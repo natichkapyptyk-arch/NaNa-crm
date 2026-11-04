@@ -478,3 +478,10 @@ table.tbl{width:100%;border-collapse:collapse;font-size:13.5px;background:#fff}
 @media (display-mode:standalone){.st-tabs a,.btn,.chip{-webkit-touch-callout:none;-webkit-user-select:none;user-select:none}}
 /* застосунок на iPhone: шапка сторінки запису не заходить під «чубчик» */
 .cl-hero{padding-top:max(18px,calc(env(safe-area-inset-top) + 8px))}
+/* сповіщення: жовтий лічильник онлайн-записів, фільтр, сірі «Ви записали…» */
+.btn .badge.onl{background:var(--yel);color:var(--gr2);font-weight:800;margin-left:3px}
+.npanel .n-f{padding:8px 12px;border-bottom:1px solid #EEEEE8;flex-wrap:nowrap}
+.npanel .n-f .chip{min-height:32px;padding:4px 12px;font-size:13px}
+.npanel .it.onl.un{background:var(--yels);box-shadow:inset 3px 0 0 var(--yel2)}
+.npanel .it.self{background:#F7F7F3;color:var(--mut)}
+.npanel .it.self .b{color:var(--ink2);font-weight:700}

@@ -1,3 +1,4 @@
+-- ⚠ Замінено оновленням 7 (docs/sql/2026-11-04-update-7.sql) — цей файл не запускати.
 -- Оновлення бази 04.11.2026 (6): сповіщення про онлайн-запис приходять усім, навіть якщо записувались з пристрою, де відкрита панель салону.
 -- Запустити один раз у Supabase → SQL Editor (проєкт arkwtpihdaqnwhdcjpqf). Можна запускати повторно.
 create or replace function trg_appt_notify() returns trigger language plpgsql security definer set search_path = public as $$

@@ -103,7 +103,7 @@ const Staff = (() => {
     if (!$('#st-main')) {
       app().innerHTML = `<div class="st-top"><a class="brand" href="#/staff/cal" title="Календар — головна сторінка"><img src="img/banana.png" alt=""><b>NaNa</b></a>
         <div class="ttl" id="st-ttl"></div>
-        <button class="btn ico" id="st-bell" title="Сповіщення про записи">${IC.bell}<span class="badge hide" id="st-bc">0</span></button>
+        <button class="btn ico" id="st-bell" title="Сповіщення про записи">${IC.bell}<span class="badge hide" id="st-bc">0</span><span class="badge onl hide" id="st-bo" title="Нові онлайн-записи">0</span></button>
         <div class="me" id="st-me" title="Мій профіль і вихід">${avatar(S.me, 's')}<span class="sm b nm">${esc(S.me.first_name)}</span></div></div>
         <div class="st-shell"><nav class="st-nav" id="st-nav"></nav><main class="st-main"><div class="pg" id="st-main"></div></main></div><nav class="st-tabs" id="st-tabs"></nav>`;
       $('#st-bell').onclick = (e) => { e.stopPropagation(); notifPanel(); };
@@ -162,28 +162,42 @@ const Staff = (() => {
   }
 
   /* ================= сповіщення ================= */
+  const ONLINE = 'Новий онлайн-запис';
   async function pollNotif() {
     if (!S.me) return;
-    const { count } = await sb.from('notifications').select('id', { count: 'exact', head: true }).eq('staff_id', S.me.id).is('read_at', null);
-    const b = $('#st-bc'); if (!b) return; b.textContent = count > 99 ? '99+' : count; b.classList.toggle('hide', !count);
+    const q = () => sb.from('notifications').select('id', { count: 'exact', head: true }).eq('staff_id', S.me.id).is('read_at', null);
+    const [{ count }, { count: on }] = await Promise.all([q(), q().eq('title', ONLINE)]);
+    const b = $('#st-bc'), o = $('#st-bo'); if (!b) return;
+    const rest = (count || 0) - (on || 0);   // червоний — інші непрочитані, жовтий 🌐 — онлайн-записи
+    b.textContent = rest > 99 ? '99+' : rest; b.classList.toggle('hide', !rest);
+    o.textContent = '🌐 ' + (on > 99 ? '99+' : on); o.classList.toggle('hide', !on);
+    $('#st-bell').title = `Сповіщення про записи${count ? ` — непрочитаних ${count}` : ''}${on ? `, з них онлайн-записів ${on}` : ''}`;
   }
   async function notifPanel() {
     let p = $('.npanel'); if (p) { p.remove(); return; }
     p = document.createElement('div'); p.className = 'npanel'; p.innerHTML = '<div class="spin"></div>'; document.body.appendChild(p);
     const off = (e) => { if (!p.contains(e.target)) { p.remove(); document.removeEventListener('click', off); } };
     setTimeout(() => document.addEventListener('click', off), 0);
-    const { data } = await sb.from('notifications').select('*').eq('staff_id', S.me.id).order('created_at', { ascending: false }).limit(40);
-    const ic = { new: '🆕', cancel: '❌', move: '🔁' };
-    p.innerHTML = `<div class="row sp" style="padding:12px 14px;border-bottom:1.5px solid var(--line)"><b>Сповіщення</b>
-      <div class="row" style="gap:6px"><button class="btn sm" id="n-all" title="Позначити всі сповіщення прочитаними">Прочитати все</button>
-      <a class="btn sm ico" href="#/staff/team/${S.me.id}" title="Налаштувати, які сповіщення отримувати">${IC.gear.replace('<svg', '<svg width="16" height="16"')}</a></div></div>` +
-      ((data || []).map((n) => `<div class="it ${n.read_at ? '' : 'un'}" data-id="${n.id}" data-day="${n.day || ''}" title="Відкрити цей день у календарі"><div class="ic">${ic[n.kind] || '🔔'}</div><div class="grow"><div class="b sm">${esc(n.title)}</div><div class="sm">${esc(n.body || '')}</div>
-        <div class="xs mut">${esc(relDay(dayOf(n.created_at)))}, ${fmtT(n.created_at)}</div></div></div>`).join('') || '<div class="empty">Поки сповіщень немає</div>');
-    $('#n-all', p).onclick = async (e) => { e.stopPropagation(); await sb.from('notifications').update({ read_at: new Date().toISOString() }).eq('staff_id', S.me.id).is('read_at', null); p.remove(); pollNotif(); };
-    $$('.it', p).forEach((it) => (it.onclick = async () => {
-      p.remove(); await sb.from('notifications').update({ read_at: new Date().toISOString() }).eq('id', it.dataset.id); pollNotif();
-      if (it.dataset.day) go('#/staff/cal/' + it.dataset.day);
-    }));
+    const { data } = await sb.from('notifications').select('*').eq('staff_id', S.me.id).order('created_at', { ascending: false }).limit(60);
+    const all = data || [], isOn = (n) => n.title === ONLINE, isSelf = (n) => /^Ви /.test(n.title || '');
+    const ic = (n) => (isSelf(n) ? '✍️' : isOn(n) ? '🌐' : { new: '🆕', cancel: '❌', move: '🔁' }[n.kind] || '🔔');
+    let only = S.nOnly && all.some(isOn) ? 1 : 0;
+    const draw = () => {
+      const unOn = all.filter((n) => isOn(n) && !n.read_at).length, list = only ? all.filter(isOn) : all;
+      p.innerHTML = `<div class="row sp" style="padding:12px 14px;border-bottom:1.5px solid var(--line)"><b>Сповіщення</b>
+        <div class="row" style="gap:6px"><button class="btn sm" id="n-all" title="Позначити всі сповіщення прочитаними">Прочитати все</button>
+        <a class="btn sm ico" href="#/staff/team/${S.me.id}" title="Налаштувати, які сповіщення отримувати">${IC.gear.replace('<svg', '<svg width="16" height="16"')}</a></div></div>
+        <div class="chips n-f"><button class="chip ${only ? '' : 'on'}" data-nf="0" title="Усі сповіщення, зокрема ваші власні дії (сірим)">Усі</button><button class="chip ${only ? 'on' : ''}" data-nf="1" title="Лише записи, які клієнти зробили самі онлайн">🌐 Онлайн-записи${unOn ? ` <span class="n">${unOn}</span>` : ''}</button></div>` +
+        (list.map((n) => `<div class="it ${n.read_at ? '' : 'un'} ${isSelf(n) ? 'self' : ''} ${isOn(n) ? 'onl' : ''}" data-id="${n.id}" data-day="${n.day || ''}" title="${isSelf(n) ? 'Ваша дія. ' : ''}Відкрити цей день у календарі"><div class="ic">${ic(n)}</div><div class="grow"><div class="b sm">${esc(n.title)}</div><div class="sm">${esc(n.body || '')}</div>
+          <div class="xs mut">${esc(relDay(dayOf(n.created_at)))}, ${fmtT(n.created_at)}</div></div></div>`).join('') || `<div class="empty">${only ? 'Онлайн-записів поки немає' : 'Поки сповіщень немає'}</div>`);
+      $('#n-all', p).onclick = async (e) => { e.stopPropagation(); await sb.from('notifications').update({ read_at: new Date().toISOString() }).eq('staff_id', S.me.id).is('read_at', null); p.remove(); pollNotif(); };
+      $$('[data-nf]', p).forEach((b) => (b.onclick = (e) => { e.stopPropagation(); only = +b.dataset.nf; S.nOnly = only; draw(); }));
+      $$('.it', p).forEach((it) => (it.onclick = async () => {
+        p.remove(); await sb.from('notifications').update({ read_at: new Date().toISOString() }).eq('id', it.dataset.id); pollNotif();
+        if (it.dataset.day) go('#/staff/cal/' + it.dataset.day);
+      }));
+    };
+    draw();
   }
 
   /* ================= розклад дня ================= */
