@@ -278,6 +278,8 @@ h3{font-size:16px}
 .cal-grid{display:grid;position:relative;min-width:100%;width:max-content}
 .cal-head{position:sticky;top:0;z-index:5;background:#fff;border-bottom:1.5px solid var(--line);display:flex;align-items:center;gap:8px;padding:8px 10px;font-weight:800;font-size:14px;min-height:52px}
 .cal-head.tm{left:0;z-index:7;border-right:1.5px solid var(--line)}
+a.cal-head.lnk{color:inherit;text-decoration:none;cursor:pointer;transition:background .12s} a.cal-head.lnk:hover{background:#FBFBF4} a.cal-head.lnk:hover .ell{text-decoration:underline}
+.cal-list h4 .m-lnk{display:flex;align-items:center;gap:8px;color:inherit;text-decoration:none} .cal-list h4 .m-lnk:hover{text-decoration:underline}
 .cal-times{position:sticky;left:0;z-index:4;background:#fff;border-right:1.5px solid var(--line)}
 .cal-times div{position:absolute;right:6px;font-size:11.5px;color:var(--mut);font-weight:700;transform:translateY(-50%)}
 .cal-col{position:relative;border-right:1.5px solid var(--line);cursor:copy}

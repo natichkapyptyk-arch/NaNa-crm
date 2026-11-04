@@ -250,6 +250,8 @@ const Staff = (() => {
     $$('[data-sel]', main).forEach((b) => (b.onclick = () => { S.calSel = b.dataset.sel; pCal(main, S.day); }));
     $('#c-cn').onchange = (e) => { S.showCancel = e.target.checked; pCal(main, S.day); };
   }
+  // картку майстра з календаря відкривають власниця/адмін (будь-яку) і майстер (лише свою)
+  const canCard = (m) => isBoss() || m.id === S.me.id;
   const apHtml = (a) => `<span class="t">${fmtT(a.starts_at)}–${fmtT(a.ends_at)}${a.visits?.source === 'online' ? ' 🌐' : ''}</span><b>${esc(a.clients?.name || '')}</b>${esc(svcById(a.service_id)?.name || '')}`;
   function drawGrid(body, shown, dd, appts) {
     const PX = 1.25;
@@ -271,7 +273,7 @@ const Staff = (() => {
     }).join('');
     const n = shown.length;
     body.innerHTML = `<div class="cal-wrap"><div class="cal-grid" style="grid-template-columns:56px repeat(${n},minmax(${n > 1 ? 150 : 220}px,1fr))">
-      <div class="cal-head tm"></div>${shown.map((m) => `<div class="cal-head">${avatar(m, 's')}<span class="ell">${esc(m.first_name)}</span></div>`).join('')}
+      <div class="cal-head tm"></div>${shown.map((m) => canCard(m) ? `<a class="cal-head lnk" href="#/staff/team/${m.id}" title="Відкрити картку: ${esc(fullName(m))}">${avatar(m, 's')}<span class="ell">${esc(m.first_name)}</span></a>` : `<div class="cal-head">${avatar(m, 's')}<span class="ell">${esc(m.first_name)}</span></div>`).join('')}
       <div class="cal-times" style="height:${H}px;position:sticky">${times}</div>${cols}</div></div>`;
     if (S.day === today()) { const nm = kParts(new Date(nowMs())).min; if (nm >= s0 && nm <= s1) $$('.cal-col', body).forEach((c) => c.insertAdjacentHTML('beforeend', `<div class="cal-now" style="top:${y(nm)}px"></div>`)); }
     const wrap = $('.cal-wrap', body);
@@ -289,7 +291,7 @@ const Staff = (() => {
     body.innerHTML = `<div class="cal-list">${shown.map((m) => {
       const list = appts.filter((a) => a.staff_id === m.id); const hh = hoursFor(m.id, S.day, dd.over);
       const bl = dd.blocks.filter((b) => b.staff_id === m.id);
-      return `<h4>${avatar(m, 's')} ${esc(fullName(m))} <span class="mut sm" style="font-weight:600">${hh ? toHM(hh[0]) + '–' + toHM(hh[1]) : 'вихідний'} · ${list.length} ${plural(list.length, 'запис', 'записи', 'записів')}</span></h4>` +
+      return `<h4>${canCard(m) ? `<a class="m-lnk" href="#/staff/team/${m.id}" title="Відкрити картку: ${esc(fullName(m))}">${avatar(m, 's')} ${esc(fullName(m))}</a>` : `${avatar(m, 's')} ${esc(fullName(m))}`} <span class="mut sm" style="font-weight:600">${hh ? toHM(hh[0]) + '–' + toHM(hh[1]) : 'вихідний'} · ${list.length} ${plural(list.length, 'запис', 'записи', 'записів')}</span></h4>` +
         bl.map((b) => `<div class="ap-row noshow" data-blk="${b.id}" title="Закритий час. Натисніть, щоб відкрити"><div class="tm">${fmtT(b.starts_at)}<small>${fmtT(b.ends_at)}</small></div><div class="grow">${IC.lock} <b>${esc(b.reason)}</b></div></div>`).join('') +
         (list.map((a) => `<div class="ap-row ${a.status}" data-ap="${a.id}" title="Відкрити запис"><div class="tm">${fmtT(a.starts_at)}<small>${fmtT(a.ends_at)}</small></div>
           <div class="grow"><div class="b ell">${esc(a.clients?.name || '')}${a.visits?.source === 'online' ? ' <span class="pill i" title="Клієнт записався онлайн">онлайн</span>' : ''}</div><div class="sm mut ell">${esc(svcById(a.service_id)?.name || '')}</div></div>
