@@ -202,9 +202,11 @@ const Admin = (() => {
     // плитки: відкривають список за період або ведуть до потрібного блоку нижче
     const jump = (id) => { const el = $('#' + id, body); if (!el) return; el.scrollIntoView({ behavior: 'smooth', block: 'start' }); el.classList.remove('flash'); void el.offsetWidth; el.classList.add('flash'); };
     const dt = (iso) => esc(fmtDay(dayOf(iso), { day: 'numeric', month: 'short' }));
+    // чим платили: 💵 готівка / 💳 картка, QR, Apple Pay…
+    const payPill = (p) => (p?.method ? `<span class="pill g pay-m" title="Спосіб оплати">${/готів|cash/i.test(p.method) ? '💵' : /qr|apple|google|карт|card|термінал|переказ/i.test(p.method) ? '💳' : '💰'} ${esc(p.method)}</span>` : '');
     const apList = (list) => list.map((a) => `<div class="m-row click" data-cl="${a.client_id}" title="Відкрити картку клієнта"><div class="grow"><div class="b sm ell">${esc(one(a.clients)?.name || '—')} · ${esc(Staff.byId(a.staff_id)?.first_name || '')}</div>
         <div class="xs mut ell">${dt(a.starts_at)}, ${fmtT(a.starts_at)} · ${esc(Staff.svcById(a.service_id)?.name || '')}</div></div>
-        <div class="r"><span class="pill ${a.status}">${STATUS[a.status]}</span><div class="sm b" style="margin-top:3px">${money(a.price)}</div></div></div>`).join('') || '<div class="empty">Немає записів за цей період</div>';
+        <div class="r">${payPill(one(a.payments))}<span class="pill ${a.status}">${STATUS[a.status]}</span><div class="sm b" style="margin-top:3px">${money(one(a.payments)?.amount ?? a.price)}</div></div></div>`).join('') || '<div class="empty">Немає записів за цей період</div>';
     // ---- вікна дашборду: свій період — день / тиждень / місяць / від–до ----
     const perOf = (mode, anc) => {
       if (mode === 'day') return { mode, from: anc, to: anc };
@@ -236,7 +238,7 @@ const Admin = (() => {
       run(); return s;
     }
     const apRange = (from, to, statuses) => { const [f, t] = tsRange(from, to);
-      return qAll(() => sb.from('appointments').select('id,visit_id,client_id,staff_id,service_id,starts_at,ends_at,price,status,clients(name)').in('status', statuses).gte('starts_at', f).lt('starts_at', t).order('starts_at')); };
+      return qAll(() => sb.from('appointments').select('id,visit_id,client_id,staff_id,service_id,starts_at,ends_at,price,status,clients(name),payments(amount,method)').in('status', statuses).gte('starts_at', f).lt('starts_at', t).order('starts_at')); };
     // список записів з категоріями: рядок-фільтр угорі, а в «Усі» — розділи по категоріях з кількістю й сумою
     const catOf = (a) => Staff.svcById(a.service_id)?.category || 'Інше';
     const ord = (c) => Math.min(...S().services.filter((x) => x.category === c).map((x) => +x.sort || 0), 9999);
