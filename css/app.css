@@ -537,3 +537,7 @@ body.cal-full .st-tabs,body.cal-full .cal-bar #c-new{display:none!important}
 /* на телефоні смужок прокрутки не видно; на компʼютері — тонка смужка під іменами, щоб гортати мишкою */
 @media (pointer:coarse){.cal-hx,.cal-xs{scrollbar-width:none}.cal-hx::-webkit-scrollbar,.cal-xs::-webkit-scrollbar{display:none}}
 @media (pointer:fine){.cal-xs{scrollbar-width:none}.cal-xs::-webkit-scrollbar{display:none}.cal-hx{scrollbar-width:thin}}
+/* сторінка запису: нижня смужка — коли візит */
+.bbar .bb-when{font-weight:800;font-size:15px;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-bottom:2px}
+.bbar .bb-when::first-letter{text-transform:uppercase}
+.bbar .bb-sum{color:var(--ink);font-size:15px}

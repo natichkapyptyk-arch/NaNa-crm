@@ -90,7 +90,12 @@ const Client = (() => {
   }
   function bottomBar() {
     if (!st.cart.length || ['cart', 'contacts', 'done'].includes(st.step)) return '';
-    return `<div class="bbar"><div class="in"><div class="sum"><div class="sm mut">У візиті: ${st.cart.length} ${plural(st.cart.length, 'послуга', 'послуги', 'послуг')} · ${durTxt(cartDur())}</div><b>${cartFrom()}${money(cartTotal())}</b></div>
+    // коли візит: день і час від першої до останньої послуги — щоб було видно, на який час додавати ще послугу
+    const iso = (ms) => new Date(ms).toISOString(), s0 = Math.min(...st.cart.map((x) => x.s)), e0 = Math.max(...st.cart.map((x) => x.e));
+    const d0 = dayOf(iso(s0)), d1 = dayOf(iso(e0 - 1));
+    const when = d0 === d1 ? `${fmtDay(d0, { weekday: 'short', day: 'numeric', month: 'long' })}, ${fmtT(iso(s0))}–${fmtT(iso(e0))}`
+      : `${fmtDay(d0, { day: 'numeric', month: 'short' })} ${fmtT(iso(s0))} – ${fmtDay(d1, { day: 'numeric', month: 'short' })} ${fmtT(iso(e0))}`;
+    return `<div class="bbar"><div class="in"><div class="sum"><div class="bb-when" title="Дата й час вашого візиту">📅 ${esc(when)}</div><div class="sm mut">${st.cart.length} ${plural(st.cart.length, 'послуга', 'послуги', 'послуг')} · ${durTxt(cartDur())} · <b class="bb-sum">${cartFrom()}${money(cartTotal())}</b></div></div>
       <button class="btn pri lg" data-go="cart" title="Переглянути вибрані послуги й перейти до оформлення">Оформити ${IC.fwd}</button></div></div>`;
   }
   function myVisitsCard() {
