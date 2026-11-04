@@ -124,6 +124,10 @@ const Admin = (() => {
     // послуги
     const sv = {}; pays.forEach((p) => { const id = one(p.appointments)?.service_id; if (!id) return; sv[id] = sv[id] || { n: 0, r: 0 }; sv[id].n++; sv[id].r += +p.amount; });
     const svTop = Object.entries(sv).sort((a, b) => b[1].r - a[1].r).slice(0, 8); const svMax = Math.max(1, ...svTop.map((x) => x[1].r));
+    // категорії (з оплат): скільки й на яку суму
+    const ct = {}; pays.forEach((p) => { const c = Staff.svcById(one(p.appointments)?.service_id)?.category || 'Інше'; ct[c] = ct[c] || { n: 0, r: 0 }; ct[c].n++; ct[c].r += +p.amount; });
+    const ctList = Object.entries(ct).sort((a, b) => b[1].r - a[1].r); const ctMax = Math.max(1, ...ctList.map((x) => x[1].r));
+    const ctColors = ['#4E4E4C', '#D3DA0C', '#2F8A57', '#2F6FB0', '#B4B4A6', '#C0392B', '#8E6CB5', '#D98E2B'];
     // дні тижня
     const wd = [0, 0, 0, 0, 0, 0, 0, 0]; live.forEach((a) => wd[isoDow(dayOf(a.starts_at))]++); const wdMax = Math.max(1, ...wd);
     // години
@@ -149,6 +153,7 @@ const Admin = (() => {
           <div class="tr"><i style="width:${pct(x.sum, rev)}%;background:${x.c}"></i></div></div>`).join('') || '<div class="empty">Оплат за період немає</div>'}
           ${exp.length || true ? `<div class="sect"><h3>Витрати: ${money(expSum)} <button class="btn sm" id="d-exp" title="Додати витрату (оренда, матеріали…)" style="margin-left:auto">${IC.plus} Витрата</button></h3>
             ${exp.slice(0, 6).map((x) => `<div class="row sp sm" style="padding:4px 0"><span>${esc(fmtDay(x.day, { day: 'numeric', month: 'short' }))} · ${esc(x.category)}${x.note ? ' · <span class="mut">' + esc(x.note) + '</span>' : ''}</span><b>${money(x.amount)}</b></div>`).join('') || '<div class="mut sm">Витрат не внесено</div>'}</div>` : ''}</div>
+        <div class="card"><h3>Виручка за категоріями</h3>${ctList.map(([c, x], i) => `<div class="hbar click" data-ctg="${esc(c)}" title="Показати завершені візити: ${esc(c)}"><div class="t"><span class="ell">${esc(c)} <span class="mut">· ${x.n} ${plural(x.n, 'оплата', 'оплати', 'оплат')}</span></span><span class="nw">${money(x.r)} · ${pct(x.r, rev)}%</span></div><div class="tr"><i style="width:${(x.r / ctMax) * 100}%;background:${ctColors[i % ctColors.length]}"></i></div></div>`).join('') || '<div class="empty">Оплат за період немає</div>'}</div>
         <div class="card"><h3>Популярні послуги</h3>${svTop.map(([id, x]) => `<div class="hbar"><div class="t"><span class="ell">${esc(Staff.svcById(id)?.name || '—')}</span><span class="nw">${x.n} × · ${money(x.r)}</span></div><div class="tr"><i class="y" style="width:${(x.r / svMax) * 100}%"></i></div></div>`).join('') || '<div class="empty">Немає даних</div>'}</div>
         <div class="card full" id="d-masters"><h3>Майстри</h3><div class="tbl-wrap d-only"><table class="tbl"><thead><tr><th>Майстер</th><th class="r">Візити</th><th class="r">Виручка</th><th class="r">Сер. чек</th><th class="r">Завантаж.</th><th class="r">%</th><th class="r">До виплати</th></tr></thead>
           <tbody>${mrows.map((x) => `<tr class="click" data-st="${x.m.id}" title="Відкрити картку майстра"><td><div class="row" style="gap:8px">${avatar(x.m, 's')}<b>${esc(fullName(x.m))}</b></div></td><td class="r">${x.n}</td><td class="r b">${money(x.r)}</td><td class="r">${money(x.avg)}</td><td class="r">${x.ld}%</td><td class="r">${Staff.payPct(x.m.id)}%</td><td class="r b">${money(x.cm)}</td></tr>`).join('')}
@@ -202,12 +207,12 @@ const Admin = (() => {
         <div class="xs mut ell">${dt(a.starts_at)}, ${fmtT(a.starts_at)} · ${esc(Staff.svcById(a.service_id)?.name || '')}</div></div>
         <div class="r"><span class="pill ${a.status}">${STATUS[a.status]}</span><div class="sm b" style="margin-top:3px">${money(a.price)}</div></div></div>`).join('') || '<div class="empty">Немає записів за цей період</div>';
     // список записів з категоріями: рядок-фільтр угорі, а в «Усі» — розділи по категоріях з кількістю й сумою
-    const catSheet = (title, list) => {
+    const catSheet = (title, list, start = '') => {
       const catOf = (a) => Staff.svcById(a.service_id)?.category || 'Інше';
       const ord = (c) => Math.min(...S().services.filter((x) => x.category === c).map((x) => +x.sort || 0), 9999);
       const cats = [...new Set(list.map(catOf))].sort((a, b) => ord(a) - ord(b) || a.localeCompare(b, 'uk'));
       const sum = (l) => l.reduce((t, a) => t + +a.price, 0);
-      let cur = '';
+      let cur = cats.includes(start) ? start : '';
       const s = listSheet(title, `<div class="chips scroll mb" id="cs-cats"></div><div id="cs-list"></div>`);
       const draw = () => {
         $('#cs-cats', s.el).innerHTML = `<button class="chip ${!cur ? 'on' : ''}" data-cc="" title="Усі категорії">Усі <span class="n">${list.length}</span></button>`
@@ -234,6 +239,7 @@ const Admin = (() => {
           `<button class="btn pri" id="pf-exp" title="Додати витрату (оренда, матеріали…)">${IC.plus} Витрата</button>`);
         $('#pf-exp', s.el).onclick = () => { s.close(); expenseSheet(() => dash(main)); }; },
     };
+    $$('[data-ctg]', body).forEach((el) => (el.onclick = () => catSheet(`Завершені візити: ${done}`, ap.filter((a) => a.status === 'done'), el.dataset.ctg)));
     $$('[data-k]', body).forEach((el) => { el.onclick = () => K[el.dataset.k](); el.onkeydown = (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); K[el.dataset.k](); } }; });
   }
   function expenseSheet(done) {
@@ -269,6 +275,9 @@ const Admin = (() => {
       <div class="kpi"><div class="l">Виручка з моїх послуг</div><div class="v">${money(rev)}</div></div>
       <div class="kpi"><div class="l">Візитів</div><div class="v">${pays.length}</div></div>
       <div class="kpi"><div class="l">Ще заплановано</div><div class="v">${fut.length}</div><div class="d mut">≈ ${money(fut.reduce((s, a) => s + +a.price, 0) * pctNow / 100)} для мене</div></div></div>
+      ${(() => { const ct = {}; pays.forEach((p) => { const c = Staff.svcById(one(p.appointments)?.service_id)?.category || 'Інше'; ct[c] = ct[c] || { n: 0, r: 0, m: 0 }; ct[c].n++; ct[c].r += +p.amount; ct[c].m += +p.commission; });
+        const l = Object.entries(ct).sort((a, b) => b[1].m - a[1].m), mx = Math.max(1, ...l.map((x) => x[1].m));
+        return l.length ? `<div class="card mt"><h3>За категоріями</h3>${l.map(([c, x]) => `<div class="hbar"><div class="t"><span class="ell">${esc(c)} <span class="mut">· ${x.n} ${plural(x.n, 'візит', 'візити', 'візитів')} · чеки ${money(x.r)}</span></span><span class="nw b">${money(x.m)}</span></div><div class="tr"><i class="y" style="width:${(x.m / mx) * 100}%"></i></div></div>`).join('')}<div class="hint">Праворуч — заробіток за категорією.</div></div>` : ''; })()}
       <div class="card mt"><h3>Мої оплачені візити</h3>
       <div class="m-list">${pays.map((p) => { const a = one(p.appointments); return `<div class="m-row"><div class="grow"><div class="b sm ell">${esc(Staff.svcById(a?.service_id)?.name || '')}</div><div class="xs mut">${esc(fmtDay(dayOf(p.paid_at), { day: 'numeric', month: 'short' }))} · ${esc(one(a?.clients)?.name || '')} · чек ${money(p.amount)}</div></div><div class="r b">${money(p.commission)}</div></div>`; }).join('') || '<div class="mut">Ще немає оплат за цей період</div>'}</div>
       <div class="tbl-wrap d-only"><table class="tbl"><thead><tr><th>Дата</th><th>Клієнт</th><th>Послуга</th><th class="r">Чек</th><th class="r">%</th><th class="r">Мені</th></tr></thead><tbody>
