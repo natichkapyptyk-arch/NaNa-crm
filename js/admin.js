@@ -266,7 +266,7 @@ const Admin = (() => {
       <div class="chips scroll mb"><button class="chip ${!S().svcCat ? 'on' : ''}" data-c="" title="Усі категорії">Усі <span class="n">${all.filter((s) => s.is_active).length}</span></button>${cats.map((c) => `<button class="chip ${S().svcCat === c ? 'on' : ''}" data-c="${esc(c)}" title="Категорія ${esc(c)}">${esc(c)} <span class="n">${all.filter((s) => s.category === c && s.is_active).length}</span></button>`).join('')}
         <label class="chip" title="Показати також вимкнені послуги"><input type="checkbox" id="sv-off" ${S().svcOff ? 'checked' : ''} style="accent-color:var(--gr)"> вимкнені</label></div>
       ${cats.filter((c) => !S().svcCat || c === S().svcCat).map((c) => { const l = list.filter((s) => s.category === c); if (!l.length) return '';
-        return `<div class="s-cat">${esc(c)}</div>` + l.map((s) => { const ms = S().ms.filter((x) => x.service_id === s.id && x.is_active); const prices = ms.map((x) => +x.price);
+        return `<div class="s-cat">${esc(c)}<button class="btn ghost sm s-rc" data-rc="${esc(c)}" title="Перейменувати категорію «${esc(c)}»">✎ Перейменувати</button></div>` + l.map((s) => { const ms = S().ms.filter((x) => x.service_id === s.id && x.is_active); const prices = ms.map((x) => +x.price);
           const pr = prices.length ? (Math.min(...prices) === Math.max(...prices) ? money(prices[0]) : money(Math.min(...prices)) + '–' + money(Math.max(...prices))) : money(s.price);
           return `<div class="list-row ${s.is_active ? '' : 'off'}" data-s="${s.id}" title="Редагувати послугу: ціни, тривалість, хто виконує, фото">${(s.photos || [])[0] ? `<span class="s-ph" style="width:46px;height:46px;cursor:pointer"><img src="${esc(s.photos[0])}" alt="" loading="lazy"></span>` : '<span class="s-ph" style="width:46px;height:46px;display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--mut)" title="Немає фото — додайте в редагуванні">📷</span>'}<div class="grow"><div class="nm">${esc(s.name)} ${s.is_active ? '' : '<span class="pill g">вимкнено</span>'}</div>
             <div class="sub">${durTxt(s.dur)} · ${ms.length ? ms.map((x) => esc(Staff.byId(x.staff_id)?.first_name || '')).join(', ') : '<span style="color:var(--bad)">немає майстра — клієнти не бачать</span>'}</div></div><div class="b nw">${pr}</div></div>`; }).join(''); }).join('')}`;
@@ -274,6 +274,29 @@ const Admin = (() => {
     $('#sv-off').onchange = (e) => { S().svcOff = e.target.checked; services(main); };
     $('#sv-new').onclick = () => serviceSheet(null, () => services(main));
     $$('[data-s]', main).forEach((r) => (r.onclick = () => serviceSheet(r.dataset.s, () => services(main))));
+    $$('[data-rc]', main).forEach((b) => (b.onclick = () => renameCat(b.dataset.rc, () => services(main))));
+  }
+  // перейменувати категорію — у всіх її послуг (і вимкнених); якщо така назва вже є — послуги приєднаються до неї
+  function renameCat(old, done) {
+    const cats = [...new Set(S().services.map((x) => x.category))].filter((c) => c !== old);
+    const n = S().services.filter((x) => x.category === old).length;
+    const s = sheet({ title: 'Перейменувати категорію', body: `<label class="lb" for="rc-n">Нова назва для «${esc(old)}» <span class="mut" style="font-weight:600">· ${n} ${plural(n, 'послуга', 'послуги', 'послуг')}</span></label>
+      <input class="inp" id="rc-n" value="${esc(old)}" list="rc-l" maxlength="40" autofocus><datalist id="rc-l">${cats.map((c) => `<option value="${esc(c)}">`).join('')}</datalist>
+      <div class="hint" id="rc-h">Назву побачать і клієнти в онлайн-записі.</div>`,
+      foot: `<button class="btn" data-x2 title="Закрити без змін">Скасувати</button><button class="btn pri" id="rc-ok" title="Зберегти нову назву">Зберегти</button>` });
+    const inp = $('#rc-n', s.el), hint = $('#rc-h', s.el);
+    inp.oninput = () => { const v = inp.value.trim(); hint.textContent = cats.includes(v) ? `Категорія «${v}» уже є — послуги «${old}» перейдуть до неї.` : 'Назву побачать і клієнти в онлайн-записі.'; };
+    $('[data-x2]', s.el).onclick = s.close;
+    s.el.addEventListener('keydown', (e) => { if (e.key === 'Enter') $('#rc-ok', s.el).click(); });
+    $('#rc-ok', s.el).onclick = (e) => busy(e.currentTarget, async () => {
+      const v = inp.value.trim();
+      if (!v) { inp.classList.add('err'); return toast('Вкажіть назву', 'bad'); }
+      if (v === old) return s.close();
+      const { error } = await sb.from('services').update({ category: v }).eq('category', old);
+      if (error) return toast(errMsg(error), 'bad');
+      if (S().svcCat === old) S().svcCat = v;
+      await Staff.reload(); s.close(); toast(cats.includes(v) ? `Послуги перенесено в «${v}»` : 'Категорію перейменовано'); done();
+    });
   }
   function serviceSheet(id, done) {
     const sv = id ? Staff.svcById(id) : { category: S().svcCat || '', name: '', descr: '', dur: 60, price: 0, is_active: true, sort: 100 };

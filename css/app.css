@@ -175,7 +175,8 @@ h3{font-size:16px}
 .dchip.none{border-style:dashed;color:var(--mut);cursor:default;background:transparent}
 .m-card .from{font-size:12.5px;color:var(--mut);margin-top:6px}
 
-.s-cat{margin:18px 0 8px;font-size:13px;font-weight:800;color:var(--mut);text-transform:uppercase;letter-spacing:.06em}
+.s-cat{margin:18px 0 8px;font-size:13px;font-weight:800;color:var(--mut);text-transform:uppercase;letter-spacing:.06em;display:flex;align-items:center;gap:8px}
+.s-cat .s-rc{text-transform:none;letter-spacing:0;font-weight:700;min-height:28px;padding:3px 10px;opacity:.75} .s-cat .s-rc:hover{opacity:1}
 .s-row{display:flex;gap:12px;align-items:center;padding:13px 14px;border:1.5px solid var(--line);border-radius:var(--r2);background:#fff;margin-bottom:8px;cursor:pointer;transition:border-color .15s,box-shadow .15s,transform .12s}
 .s-row:hover{border-color:var(--gr);box-shadow:var(--sh);transform:translateY(-1px)}
 .s-row .nm{font-weight:700}
