@@ -625,7 +625,11 @@ const Admin = (() => {
       if (error) return toast(errMsg(error), 'bad', 5000);
       await Staff.reload(); $('#f-pw', main).value = ''; toast('Вхід збережено' + (pw ? ' — новий пароль діє' : ''));
     });
-    const sv = $('#f-save', main); if (sv) sv.onclick = () => busy(sv, async () => {
+    // попередження, якщо вийти з картки, не зберігши зміни
+    const snap = () => $$('input,select,textarea', main).filter((x) => !['ms-q', 'f-lg', 'f-pw', 'ph-in'].includes(x.id)).map((x) => (x.type === 'checkbox' ? x.checked : x.value)).join('\u0001') + '|' + photo;
+    const snap0 = snap();
+    const sv = $('#f-save', main);
+    const doSave = async (leaving = false) => {
       const fn = $('#f-fn', main).value.trim(); if (!fn) { $('#f-fn', main).classList.add('err'); return toast('Вкажіть імʼя', 'bad'); }
       const phone = $('#f-ph', main).value.trim(); if (phone && !normPhone(phone)) return toast('Перевірте телефон', 'bad');
       const notify = {}; $$('[data-nt]', main).forEach((c) => (notify[c.dataset.nt] = c.checked));
@@ -648,8 +652,12 @@ const Admin = (() => {
         if (isNew && row.is_bookable) await sb.from('work_hours').upsert([1, 2, 3, 4, 5, 6].map((d) => ({ staff_id: p.id, weekday: d, start_time: S().settings.open_time, end_time: S().settings.close_time })));
       }
       await Staff.reload(); toast(isNew ? 'Співробітника створено. Тепер задайте вхід у програму.' : 'Збережено');
-      if (isNew) go('#/staff/team/' + p.id); else staffCard(main, p.id);
-    });
+      if (leaving) return true;
+      leaveGuard = null; if (isNew) go('#/staff/team/' + p.id); else staffCard(main, p.id);
+      return true;
+    };
+    if (sv) { sv.onclick = () => busy(sv, () => doSave());
+      leaveGuard = { hash: location.hash, dirty: () => sv.isConnected && snap() !== snap0, save: () => doSave(true) }; }
   }
 
   /* ================= НАЛАШТУВАННЯ ================= */

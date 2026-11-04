@@ -283,7 +283,30 @@ function siteBase() { return location.href.replace(/#.*$/, ''); }
 // попередня сторінка — щоб кнопка «назад» у картці вела туди, звідки прийшли (календар, персонал…)
 let curHash = location.hash, prevHash = '';
 function go(h) { if (location.hash === h) route(); else location.hash = h; }
+// незбережені зміни: сторінка ставить leaveGuard = { hash, dirty(), save() } — перед переходом спитаємо
+let leaveGuard = null;
+function leaveBox() {
+  return new Promise((res) => {
+    const s = sheet({ title: 'Зміни не збережено', body: '<p style="margin:0">Ви змінили дані, але не натиснули «Зберегти». Що зробити?</p>',
+      foot: `<button class="btn" data-lv="stay" title="Повернутись до редагування">Залишитись</button><button class="btn red" data-lv="drop" title="Вийти, зміни пропадуть">Не зберігати</button><button class="btn pri" data-lv="save" title="Зберегти зміни й перейти далі">Зберегти й вийти</button>`,
+      onClose: () => res(s._v || 'stay') });
+    $$('[data-lv]', s.el).forEach((b) => (b.onclick = () => { s._v = b.dataset.lv; s.close(); }));
+  });
+}
+window.addEventListener('beforeunload', (e) => { if (leaveGuard && leaveGuard.dirty()) { e.preventDefault(); e.returnValue = ''; } });
 async function route() {
+  if (leaveGuard && location.hash !== leaveGuard.hash) {
+    const g = leaveGuard;
+    if (g.dirty()) {
+      const target = location.hash;
+      history.replaceState(null, '', g.hash || '#');   // лишаємось на картці, поки не вирішили
+      const v = await leaveBox();
+      if (v === 'stay' || leaveGuard !== g) return;
+      if (v === 'save' && !(await g.save())) return;
+      leaveGuard = null; location.hash = target; return;
+    }
+  }
+  leaveGuard = null;
   if (location.hash !== curHash) { prevHash = curHash; curHash = location.hash; }
   hideTip(); while (sheets.length) sheets[sheets.length - 1].close();
   const h = decodeURIComponent(location.hash.replace(/^#/, ''));
