@@ -541,3 +541,11 @@ body.cal-full .st-tabs,body.cal-full .cal-bar #c-new{display:none!important}
 .bbar .bb-when{font-weight:800;font-size:15px;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-bottom:2px}
 .bbar .bb-when::first-letter{text-transform:uppercase}
 .bbar .bb-sum{color:var(--ink);font-size:15px}
+/* онлайн-запис: день вашого візиту і час «без перерви» */
+.dchip.visit{background:var(--yel);border-color:var(--yel2);color:var(--gr2)}
+.dchip.visit span{font-weight:800;font-size:11px}
+.dpill.visit:not(.on){border-color:var(--yel2);box-shadow:inset 0 -4px 0 var(--yel)}
+.dpill.visit.on{box-shadow:inset 0 -4px 0 var(--yel)}
+.slots .slot.quick{grid-column:span 2;background:var(--yels);border-color:var(--yel2);display:flex;align-items:center;justify-content:center;gap:6px}
+.slots .slot.quick small{font-weight:700;color:var(--ink2);font-size:12px}
+.bbar .bb-when{cursor:pointer} .bbar .bb-when:hover{text-decoration:underline} .bbar .bb-arr{color:var(--mut);font-weight:800}

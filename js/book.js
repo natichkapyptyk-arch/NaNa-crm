@@ -45,8 +45,10 @@ const Client = (() => {
     const bl = B.blocks.get(mid) || [];
     const ig = opt.ignore ?? -1, igK = st.cart[ig]?.k;
     const mine = st.cart.filter((x, i) => i !== ig && !(igK && x.of === igK)).map((x) => [x.s, x.e]).concat(opt.extra || []);
-    const out = [];
-    for (let m = hh[0]; m + dur <= hh[1] && m <= last; m += step) {
+    const out = [], cand = [];
+    if (opt.at) cand.push(...opt.at); else for (let m = hh[0]; m + dur <= hh[1] && m <= last; m += step) cand.push(m);   // opt.at — перевірити лише ці хвилини
+    for (const m of cand) {
+      if (m < hh[0] || m + dur > hh[1] || m > last) continue;
       const a = base + m * 6e4, b = a + dur * 6e4;
       if (a < lead || a > maxT) continue;
       if (bz.some(([x, y]) => x < b + buf && y > a - buf)) continue;
@@ -64,6 +66,7 @@ const Client = (() => {
     for (let i = 0; i <= C.settings.max_days && out.length < n; i++) { const d = addDays(t, i); if (slots(mid, dur, d).length) out.push(d); }
     return out;
   }
+  const visitDay = () => (st.cart.length ? dayOf(new Date(Math.min(...st.cart.map((x) => x.s))).toISOString()) : null);   // день візиту (перша послуга)
   const cartTotal = () => st.cart.reduce((a, x) => a + +x.price, 0);
   // ціна «від» (кінцева залежить від роботи): у майстрині, а якщо база ще стара — у послуги
   const isFrom = (sid, mid) => { const x = mid && C.ms.get(mid)?.get(sid); return x && 'price_from' in x ? !!x.price_from : !!C.svc.get(sid)?.price_from; };
@@ -95,7 +98,7 @@ const Client = (() => {
     const d0 = dayOf(iso(s0)), d1 = dayOf(iso(e0 - 1));
     const when = d0 === d1 ? `${fmtDay(d0, { weekday: 'short', day: 'numeric', month: 'long' })}, ${fmtT(iso(s0))}–${fmtT(iso(e0))}`
       : `${fmtDay(d0, { day: 'numeric', month: 'short' })} ${fmtT(iso(s0))} – ${fmtDay(d1, { day: 'numeric', month: 'short' })} ${fmtT(iso(e0))}`;
-    return `<div class="bbar"><div class="in"><div class="sum"><div class="bb-when" title="Дата й час вашого візиту">📅 ${esc(when)}</div><div class="sm mut">${st.cart.length} ${plural(st.cart.length, 'послуга', 'послуги', 'послуг')} · ${durTxt(cartDur())} · <b class="bb-sum">${cartFrom()}${money(cartTotal())}</b></div></div>
+    return `<div class="bbar"><div class="in"><div class="sum"><div class="bb-when" data-go="cart" role="button" tabindex="0" title="Переглянути візит: усі послуги й час кожної">📅 ${esc(when)} <span class="bb-arr">›</span></div><div class="sm mut">${st.cart.length} ${plural(st.cart.length, 'послуга', 'послуги', 'послуг')} · ${durTxt(cartDur())} · <b class="bb-sum">${cartFrom()}${money(cartTotal())}</b></div></div>
       <button class="btn pri lg" data-go="cart" title="Переглянути вибрані послуги й перейти до оформлення">Оформити ${IC.fwd}</button></div></div>`;
   }
   function myVisitsCard() {
@@ -112,13 +115,17 @@ const Client = (() => {
       `<button class="chip ${st.cat === c ? 'on' : ''}" data-cat="${esc(c)}" title="Майстри, які роблять: ${esc(c.toLowerCase())}">${esc(c)}</button>`).join('')}</div>`;
     const cards = ms.map((m) => {
       const list = masterServices(m.id).filter((x) => !st.cat || C.svc.get(x.service_id).category === st.cat);
-      const from = Math.min(...list.map((x) => +x.price)); const days = nearDays(m.id, 5, st.cat);
+      const from = Math.min(...list.map((x) => +x.price)); let days = nearDays(m.id, 5, st.cat);
+      // день вашого візиту — завжди серед днів (якщо в майстрині є вільний час) і виділений
+      const vd = visitDay();
+      if (vd && !days.includes(vd) && slots(m.id, Math.min(...list.map((x) => x.dur)), vd).length) days = [...days.slice(0, 4), vd].sort();
       const cats = [...new Set(list.map((x) => C.svc.get(x.service_id).category))].join(' · ');
       return `<div class="m-card" data-m="${m.id}" title="Обрати майстра ${esc(m.first_name)} і подивитись послуги">
         ${avatar(m, 'l')}<div class="grow"><div class="nm">${esc(fullName(m))}</div><div class="rl">${esc(m.experience || cats)}</div>
         ${m.bio ? `<div class="bio">${esc(m.bio)}</div>` : ''}
         <div class="from">${esc(cats)} · від ${money(from)}</div>
-        <div class="days">${days.length ? days.map((d) => `<span class="dchip" data-m="${m.id}" data-day="${d}" title="Найближчий вільний день: ${esc(fmtDay(d, { weekday: 'long', day: 'numeric', month: 'long' }))}"><span>${esc(relDay(d).split(',')[0])}</span><b>${+d.slice(8)}</b></span>`).join('')
+        <div class="days">${days.length ? days.map((d) => d === vd ? `<span class="dchip visit" data-m="${m.id}" data-day="${d}" title="День вашого візиту: ${esc(fmtDay(d, { weekday: 'long', day: 'numeric', month: 'long' }))} — додати послугу на цей день"><span>ваш візит</span><b>${+d.slice(8)}</b></span>`
+          : `<span class="dchip" data-m="${m.id}" data-day="${d}" title="Найближчий вільний день: ${esc(fmtDay(d, { weekday: 'long', day: 'numeric', month: 'long' }))}"><span>${esc(relDay(d).split(',')[0])}</span><b>${+d.slice(8)}</b></span>`).join('')
           : '<span class="dchip none">Немає вільного часу</span>'}</div></div></div>`;
     }).join('');
     return `${stepsBar()}<div class="st-title"><h2>${st.cart.length ? 'Додайте ще послугу' : 'Оберіть майстра'}</h2></div>${cats}
@@ -149,15 +156,27 @@ const Client = (() => {
     const t = today(), days = [];
     const addDur = st.edit >= 0 ? addonsOf(st.cart[st.edit].k).reduce((t2, a) => t2 + a.dur, 0) : 0;   // основна + її «додатково» мають вміститись разом
     for (let i = 0; i <= C.settings.max_days; i++) { const d = addDays(t, i); days.push([d, slots(m.id, x.dur + addDur, d, { ignore: st.edit }).length]); }
+    const vd = st.edit < 0 ? visitDay() : null;
+    if (!st.day && vd && days.find((d) => d[0] === vd && d[1])) st.day = vd;   // додаєте ще послугу — одразу день вашого візиту
     if (!st.day || !days.find((d) => d[0] === st.day && d[1])) st.day = (days.find((d) => d[1]) || [])[0] || null;
-    const strip = days.map(([d, n]) => `<button class="dpill ${d === st.day ? 'on' : ''} ${n ? '' : 'off'}" ${n ? `data-day="${d}"` : 'disabled'} title="${n ? esc(fmtDay(d, { weekday: 'long', day: 'numeric', month: 'long' })) + ': вільних віконець — ' + n : 'Немає вільного часу'}">
+    const strip = days.map(([d, n]) => `<button class="dpill ${d === st.day ? 'on' : ''} ${n ? '' : 'off'} ${d === vd ? 'visit' : ''}" ${n ? `data-day="${d}"` : 'disabled'} title="${n ? esc(fmtDay(d, { weekday: 'long', day: 'numeric', month: 'long' })) + ': вільних віконець — ' + n : 'Немає вільного часу'}">
       <div class="w">${WD[isoDow(d)]}</div><div class="d">${+d.slice(8)}</div><div class="m">${esc(fmtDay(d, { month: 'short' }).replace('.', ''))}</div></button>`).join('');
     let body = '';
     if (!st.day) body = '<div class="empty"><div class="big">🗓</div>У найближчі дні вільного часу немає. Спробуйте іншого майстра або зателефонуйте нам.</div>';
     else {
       const sl = slots(m.id, x.dur + addDur, st.day, { ignore: st.edit });
       const g = [['Ранок', sl.filter((v) => v < 720)], ['День', sl.filter((v) => v >= 720 && v < 1020)], ['Вечір', sl.filter((v) => v >= 1020)]];
-      body = `<div class="sm mut" style="margin:2px 0 4px"><b style="color:var(--ink)">${esc(fmtDay(st.day, { weekday: 'long', day: 'numeric', month: 'long' }))}</b></div>` +
+      // час без перерви: одразу після або одразу перед послугами, які вже у вашому візиті цього дня
+      let quick = '';
+      const vis = st.edit < 0 ? st.cart.filter((c) => dayOf(new Date(c.s).toISOString()) === st.day) : [];
+      if (vis.length) {
+        const base = dayBase(st.day), need = x.dur + addDur;
+        const aft = Math.round((Math.max(...vis.map((c) => c.e)) - base) / 6e4), bef = Math.round((Math.min(...vis.map((c) => c.s)) - base) / 6e4) - need;
+        const ok = slots(m.id, need, st.day, { at: [aft, bef] });
+        const q = [[bef, 'одразу перед'], [aft, 'одразу після']].filter(([v]) => ok.includes(v));
+        if (q.length) quick = `<div class="slots-h">⚡ Без перерви у вашому візиті</div><div class="slots">${q.map(([v, t]) => `<button class="slot quick" data-t="${v}" title="Записатися на ${toHM(v)}–${toHM(v + x.dur)} — ${t} вже вибраних послуг">${toHM(v)} <small>${t}</small></button>`).join('')}</div>`;
+      }
+      body = `<div class="sm mut" style="margin:2px 0 4px"><b style="color:var(--ink)">${esc(fmtDay(st.day, { weekday: 'long', day: 'numeric', month: 'long' }))}</b>${st.day === vd ? ' · день вашого візиту' : ''}</div>` + quick +
         g.filter((v) => v[1].length).map(([n, v]) => `<div class="slots-h">${n}</div><div class="slots">${v.map((mm) => `<button class="slot" data-t="${mm}" title="Записатися на ${toHM(mm)}–${toHM(mm + x.dur)}">${toHM(mm)}</button>`).join('')}</div>`).join('');
     }
     return `${stepsBar()}<div class="st-title"><button class="btn ghost ico" data-back="services" title="Назад — до послуг">${IC.back}</button><h2>Оберіть день і час</h2></div>
