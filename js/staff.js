@@ -244,7 +244,9 @@ const Staff = (() => {
     const paid = act.reduce((s, a) => s + +(a.payments?.amount || 0), 0), plan = act.filter((a) => a.status !== 'noshow').reduce((s, a) => s + +a.price, 0);
     main.innerHTML = `<div class="cal-bar">
         <button class="btn ico" id="c-prev" title="Попередній день">${IC.back}</button>
-        <label class="cal-day" title="Обрати дату в календарі" style="cursor:pointer;position:relative">${esc(relDay(S.day) === fmtDay(S.day, { weekday: 'short', day: 'numeric', month: 'short' }) ? fmtDay(S.day, { weekday: 'long', day: 'numeric', month: 'long' }) : relDay(S.day) + ', ' + fmtDay(S.day, { day: 'numeric', month: 'long' }))}
+        <label class="cal-day" title="Обрати дату в календарі" style="cursor:pointer;position:relative">${esc(innerWidth < 600
+          ? (relDay(S.day) === fmtDay(S.day, { weekday: 'short', day: 'numeric', month: 'short' }) ? fmtDay(S.day, { weekday: 'short', day: 'numeric', month: 'short' }) : relDay(S.day) + ', ' + fmtDay(S.day, { day: 'numeric', month: 'short' }))
+          : (relDay(S.day) === fmtDay(S.day, { weekday: 'short', day: 'numeric', month: 'short' }) ? fmtDay(S.day, { weekday: 'long', day: 'numeric', month: 'long' }) : relDay(S.day) + ', ' + fmtDay(S.day, { day: 'numeric', month: 'long' })))}
           <input type="date" id="c-date" value="${S.day}" style="position:absolute;inset:0;opacity:0;cursor:pointer"></label>
         <button class="btn ico" id="c-next" title="Наступний день">${IC.fwd}</button>
         ${S.day !== today() ? '<button class="btn sm" id="c-today" title="Повернутись до сьогодні">Сьогодні</button>' : ''}
