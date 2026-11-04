@@ -322,8 +322,7 @@ const Staff = (() => {
     if (S.day === today()) { const nm = kParts(new Date(nowMs())).min; if (nm >= s0 && nm <= s1) $$('.cal-col', body).forEach((c) => c.insertAdjacentHTML('beforeend', `<div class="cal-now" style="top:${y(nm)}px"></div>`)); }
     const wrap = $('.cal-wrap', body), xs = $('.cal-xs', body), hx = $('.cal-hx', body);
     // шапка з іменами їде вбік разом зі стовпчиками (і навпаки — можна гортати за шапку)
-    let syncing = false;
-    const sync = (from, to) => () => { if (syncing) return; syncing = true; to.scrollLeft = from.scrollLeft; requestAnimationFrame(() => (syncing = false)); };
+    const sync = (from, to) => () => { if (Math.abs(to.scrollLeft - from.scrollLeft) > 0.5) to.scrollLeft = from.scrollLeft; };
     xs.addEventListener('scroll', sync(xs, hx), { passive: true }); hx.addEventListener('scroll', sync(hx, xs), { passive: true });
     calFull(body, S.calFull);
     // сітка займає весь екран до нижнього меню — гортається всередині, а не вся сторінка
