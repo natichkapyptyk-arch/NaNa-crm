@@ -334,7 +334,7 @@ const Staff = (() => {
   const FS_ON = '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg>';
   const FS_OFF = '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5"/></svg>';
   function calFull(body, on, user = false) {
-    S.calFull = on; document.body.classList.toggle('cal-full', on);
+    on = !!on; S.calFull = on; document.body.classList.toggle('cal-full', on);
     const wrap = $('.cal-wrap', body), btn = $('#c-fs', body); if (!wrap) return;
     wrap.classList.toggle('full', on);
     if (btn) { btn.innerHTML = on ? FS_OFF : FS_ON; btn.title = on ? 'Вийти з повноекранного режиму (Esc)' : 'Відкрити сітку на весь екран'; }
