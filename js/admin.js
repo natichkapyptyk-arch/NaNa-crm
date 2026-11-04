@@ -553,14 +553,17 @@ const Admin = (() => {
           <label class="sw" title="Вимкніть, якщо людина більше не працює — історія збережеться"><input type="checkbox" id="f-ac" ${p.is_active ? 'checked' : ''} ${boss && !self ? '' : 'disabled'}><i></i><span class="b">Працює в салоні</span></label></div>
           ${!isNew ? `<a class="btn wide mt" href="#/staff/sched/${p.id}" title="Години роботи, вихідні, закритий час">${IC.clock} Графік роботи</a>` : ''}</div>
         <div class="card full"><h3>Послуги, які виконує ${boss ? '' : '<span class="mut sm" style="font-weight:600">(змінює власниця)</span>'}</h3>
-          ${(() => { // спершу послуги, які майстер виконує, потім усі інші (по категоріях)
+          ${(() => { // спершу послуги, які майстер виконує, потім усі інші (по категоріях, згорнуто)
             const row = (s) => { const x = myS.find((m) => m.service_id === s.id);
-              return `<div class="ms-row"><input type="checkbox" data-sv="${s.id}" ${x ? 'checked' : ''} ${boss ? '' : 'disabled'} title="Виконує «${esc(s.name)}»"><span class="ell sm b">${esc(s.name)}</span>
+              return `<div class="ms-row" data-nm="${esc(s.name.toLowerCase())}"><input type="checkbox" data-sv="${s.id}" ${x ? 'checked' : ''} ${boss ? '' : 'disabled'} title="Виконує «${esc(s.name)}»"><span class="ell sm b">${esc(s.name)}</span>
               <input class="inp" type="number" min="5" step="5" data-su="${s.id}" value="${x ? x.dur : s.dur}" ${boss ? '' : 'disabled'} title="Тривалість, хв"><input class="inp" type="number" min="0" step="10" data-sp="${s.id}" value="${x ? +x.price : +s.price}" ${boss ? '' : 'disabled'} title="Ціна, ₴"></div>`; };
-            const byCat = (l) => [...new Set(l.map((s) => s.category))].map((c) => `<div class="s-cat" style="margin-top:10px">${esc(c)}</div>` + l.filter((s) => s.category === c).map(row).join('')).join('');
+            const byCat = (l) => [...new Set(l.map((s) => s.category))].map((c) => `<div class="ms-cat"><div class="s-cat ms-ch">${esc(c)}${boss ? `<button type="button" class="ms-all" data-all title="Позначити або зняти всі послуги категорії «${esc(c)}»">вибрати всі</button>` : ''}</div>`
+              + l.filter((s) => s.category === c).map(row).join('') + '</div>').join('');
             const mine = svcs.filter((s) => myS.some((m) => m.service_id === s.id)), rest = svcs.filter((s) => !mine.includes(s));
-            return (mine.length ? `<div class="ms-grp">✓ Виконує <span class="mut">· ${mine.length}</span></div>${byCat(mine)}` : `<div class="mut sm" style="margin-top:6px">Ще не вибрано жодної послуги — позначте нижче.</div>`)
-              + (rest.length ? `<div class="ms-grp other">Інші послуги салону <span class="mut">· ${rest.length}</span></div>${byCat(rest)}` : ''); })()}
+            return (svcs.length > 8 ? `<div class="search ms-q">${IC.search}<input class="inp" id="ms-q" placeholder="Пошук послуги" autocomplete="off"></div>` : '')
+              + (mine.length ? `<div class="ms-grp">✓ Виконує <span class="mut">· ${mine.length}</span></div><div id="ms-mine">${byCat(mine)}</div>` : `<div class="mut sm" style="margin-top:6px">Ще не вибрано жодної послуги — позначте нижче.</div>`)
+              + (rest.length ? `<button type="button" class="ms-grp other" id="ms-tg" aria-expanded="${mine.length ? 'false' : 'true'}" title="Показати або сховати послуги, яких цей майстер не виконує"><span>Інші послуги салону <span class="mut">· ${rest.length}</span></span><span class="ms-tgl">${mine.length ? 'Показати ▾' : 'Сховати ▴'}</span></button><div id="ms-rest" ${mine.length ? 'hidden' : ''}>${byCat(rest)}</div>` : '')
+              + '<div class="empty" id="ms-none" hidden>Послуг не знайдено</div>'; })()}
           <div class="hint">Колонки: тривалість (хв) і ціна (₴) саме в цього майстра.</div></div>
         <div class="card"><h3>Сповіщення</h3>
           <div class="col">${[['new', 'Нові записи'], ['cancel', 'Скасування'], ['move', 'Перенесення']].map(([k, n]) => `<label class="sw" title="Отримувати сповіщення: ${n.toLowerCase()}"><input type="checkbox" data-nt="${k}" ${nt[k] !== false ? 'checked' : ''} ${can ? '' : 'disabled'}><i></i><span>${n}</span></label>`).join('')}
@@ -582,6 +585,19 @@ const Admin = (() => {
       ls.set('pwHint', 0); const f = $('#f-pw', main);
       if (f) setTimeout(() => { f.scrollIntoView({ block: 'center', behavior: 'smooth' }); f.focus(); f.classList.add('err'); toast('Впишіть новий пароль і натисніть «Змінити вхід»', 'ok', 6000); }, 300);
     }
+    // послуги в картці: згорнути / розгорнути «Інші», «вибрати всі» по категорії, пошук
+    const msTg = $('#ms-tg', main), msRest = $('#ms-rest', main);
+    const msOpen = (on) => { if (!msTg) return; msRest.hidden = !on; msTg.setAttribute('aria-expanded', on); $('.ms-tgl', msTg).textContent = on ? 'Сховати ▴' : 'Показати ▾'; };
+    if (msTg) msTg.onclick = () => msOpen(msRest.hidden);
+    const allLbl = (cat) => { const b = $('[data-all]', cat); if (!b) return; const cb = $$('.ms-row:not([hidden]) [data-sv]', cat); b.textContent = cb.length && cb.every((x) => x.checked) ? 'зняти всі' : 'вибрати всі'; };
+    $$('.ms-cat', main).forEach((cat) => { allLbl(cat);
+      const b = $('[data-all]', cat); if (b) b.onclick = () => { const cb = $$('.ms-row:not([hidden]) [data-sv]', cat), on = !cb.every((x) => x.checked); cb.forEach((x) => (x.checked = on)); allLbl(cat); };
+      $$('[data-sv]', cat).forEach((x) => x.addEventListener('change', () => allLbl(cat))); });
+    const msQ = $('#ms-q', main); if (msQ) { const wasOpen = () => msTg && !msRest.hidden; let keep = null;
+      msQ.oninput = () => { const q = msQ.value.trim().toLowerCase();
+        if (q && keep === null) keep = wasOpen(); if (!q && keep !== null) { msOpen(keep); keep = null; } else if (q) msOpen(true);
+        let n = 0; $$('.ms-cat', main).forEach((cat) => { let k = 0; $$('.ms-row', cat).forEach((r) => { const show = !q || r.dataset.nm.includes(q); r.hidden = !show; if (show) k++; }); cat.hidden = !k; n += k; allLbl(cat); });
+        $('#ms-none', main).hidden = !!n; }; }
     let photo = p.photo_url || null;
     $('#f-bd', main).onchange = (e) => { const a = ageOf(e.target.value); $('#f-age', main).textContent = a != null ? a + ' ' + plural(a, 'рік', 'роки', 'років') : '—'; };
     const phIn = $('#ph-in', main); if (phIn) phIn.onchange = async () => {
