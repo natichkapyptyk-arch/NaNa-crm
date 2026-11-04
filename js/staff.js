@@ -245,7 +245,7 @@ const Staff = (() => {
     main.innerHTML = `<div class="cal-bar">
         <button class="btn ico" id="c-prev" title="Попередній день">${IC.back}</button>
         <label class="cal-day" title="Обрати дату в календарі" style="cursor:pointer;position:relative">${esc(innerWidth < 600
-          ? (relDay(S.day) === fmtDay(S.day, { weekday: 'short', day: 'numeric', month: 'short' }) ? fmtDay(S.day, { weekday: 'short', day: 'numeric', month: 'short' }) : relDay(S.day) + ', ' + fmtDay(S.day, { day: 'numeric', month: 'short' }))
+          ? (S.day === today() ? 'Сьогодні, ' + fmtDay(S.day, { day: 'numeric', month: 'short' }) : fmtDay(S.day, { weekday: 'short', day: 'numeric', month: 'short' }))
           : (relDay(S.day) === fmtDay(S.day, { weekday: 'short', day: 'numeric', month: 'short' }) ? fmtDay(S.day, { weekday: 'long', day: 'numeric', month: 'long' }) : relDay(S.day) + ', ' + fmtDay(S.day, { day: 'numeric', month: 'long' })))}
           <input type="date" id="c-date" value="${S.day}" style="position:absolute;inset:0;opacity:0;cursor:pointer"></label>
         <button class="btn ico" id="c-next" title="Наступний день">${IC.fwd}</button>
@@ -297,12 +297,13 @@ const Staff = (() => {
     const H = (s1 - s0) * PX, y = (m) => (m - s0) * PX;
     let times = ''; for (let m = s0; m <= s1; m += 60) times += `<div style="top:${y(m)}px">${toHM(m)}</div>`;
     let lines = ''; for (let m = s0; m < s1; m += 30) lines += `<div class="hl ${m % 60 ? '' : 'h'}" style="top:${y(m)}px"></div>`;
+    const G = {};   // візит (група послуг) за id першого запису — для перетягування
     const cols = shown.map((m) => {
       const hh = hoursFor(m.id, S.day, dd.over);
       const off = !hh ? `<div class="off" style="top:0;height:${H}px"></div>` : (hh[0] > s0 ? `<div class="off" style="top:0;height:${y(hh[0])}px"></div>` : '') + (hh[1] < s1 ? `<div class="off" style="top:${y(hh[1])}px;height:${H - y(hh[1])}px"></div>` : '');
       const bl = dd.blocks.filter((b) => b.staff_id === m.id).map((b) => { const a = dayOf(b.starts_at) < S.day ? 0 : kParts(b.starts_at).min, e = dayOf(b.ends_at) > S.day ? 1440 : kParts(b.ends_at).min;
         return `<div class="blk" data-blk="${b.id}" style="top:${y(Math.max(a, s0))}px;height:${Math.max(18, (Math.min(e, s1) - Math.max(a, s0)) * PX)}px" title="Закритий час: ${esc(b.reason)}. Натисніть, щоб відкрити">${IC.lock} ${esc(b.reason)}</div>`; }).join('');
-      const ap = visitGroups(appts.filter((a) => a.staff_id === m.id)).map((g) => { const a = g.items[0], z = g.items[g.items.length - 1];
+      const ap = visitGroups(appts.filter((a) => a.staff_id === m.id)).map((g) => { const a = g.items[0], z = g.items[g.items.length - 1]; G[a.id] = g;
         const st = kParts(a.starts_at).min, en = dayOf(z.ends_at) === S.day ? kParts(z.ends_at).min : 1440, box = `style="top:${y(st)}px;height:${Math.max(24, (en - st) * PX - 2)}px"`;
         if (g.items.length === 1) return `<div class="ap ${a.status}" data-ap="${a.id}" ${box} title="${esc(STATUS[a.status])}: ${esc(a.clients?.name)} — ${esc(svcById(a.service_id)?.name)}">${apHtml(a)}</div>`;
         return `<div class="ap grp ${g.status}" data-ap="${a.id}" ${box} title="Візит: ${g.items.length} ${plural(g.items.length, 'послуга', 'послуги', 'послуг')} — ${esc(a.clients?.name)}"><span class="t">${fmtT(a.starts_at)}–${fmtT(z.ends_at)}${a.visits?.source === 'online' ? ' 🌐' : ''} · ${g.items.length} ${plural(g.items.length, 'послуга', 'послуги', 'послуг')}</span><b>${esc(a.clients?.name || '')}</b>`
@@ -331,6 +332,80 @@ const Staff = (() => {
       newAppt({ mid: c.dataset.col, day: S.day, min: m });
     }));
     bindDay(body, dd);
+    gridDrag(body, { s0, s1, PX, G });
+  }
+
+  /* ---- перетягування запису в сітці: мишкою одразу, пальцем — затиснути ~0,4 с і тягнути ---- */
+  function gridDrag(body, { s0, s1, PX, G }) {
+    if (S.dragOff) S.dragOff();
+    const wrap = $('.cal-wrap', body); if (!wrap) return;
+    const step = +S.settings.step_min || 15;
+    let d = null, skipClick = false;
+    const can = (g) => g.items.every((a) => a.status === 'booked') && (isBoss() || g.items[0].staff_id === S.me.id);
+    const colAt = (x) => $$('.cal-col', body).find((c) => { const r = c.getBoundingClientRect(); return x >= r.left && x <= r.right; });
+    const durOf = (g) => (Date.parse(g.items[g.items.length - 1].ends_at) - Date.parse(g.items[0].starts_at)) / 6e4;
+    const begin = (el, g, x, y, touch) => {
+      const r = el.getBoundingClientRect();
+      d = { el, g, x0: x, y0: y, dy: y - r.top, on: false, touch, t: 0, col: null, min: null };
+      if (touch) d.t = setTimeout(() => { if (d && !d.on) { start(); move(d.x0, d.y0); } }, 380);
+    };
+    const start = () => {
+      d.on = true; d.el.classList.add('drg-src');
+      d.gh = d.el.cloneNode(true); d.gh.classList.add('drg-gh'); d.gh.removeAttribute('data-ap'); d.gh.removeAttribute('title');
+      $$('[data-ap]', d.gh).forEach((x) => x.removeAttribute('data-ap'));
+      d.gh.insertAdjacentHTML('afterbegin', '<div class="drg-t"></div>');
+      document.body.classList.add('cal-dragging'); hideTip(); try { navigator.vibrate && navigator.vibrate(12); } catch (e) { /* */ }
+    };
+    const move = (x, y) => {
+      if (!d) return;
+      if (!d.on) { if (Math.hypot(x - d.x0, y - d.y0) < 8) return; if (d.touch) { clearTimeout(d.t); d = null; return; } start(); }
+      const wr = wrap.getBoundingClientRect();   // біля краю — сітка сама прокручується
+      if (y < wr.top + 70) wrap.scrollTop -= 14; else if (y > wr.bottom - 40) wrap.scrollTop += 14;
+      if (x < wr.left + 60) wrap.scrollLeft -= 14; else if (x > wr.right - 30) wrap.scrollLeft += 14;
+      const col = colAt(x) || d.col; if (!col) return;
+      const dur = durOf(d.g), cr = col.getBoundingClientRect();
+      let m = Math.round((s0 + (y - d.dy - cr.top) / PX) / step) * step;
+      m = Math.max(s0, Math.min(m, Math.max(s0, s1 - dur)));
+      if (d.gh.parentNode !== col) col.appendChild(d.gh);
+      d.col = col; d.min = m; d.gh.style.top = (m - s0) * PX + 'px';
+      $('.drg-t', d.gh).textContent = `${toHM(m)}–${toHM(m + dur)} · ${byId(col.dataset.col)?.first_name || ''}`;
+    };
+    const end = async () => {
+      if (!d) return; clearTimeout(d.t); const x = d; d = null; document.body.classList.remove('cal-dragging');
+      if (!x.on) return;
+      skipClick = true; setTimeout(() => (skipClick = false), 450);
+      const g = x.g, a0 = g.items[0], from = kParts(a0.starts_at).min, mid = x.col?.dataset.col;
+      const back = () => { x.gh?.remove(); x.el.classList.remove('drg-src'); };
+      if (!mid || x.min == null || (mid === a0.staff_id && x.min === from)) return back();
+      if (!isBoss() && mid !== S.me.id) { back(); return toast('Переносити можна лише у свій стовпчик', 'bad'); }
+      if (mid !== a0.staff_id) { const bad = g.items.find((a) => !msOf(mid).some((m) => m.service_id === a.service_id));
+        if (bad) { back(); return toast(`${byId(mid)?.first_name || 'Цей майстер'} не виконує «${svcById(bad.service_id)?.name || 'цю послугу'}»`, 'bad', 4500); } }
+      const delta = x.min - from, other = mid !== a0.staff_id;
+      const ok = await confirmBox(`Перенести ${g.items.length > 1 ? 'візит' : 'запис'} на ${toHM(x.min)}${other ? ` до майстра ${byId(mid)?.first_name || ''}` : ''}?`,
+        { ok: 'Перенести', sub: esc(`${a0.clients?.name || ''} · ${g.items.map((a) => svcById(a.service_id)?.name || '').join(', ')} · було ${fmtT(a0.starts_at)}${other ? ', ' + (byId(a0.staff_id)?.first_name || '') : ''}`) });
+      if (!ok) return back();
+      for (const a of delta > 0 ? [...g.items].reverse() : g.items) {   // по черзі, щоб послуги візиту не «наїхали» одна на одну
+        const st = new Date(Date.parse(a.starts_at) + delta * 6e4), dur = Math.round((Date.parse(a.ends_at) - Date.parse(a.starts_at)) / 6e4);
+        const r = await withForce((force) => sb.rpc('staff_move', { p_appt: a.id, p_staff: mid, p_start: st.toISOString(), p_dur: dur, p_force: force }));
+        if (r.cancelled) { back(); return refresh(); }
+        if (r.error) { toast(errMsg(r.error), 'bad', 5000); return refresh(); }
+      }
+      toast(g.items.length > 1 ? 'Візит перенесено' : 'Запис перенесено'); refresh();
+    };
+    $$('.cal-col .ap', body).forEach((el) => { const g = G[el.dataset.ap]; if (!g || !can(g)) return;
+      el.classList.add('drg'); el.title += ' · Перетягніть, щоб перенести';
+      el.addEventListener('mousedown', (e) => { if (e.button === 0) { e.preventDefault(); begin(el, g, e.clientX, e.clientY, false); } });
+      el.addEventListener('touchstart', (e) => { if (e.touches.length === 1) begin(el, g, e.touches[0].clientX, e.touches[0].clientY, true); }, { passive: true });
+      el.addEventListener('contextmenu', (e) => { if (d) e.preventDefault(); });
+    });
+    const mm = (e) => d && move(e.clientX, e.clientY);
+    const tm = (e) => { if (!d) return; if (d.on) e.preventDefault(); move(e.touches[0].clientX, e.touches[0].clientY); };
+    const up = () => end();
+    const ck = (e) => { if (skipClick && body.contains(e.target)) { e.stopPropagation(); e.preventDefault(); skipClick = false; } };
+    document.addEventListener('mousemove', mm); document.addEventListener('mouseup', up);
+    document.addEventListener('touchmove', tm, { passive: false }); document.addEventListener('touchend', up); document.addEventListener('touchcancel', up);
+    document.addEventListener('click', ck, true);
+    S.dragOff = () => { [['mousemove', mm], ['mouseup', up], ['touchmove', tm], ['touchend', up], ['touchcancel', up]].forEach(([k, f]) => document.removeEventListener(k, f)); document.removeEventListener('click', ck, true); S.dragOff = null; };
   }
   // сітка на весь екран: верхня смужка з датою й кнопками, сітка — на весь екран (і браузер на весь екран, де можна)
   const FS_ON = '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg>';
