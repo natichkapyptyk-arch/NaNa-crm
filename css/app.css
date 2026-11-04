@@ -496,3 +496,17 @@ body.cal-full{overflow:hidden}
 .cal-fbar .btn:not(.pri){background:transparent;border-color:rgba(255,255,255,.3);color:#fff}
 .cal-wrap.full{position:fixed;left:0;right:0;bottom:0;top:calc(54px + env(safe-area-inset-top));z-index:94;max-height:none;border:0;border-radius:0;box-shadow:none;padding-bottom:env(safe-area-inset-bottom)}
 @media (max-width:520px){.cal-fbar .cf-t{display:none}}
+/* календар на телефоні */
+@media (max-width:599px){
+  .cal-bar{gap:6px}
+  .cal-bar .cal-day{min-width:0;flex:1;font-size:16px}
+  .cal-bar .cb-t{display:none}
+  .cal-bar #c-mode,.cal-bar #c-block{width:40px;padding:0;justify-content:center}
+  /* «+ Запис» — кругла кнопка внизу праворуч, завжди під пальцем */
+  .cal-bar #c-new{position:fixed;right:14px;bottom:calc(82px + env(safe-area-inset-bottom));z-index:65;height:54px;padding:0 20px;border-radius:999px;box-shadow:0 8px 24px rgba(30,30,28,.28);font-size:15px}
+  .cal-head{padding:6px 8px;font-size:13px;min-height:46px;gap:6px}
+  .cal-head .ava.s{width:28px;height:28px;font-size:11px}
+  .cal-times div{right:4px;font-size:11px}
+  .cal-col .ap{left:2px;right:2px;padding:4px 6px;font-size:12px}
+  .cal-wrap.full .cal-grid{padding-bottom:calc(80px + env(safe-area-inset-bottom))}
+}

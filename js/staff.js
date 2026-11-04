@@ -249,8 +249,8 @@ const Staff = (() => {
         <button class="btn ico" id="c-next" title="Наступний день">${IC.fwd}</button>
         ${S.day !== today() ? '<button class="btn sm" id="c-today" title="Повернутись до сьогодні">Сьогодні</button>' : ''}
         <div class="grow"></div>
-        <button class="btn sm" id="c-mode" title="${S.calMode === 'grid' ? 'Показати списком' : 'Показати сіткою по годинах'}">${S.calMode === 'grid' ? IC.list.replace('<svg', '<svg width="16" height="16"') + ' Список' : IC.cal.replace('<svg', '<svg width="16" height="16"') + ' Сітка'}</button>
-        <button class="btn sm" id="c-block" title="Закрити час або день для запису (відпустка, лікар…)">${IC.lock} Закрити час</button>
+        <button class="btn sm" id="c-mode" title="${S.calMode === 'grid' ? 'Показати списком' : 'Показати сіткою по годинах'}">${S.calMode === 'grid' ? IC.list.replace('<svg', '<svg width="16" height="16"') + '<span class="cb-t"> Список</span>' : IC.cal.replace('<svg', '<svg width="16" height="16"') + '<span class="cb-t"> Сітка</span>'}</button>
+        <button class="btn sm" id="c-block" title="Закрити час або день для запису (відпустка, лікар…)">${IC.lock}<span class="cb-t"> Закрити час</span></button>
         <button class="btn pri" id="c-new" title="Створити новий запис клієнта">${IC.plus} Запис</button></div>
       <div class="chips scroll mb">${ms.length > 1 ? `<button class="chip ${S.calSel === 'all' ? 'on' : ''}" data-sel="all" title="Показати всіх майстрів">Усі майстри</button>` : ''}${ms.map((m) => `<button class="chip ${S.calSel === m.id ? 'on' : ''}" data-sel="${m.id}" title="Лише записи майстра ${esc(m.first_name)}">${esc(m.first_name)}</button>`).join('')}
         <label class="chip" title="Показувати також скасовані записи" style="gap:8px"><input type="checkbox" id="c-cn" ${S.showCancel ? 'checked' : ''} style="accent-color:var(--gr)"> скасовані</label></div>
@@ -307,13 +307,18 @@ const Staff = (() => {
           + g.items.map((x) => `<div class="ap-ln ${x.status}" data-ap="${x.id}" title="Відкрити: ${esc(svcById(x.service_id)?.name)}">${fmtT(x.starts_at)} ${esc(svcById(x.service_id)?.name || '')}</div>`).join('') + `</div>`; }).join('');
       return `<div class="cal-col" data-col="${m.id}" style="height:${H}px" title="Натисніть на вільне місце, щоб записати клієнта">${lines}${off}${bl}${ap}</div>`;
     }).join('');
-    const n = shown.length;
-    body.innerHTML = `<div class="cal-wrap"><div class="cal-grid" style="grid-template-columns:56px repeat(${n},minmax(${n > 1 ? 150 : 220}px,1fr))">
+    const n = shown.length, phone = innerWidth < 600;   // на телефоні вужча колонка часу й майстрів — видно 2,5 майстра
+    body.innerHTML = `<div class="cal-wrap"><div class="cal-grid" style="grid-template-columns:${phone ? 46 : 56}px repeat(${n},minmax(${n > 1 ? (phone ? 128 : 150) : 200}px,1fr))">
       <button type="button" class="cal-head tm cal-fs" id="c-fs" title="${S.calFull ? 'Вийти з повноекранного режиму (Esc)' : 'Відкрити сітку на весь екран'}">${S.calFull ? FS_OFF : FS_ON}</button>${shown.map((m) => canCard(m) ? `<a class="cal-head lnk" href="#/staff/team/${m.id}" title="Відкрити картку: ${esc(fullName(m))}">${avatar(m, 's')}<span class="ell">${esc(m.first_name)}</span></a>` : `<div class="cal-head">${avatar(m, 's')}<span class="ell">${esc(m.first_name)}</span></div>`).join('')}
       <div class="cal-times" style="height:${H}px;position:sticky">${times}</div>${cols}</div></div>`;
     if (S.day === today()) { const nm = kParts(new Date(nowMs())).min; if (nm >= s0 && nm <= s1) $$('.cal-col', body).forEach((c) => c.insertAdjacentHTML('beforeend', `<div class="cal-now" style="top:${y(nm)}px"></div>`)); }
     const wrap = $('.cal-wrap', body);
     calFull(body, S.calFull);
+    // сітка займає весь екран до нижнього меню — гортається всередині, а не вся сторінка
+    const fit = () => { if (!wrap.isConnected) return removeEventListener('resize', fit); if (wrap.classList.contains('full')) { wrap.style.maxHeight = ''; return; }
+      const tabs = $('#st-tabs'), tb = tabs && getComputedStyle(tabs).display !== 'none' ? tabs.offsetHeight : 0;
+      wrap.style.maxHeight = Math.max(320, innerHeight - (wrap.getBoundingClientRect().top + scrollY) - tb - 14) + 'px'; };
+    fit(); addEventListener('resize', fit); S.calFit = fit;
     $('#c-fs', body).onclick = () => calFull(body, !S.calFull, true);
     const first = appts[0] ? kParts(appts[0].starts_at).min : S.day === today() ? kParts(new Date(nowMs())).min : s0 + 60;
     wrap.scrollTop = Math.max(0, y(first) - 60);
@@ -344,6 +349,7 @@ const Staff = (() => {
       $('#cf-x', body).onclick = () => calFull(body, false, true);
       if (user && document.documentElement.requestFullscreen && !document.fullscreenElement) document.documentElement.requestFullscreen().catch(() => {});
     } else if (user && document.fullscreenElement) document.exitFullscreen().catch(() => {});
+    if (!on && S.calFit) setTimeout(S.calFit, 50);
   }
   // Esc / вихід з повноекранного режиму браузера — закрити й нашу «повноекранну» сітку
   document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && S.calFull && !sheets.length && $('#c-body')) calFull($('#c-body'), false, true); });
