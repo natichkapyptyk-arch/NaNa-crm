@@ -433,7 +433,7 @@ const Staff = (() => {
       <div class="two"><div><label class="lb" for="cs-u">Тривалість, хв</label><input class="inp" id="cs-u" type="number" min="5" step="5"></div><div><label class="lb" for="cs-p">Ціна, ₴</label><input class="inp" id="cs-p" type="number" min="0" step="10"></div></div>
       <div class="hint">Початок лишається ${fmtT(a.starts_at)}, кінець зміниться за новою тривалістю.${a.status === 'done' ? ' Візит уже оплачено — суму оплати змініть окремо кнопкою «Змінити оплату».' : ''}</div>`,
       foot: `<button class="btn" data-x2 title="Закрити без змін">Скасувати</button><button class="btn pri" id="cs-ok" title="Зберегти іншу послугу">Зберегти</button>` });
-    const sel = $('#cs-s', s.el), u = $('#cs-u', s.el), pr = $('#cs-p', s.el);
+    const sel = $('#cs-s', s.el), u = $('#cs-u', s.el), pr = $('#cs-p', s.el); niceSelect(sel);
     const fill = (keep) => { const o = S.ms.find((x) => x.staff_id === a.staff_id && x.service_id === sel.value && x.is_active), sv = svcById(sel.value);
       if (keep) { u.value = Math.round((Date.parse(a.ends_at) - Date.parse(a.starts_at)) / 6e4); pr.value = +a.price; }
       else { u.value = o?.dur || sv?.dur || ''; pr.value = +(o?.price ?? sv?.price ?? 0); } };
@@ -466,7 +466,7 @@ const Staff = (() => {
       foot: `<button class="btn" data-x2 title="Не переносити">Скасувати</button><button class="btn pri" id="mv-ok" title="Зберегти новий час">Перенести</button>` });
     const tp = () => timePicker($('#mv-t', s.el), { mid: st.mid, dur: st.dur, day: st.day, min: st.min, ignoreId: a.id, onPick: (m) => (st.min = m) });
     tp();
-    const mm = $('#mv-m', s.el); if (mm) mm.onchange = () => { st.mid = mm.value; tp(); };
+    const mm = $('#mv-m', s.el); if (mm) { niceSelect(mm); mm.onchange = () => { st.mid = mm.value; tp(); }; }
     $('#mv-d', s.el).onchange = (e) => { if (e.target.value) { st.day = e.target.value; st.min = null; tp(); } };
     $('#mv-u', s.el).onchange = (e) => { st.dur = Math.max(5, +e.target.value || st.dur); tp(); };
     $('[data-x2]', s.el).onclick = s.close;
@@ -524,7 +524,7 @@ const Staff = (() => {
     };
     drawClient();
     // майстер і послуга
-    const msel = $('#na-m', el), ssel = $('#na-s', el);
+    const msel = $('#na-m', el), ssel = $('#na-s', el); niceSelect(msel); niceSelect(ssel);
     const fillSvc = () => {
       // лише послуги, закріплені за майстром (інших майстер не виконує)
       const own = st.mid ? msOf(st.mid) : [];

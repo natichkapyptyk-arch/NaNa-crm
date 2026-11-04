@@ -114,6 +114,42 @@ function phoneDupWatch(input, box, { exceptId = null, label, onPick }) {
     }, 250);
   });
 }
+// випадаючий список під полем замість системного (select лишається «джерелом правди»: value, onchange)
+function niceSelect(sel) {
+  if (!sel || sel._nice) return sel?._nice;
+  const wrap = document.createElement('div'); wrap.className = 'nsel';
+  sel.parentNode.insertBefore(wrap, sel); wrap.appendChild(sel); sel.classList.add('nsel-native'); sel.tabIndex = -1;
+  const btn = document.createElement('button'); btn.type = 'button'; btn.className = 'inp nsel-btn'; if (sel.id) btn.dataset.for = sel.id;
+  const list = document.createElement('div'); list.className = 'nsel-list hide'; list.setAttribute('role', 'listbox');
+  wrap.append(btn, list);
+  const parts = (t) => { const i = t.indexOf(' — '); return i > 0 ? [t.slice(0, i), t.slice(i + 3)] : [t, '']; };
+  const sync = () => { const o = sel.selectedOptions[0]; const [a, b] = parts(o ? o.textContent : '');
+    btn.innerHTML = `<span class="nm ${!o || !o.value ? 'ph' : ''}">${esc(a)}</span>${b ? `<span class="sub">${esc(b)}</span>` : ''}<i class="ar">▾</i>`;
+    btn.disabled = sel.disabled || !sel.options.length; };
+  const close = () => { list.classList.add('hide'); wrap.classList.remove('open'); document.removeEventListener('mousedown', outside, true); };
+  const outside = (e) => { if (!wrap.contains(e.target)) close(); };
+  const pick = (v) => { sel.value = v; close(); sel.dispatchEvent(new Event('change', { bubbles: true })); btn.focus(); };
+  const draw = (q = '') => {
+    const ql = q.trim().toLowerCase(), opts = [...sel.options].filter((o) => o.value && (!ql || o.textContent.toLowerCase().includes(ql)));
+    const groups = []; opts.forEach((o) => { const g = o.parentElement.tagName === 'OPTGROUP' ? o.parentElement.label : ''; let G = groups.find((x) => x.g === g); if (!G) groups.push((G = { g, o: [] })); G.o.push(o); });
+    const many = [...sel.options].filter((o) => o.value).length > 8;
+    list.innerHTML = (many ? `<input class="inp nsel-q" placeholder="Пошук…" value="${esc(q)}">` : '') + (groups.map((G) => (G.g && groups.length > 1 ? `<div class="nsel-g">${esc(G.g)}</div>` : '') + G.o.map((o) => { const [a, b] = parts(o.textContent);
+      return `<div class="nsel-o ${o.selected ? 'on' : ''}" role="option" data-v="${esc(o.value)}" title="${esc(o.textContent)}"><span class="nm">${esc(a)}</span>${b ? `<span class="sub">${esc(b)}</span>` : ''}</div>`; }).join('')).join('')
+      || `<div class="nsel-e">${esc([...sel.options].find((o) => !o.value)?.textContent || 'Немає варіантів')}</div>`);
+    $$('[data-v]', list).forEach((d) => (d.onclick = () => pick(d.dataset.v)));
+    const qi = $('.nsel-q', list); if (qi) { qi.oninput = () => { draw(qi.value); const n = $('.nsel-q', list); n.focus(); n.setSelectionRange(n.value.length, n.value.length); }; }
+  };
+  btn.onclick = () => { if (!list.classList.contains('hide')) return close();
+    draw(); list.classList.remove('hide'); wrap.classList.add('open'); document.addEventListener('mousedown', outside, true);
+    const on = $('.nsel-o.on', list); if (on) on.scrollIntoView({ block: 'nearest' }); $('.nsel-q', list)?.focus(); };
+  wrap.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !list.classList.contains('hide')) { e.stopPropagation(); close(); btn.focus(); } }, true);
+  // програмна зміна value / списку → оновити кнопку
+  for (const k of ['value', 'selectedIndex']) { const d = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, k);
+    Object.defineProperty(sel, k, { configurable: true, get() { return d.get.call(this); }, set(v) { d.set.call(this, v); sync(); } }); }
+  new MutationObserver(sync).observe(sel, { childList: true, subtree: true, attributes: true, attributeFilter: ['disabled'] });
+  sel.addEventListener('change', sync); sync();
+  return (sel._nice = { sync, close });
+}
 function fmtPhone(p) { const m = String(p || '').match(/^\+380(\d{2})(\d{3})(\d{2})(\d{2})$/); return m ? `+380 ${m[1]} ${m[2]} ${m[3]} ${m[4]}` : p || ''; }
 const IC = {
   tg: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M21.9 4.3 18.6 20c-.2 1.1-.9 1.4-1.8.9l-5-3.7-2.4 2.3c-.3.3-.5.5-1 .5l.4-5.1 9.3-8.4c.4-.4-.1-.6-.6-.2L6 13.5l-4.9-1.5c-1.1-.3-1.1-1.1.2-1.6l19.2-7.4c.9-.3 1.7.2 1.4 1.3z"/></svg>',
