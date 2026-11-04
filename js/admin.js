@@ -348,7 +348,10 @@ const Admin = (() => {
       const name = $('#sv-n', el).value.trim(), dur = +$('#sv-u', el).value, price = +$('#sv-p', el).value;
       if (!name) { $('#sv-n', el).classList.add('err'); return toast('Вкажіть назву', 'bad'); }
       if (!(dur >= 5) || !(price >= 0)) return toast('Перевірте тривалість і ціну', 'bad');
-      const row = { category: $('#sv-c', el).value.trim() || 'Інше', name, descr: $('#sv-d', el).value.trim() || null, dur, price, sort: +$('#sv-o', el).value || 100, is_active: $('#sv-a', el).checked, photos };
+      // якщо поле категорії не чіпали, а за цей час категорію перейменували — не повертаємо стару назву
+      let category = $('#sv-c', el).value.trim() || 'Інше';
+      if (id && category === sv.category) { const { data: cur } = await sb.from('services').select('category').eq('id', id).single(); if (cur?.category) category = cur.category; }
+      const row = { category, name, descr: $('#sv-d', el).value.trim() || null, dur, price, sort: +$('#sv-o', el).value || 100, is_active: $('#sv-a', el).checked, photos };
       const r1 = id ? await sb.from('services').update(row).eq('id', id) : await sb.from('services').insert({ id: sid, ...row });
       if (r1.error) return toast(errMsg(r1.error), 'bad');
       const up = [], del = [];
