@@ -339,6 +339,9 @@ const Admin = (() => {
       };
     };
     drawPh();
+    // тривалість і ціна згори переходять до майстрів, у яких стояло те саме значення (свої, відмінні — не чіпаємо)
+    [['#sv-u', 'pu'], ['#sv-p', 'pp']].forEach(([sel, k]) => { const top = $(sel, el); let prev = top.value;
+      top.addEventListener('input', () => { $$(`[data-${k}]`, el).forEach((f) => { if (f.value === prev || f.value === '') { f.value = top.value; f.classList.add('synced'); setTimeout(() => f.classList.remove('synced'), 700); } }); prev = top.value; }); });
     $('#sv-all', el).onclick = () => { $$('[data-p]', el).forEach((c) => { if (c.checked) { $(`[data-pu="${c.dataset.p}"]`, el).value = $('#sv-u', el).value; $(`[data-pp="${c.dataset.p}"]`, el).value = $('#sv-p', el).value; } }); };
     $('[data-x2]', el).onclick = s.close;
     $('#sv-ok', el).onclick = (e) => busy(e.currentTarget, async () => {
