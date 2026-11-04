@@ -101,6 +101,19 @@ document.addEventListener('paste', (e) => { const el = e.target;
   if (!isTel(el) || el.value.replace(/\s/g, '') !== '+380') return;
   const n = normPhone(e.clipboardData?.getData('text') || ''); if (!n) return;
   e.preventDefault(); el.value = phoneTyping(n); el.dispatchEvent(new Event('input', { bubbles: true })); });
+// чи є вже інший клієнт з таким номером: показує попередження з кнопкою (обрати / відкрити картку)
+function phoneDupWatch(input, box, { exceptId = null, label, onPick }) {
+  let tmr, seq = 0;
+  input.addEventListener('input', () => {
+    clearTimeout(tmr); box.innerHTML = ''; const n = normPhone(input.value); if (!n) return; const my = ++seq;
+    tmr = setTimeout(async () => {
+      let rq = sb.from('clients').select('id,name,phone,contact,instagram').eq('phone', n).limit(1); if (exceptId) rq = rq.neq('id', exceptId);
+      const { data } = await rq; if (my !== seq || !data?.length) return; const x = data[0];
+      box.innerHTML = `<div class="dup">⚠️ Цей номер уже є в базі: <b>${esc(x.name)}</b><button type="button" class="btn sm" title="${esc(label)}: ${esc(x.name)}">${esc(label)}</button></div>`;
+      $('button', box).onclick = () => onPick(x);
+    }, 250);
+  });
+}
 function fmtPhone(p) { const m = String(p || '').match(/^\+380(\d{2})(\d{3})(\d{2})(\d{2})$/); return m ? `+380 ${m[1]} ${m[2]} ${m[3]} ${m[4]}` : p || ''; }
 const IC = {
   tg: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M21.9 4.3 18.6 20c-.2 1.1-.9 1.4-1.8.9l-5-3.7-2.4 2.3c-.3.3-.5.5-1 .5l.4-5.1 9.3-8.4c.4-.4-.1-.6-.6-.2L6 13.5l-4.9-1.5c-1.1-.3-1.1-1.1.2-1.6l19.2-7.4c.9-.3 1.7.2 1.4 1.3z"/></svg>',
@@ -131,10 +144,12 @@ const IC = {
 const CONTACTS = { telegram: ['Telegram', IC.tg], viber: ['Viber', IC.vb], call: ['Дзвінок', IC.call], instagram: ['Instagram', IC.ig] };
 function contactLinks(c) {   // кнопки «зателефонувати / написати»
   const p = String(c.phone || '').replace(/[^\d+]/g, '');
-  let h = `<a class="btn sm" href="tel:${esc(p)}" title="Зателефонувати клієнту">${IC.call}<span>Дзвінок</span></a>`;
-  h += `<a class="btn sm" href="viber://chat?number=${encodeURIComponent(p)}" title="Відкрити чат у Viber">${IC.vb}<span>Viber</span></a>`;
-  h += `<a class="btn sm" href="https://t.me/${esc(p)}" target="_blank" rel="noopener" title="Відкрити чат у Telegram за номером">${IC.tg}<span>Telegram</span></a>`;
-  if (c.instagram) h += `<a class="btn sm" href="https://instagram.com/${encodeURIComponent(String(c.instagram).replace(/^@/, ''))}" target="_blank" rel="noopener" title="Профіль в Instagram">${IC.ig}<span>Instagram</span></a>`;
+  const pref = c.contact === 'instagram' && !c.instagram ? 'call' : c.contact || 'call';   // клієнту так зручніше — кнопка виділена
+  const cls = (k) => (k === pref ? 'btn sm pri' : 'btn sm'), tip = (k, t) => esc(t + (k === pref ? ' — клієнту так зручніше' : ''));
+  let h = `<a class="${cls('call')}" href="tel:${esc(p)}" title="${tip('call', 'Зателефонувати клієнту')}">${IC.call}<span>Дзвінок</span></a>`;
+  h += `<a class="${cls('viber')}" href="viber://chat?number=${encodeURIComponent(p)}" title="${tip('viber', 'Відкрити чат у Viber')}">${IC.vb}<span>Viber</span></a>`;
+  h += `<a class="${cls('telegram')}" href="https://t.me/${esc(p)}" target="_blank" rel="noopener" title="${tip('telegram', 'Відкрити чат у Telegram за номером')}">${IC.tg}<span>Telegram</span></a>`;
+  if (c.instagram) h += `<a class="${cls('instagram')}" href="https://instagram.com/${encodeURIComponent(String(c.instagram).replace(/^@/, ''))}" target="_blank" rel="noopener" title="${tip('instagram', 'Профіль в Instagram')}">${IC.ig}<span>Instagram</span></a>`;
   return `<div class="contact-btns">${h}</div>`;
 }
 function avatar(p, cls = '') {

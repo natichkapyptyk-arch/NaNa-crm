@@ -466,7 +466,7 @@ const Staff = (() => {
         return;
       }
       c.innerHTML = `<div class="search">${IC.search}<input class="inp" id="na-q" placeholder="Пошук: імʼя або телефон" autocomplete="off" autofocus></div><div id="na-sg"></div>
-        <div id="na-newc" class="hide"><div class="two mt"><input class="inp" id="na-cn" placeholder="Імʼя клієнта"><input class="inp" id="na-cp" type="tel" placeholder="+380…"></div>
+        <div id="na-newc" class="hide"><div class="two mt"><input class="inp" id="na-cn" placeholder="Імʼя клієнта"><input class="inp" id="na-cp" type="tel" placeholder="+380…"></div><div id="na-dup"></div>
         <div class="chips mt" id="na-cc">${Object.entries(CONTACTS).map(([k, [n]]) => `<button type="button" class="chip ${k === st.contact ? 'on' : ''}" data-cc="${k}" title="Клієнту зручно: ${n}">${n}</button>`).join('')}</div></div>`;
       const q = $('#na-q', c), sg = $('#na-sg', c);
       let tmr;
@@ -483,6 +483,7 @@ const Staff = (() => {
         $('[data-newc]', sg).onclick = () => { sg.innerHTML = ''; $('#na-newc', c).classList.remove('hide'); if (digits.length >= 9) $('#na-cp', c).value = v; else $('#na-cn', c).value = v; ($('#na-cn', c).value ? $('#na-cp', c) : $('#na-cn', c)).focus(); };
       }, 220); };
       $$('[data-cc]', c).forEach((b) => (b.onclick = () => { st.contact = b.dataset.cc; $$('[data-cc]', c).forEach((x) => x.classList.toggle('on', x === b)); }));
+      phoneDupWatch($('#na-cp', c), $('#na-dup', c), { label: 'Обрати цього клієнта', onPick: (x) => { st.client = x; drawClient(); } });
     };
     drawClient();
     // майстер і послуга
@@ -701,7 +702,7 @@ const Staff = (() => {
       ${fav ? `<div class="hint mt">💛 Улюблена послуга: <b>${esc(svcById(fav[0])?.name || '')}</b> (${fav[1]} р.)</div>` : ''}
       ${next ? `<div class="hint">📅 Наступний запис: <b>${esc(relDay(dayOf(next.starts_at)))}, ${fmtT(next.starts_at)}</b></div>` : ''}
       <div class="sect"><h3>Дані клієнта</h3>
-        <div class="two"><div><label class="lb" for="c-n">Імʼя</label><input class="inp" id="c-n" value="${esc(c.name)}"></div><div><label class="lb" for="c-p">Телефон</label><input class="inp" id="c-p" type="tel" value="${esc(c.phone)}"></div></div>
+        <div class="two"><div><label class="lb" for="c-n">Імʼя</label><input class="inp" id="c-n" value="${esc(c.name)}"></div><div><label class="lb" for="c-p">Телефон</label><input class="inp" id="c-p" type="tel" value="${esc(c.phone)}"></div></div><div id="c-dup"></div>
         <label class="lb">Зручний звʼязок</label><div class="chips" id="c-c">${Object.entries(CONTACTS).map(([k, [n]]) => `<button class="chip ${c.contact === k ? 'on' : ''}" data-cc="${k}" title="Клієнту зручно: ${n}">${n}</button>`).join('')}</div>
         <div class="two"><div><label class="lb" for="c-ig">Instagram</label><input class="inp" id="c-ig" value="${esc(c.instagram || '')}" placeholder="nickname"></div><div><label class="lb" for="c-b">День народження</label><input class="inp" id="c-b" type="date" value="${c.birthday || ''}"></div></div>
         <label class="lb" for="c-no">Нотатки</label><textarea class="inp" id="c-no" rows="2" placeholder="Алергії, вподобання, колір…">${esc(c.note || '')}</textarea>
@@ -711,6 +712,7 @@ const Staff = (() => {
         <div class="b sm nw">${x.payments ? money(x.payments.amount) : x.status === 'booked' ? money(x.price) : ''}</div></div>`).join('') || '<div class="mut">Ще не було записів</div>'}</div>`;
     s.el.querySelector('.sh-f')?.remove();
     s.el.insertAdjacentHTML('beforeend', `<div class="sh-f"><button class="btn pri" id="c-book" title="Створити новий запис для цього клієнта">${IC.plus} Записати</button></div>`);
+    phoneDupWatch($('#c-p', s.el), $('#c-dup', s.el), { exceptId: c.id, label: 'Відкрити картку', onPick: (x) => clientSheet(x.id) });
     let contact = c.contact;
     $$('[data-cc]', s.el).forEach((b) => (b.onclick = () => { contact = b.dataset.cc; $$('[data-cc]', s.el).forEach((x) => x.classList.toggle('on', x === b)); }));
     $('#c-save', s.el).onclick = (e) => busy(e.currentTarget, async () => {
