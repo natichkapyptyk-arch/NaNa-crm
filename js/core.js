@@ -193,6 +193,7 @@ async function route() {
   const h = decodeURIComponent(location.hash.replace(/^#/, ''));
   if (h.startsWith('/v/')) return Client.visit(h.slice(3));
   if (h.startsWith('/team/')) return Staff.quick(h.slice(6));
+  if (h.startsWith('/pw/')) return Staff.pwLink(h.slice(4));
   if (h === 'staff' || h.startsWith('/staff')) return Staff.open(h.replace(/^\/?staff\/?/, ''));
   return Client.book();
 }

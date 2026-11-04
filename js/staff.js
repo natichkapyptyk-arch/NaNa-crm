@@ -73,6 +73,19 @@ const Staff = (() => {
     } catch (e) { $('#qb').innerHTML = `<div class="empty"><div class="big">🔒</div>${esc(errMsg(e))}<div class="mt"><a class="btn" href="#/staff" title="Звичайний вхід з паролем">Увійти з паролем</a></div></div>`; }
   }
 
+  async function pwLink(token) {   // одноразове посилання з Telegram → вхід → поле нового пароля
+    document.title = 'Встановити пароль — NaNa studio';
+    app().innerHTML = `<div class="login-box"><div class="login-logo"><img src="img/logo.png" alt="NaNa studio"></div><div class="card" id="qb"><div class="spin"></div></div></div>`;
+    try {
+      const r = await fetch(SB_URL + '/functions/v1/team-login', { method: 'POST', headers: { 'Content-Type': 'application/json', apikey: SB_KEY, Authorization: 'Bearer ' + SB_KEY }, body: JSON.stringify({ pw_token: token }) });
+      const j = await r.json(); if (!r.ok || j.error) throw new Error(j.error || 'Помилка');
+      let { error } = await sb.auth.verifyOtp({ token_hash: j.token_hash, type: 'magiclink' });
+      if (error) ({ error } = await sb.auth.verifyOtp({ token_hash: j.token_hash, type: 'email' }));
+      if (error) throw error;
+      ls.set('pwHint', 1); S.loaded = false; location.replace(siteBase() + '#/staff/team/' + j.staff_id);
+    } catch (e) { $('#qb').innerHTML = `<div class="empty"><div class="big">🔒</div>${esc(errMsg(e))}<div class="mt"><a class="btn" href="#/staff" title="Звичайний вхід з паролем">Увійти з паролем</a></div></div>`; }
+  }
+
   /* ================= каркас ================= */
   const NAV = () => [
     ['cal', 'Календар', IC.cal, true],
@@ -708,5 +721,5 @@ const Staff = (() => {
     $('#c-book', s.el).onclick = () => { s.close(); newAppt({ client: c, mid: isBoss() ? null : S.me.id }); };
   }
 
-  return { open, quick, S, isBoss, isOwner, masters, byId, svcById, msOf, payPct, reload, newAppt, clientSheet, loginPage, dayData, hoursFor };
+  return { open, quick, pwLink, S, isBoss, isOwner, masters, byId, svcById, msOf, payPct, reload, newAppt, clientSheet, loginPage, dayData, hoursFor };
 })();

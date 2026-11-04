@@ -364,6 +364,10 @@ const Admin = (() => {
           <div class="hint">Без пошти: логін на кшталт <b>polina</b>. Персонал може входити й за спільним посиланням швидкого входу (Налаштування).</div>` : ''}</div>
       </div>
       ${can ? `<div class="row mt2" style="justify-content:flex-end;gap:10px"><button class="btn pri lg" id="f-save" title="Зберегти картку">${isNew ? 'Створити співробітника' : 'Зберегти зміни'}</button></div>` : ''}`;
+    if (self && ls.get('pwHint', 0)) {   // прийшли за посиланням «встановити пароль»
+      ls.set('pwHint', 0); const f = $('#f-pw', main);
+      if (f) setTimeout(() => { f.scrollIntoView({ block: 'center', behavior: 'smooth' }); f.focus(); f.classList.add('err'); toast('Впишіть новий пароль і натисніть «Змінити вхід»', 'ok', 6000); }, 300);
+    }
     let photo = p.photo_url || null;
     $('#f-bd', main).onchange = (e) => { const a = ageOf(e.target.value); $('#f-age', main).textContent = a != null ? a + ' ' + plural(a, 'рік', 'роки', 'років') : '—'; };
     const phIn = $('#ph-in', main); if (phIn) phIn.onchange = async () => {

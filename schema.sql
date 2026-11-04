@@ -233,6 +233,15 @@ create table if not exists tg_chats (                 -- хто писав бо�
   last_at timestamptz not null default now()
 );
 
+-- одноразові посилання «встановити пароль» (надсилаються в Telegram, діють 24 год)
+create table if not exists pw_links (
+  token uuid primary key default gen_random_uuid(),
+  staff_id uuid not null references staff(id) on delete cascade,
+  expires_at timestamptz not null default now() + interval '24 hours',
+  used_at timestamptz,
+  created_at timestamptz not null default now()
+);
+
 -- ===== Права: хто я =====
 create or replace function me() returns uuid language sql stable security definer set search_path = public as
 $$ select id from staff where user_id = auth.uid() and is_active $$;
@@ -686,7 +695,7 @@ select cron.schedule('nana-remind', '*/10 * * * *', 'select nana_priv.remind_tic
 -- ===== RLS і доступ =====
 do $$ declare t text; begin
   foreach t in array array['settings','app_secrets','staff','staff_pay','services','master_services','work_hours','day_overrides',
-    'blocks','clients','visits','appointments','payments','expenses','notifications','tg_chats'] loop
+    'blocks','clients','visits','appointments','payments','expenses','notifications','tg_chats','pw_links'] loop
     execute format('alter table %I enable row level security', t);
     execute format('revoke all on %I from anon, authenticated', t);
   end loop;
