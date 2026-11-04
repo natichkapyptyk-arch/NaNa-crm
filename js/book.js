@@ -117,14 +117,15 @@ const Client = (() => {
       const list = masterServices(m.id).filter((x) => !st.cat || C.svc.get(x.service_id).category === st.cat);
       const from = Math.min(...list.map((x) => +x.price)); let days = nearDays(m.id, 5, st.cat);
       // день вашого візиту — завжди серед днів (якщо в майстрині є вільний час) і виділений
-      const vd = visitDay();
+      // «ваш візит» — лише в майстрині, до якої вже є послуга в кошику (у решти цей день — звичайний, якщо він вільний)
+      const vd = visitDay(), mineV = vd && st.cart.some((x) => x.mid === m.id && dayOf(new Date(x.s).toISOString()) === vd);
       if (vd && !days.includes(vd) && slots(m.id, Math.min(...list.map((x) => x.dur)), vd).length) days = [...days.slice(0, 4), vd].sort();
       const cats = [...new Set(list.map((x) => C.svc.get(x.service_id).category))].join(' · ');
       return `<div class="m-card" data-m="${m.id}" title="Обрати майстра ${esc(m.first_name)} і подивитись послуги">
         ${avatar(m, 'l')}<div class="grow"><div class="nm">${esc(fullName(m))}</div><div class="rl">${esc(m.experience || cats)}</div>
         ${m.bio ? `<div class="bio">${esc(m.bio)}</div>` : ''}
         <div class="from">${esc(cats)} · від ${money(from)}</div>
-        <div class="days">${days.length ? days.map((d) => d === vd ? `<span class="dchip visit" data-m="${m.id}" data-day="${d}" title="День вашого візиту: ${esc(fmtDay(d, { weekday: 'long', day: 'numeric', month: 'long' }))} — додати послугу на цей день"><span>ваш візит</span><b>${+d.slice(8)}</b></span>`
+        <div class="days">${days.length ? days.map((d) => d === vd && mineV ? `<span class="dchip visit" data-m="${m.id}" data-day="${d}" title="День вашого візиту: ${esc(fmtDay(d, { weekday: 'long', day: 'numeric', month: 'long' }))} — додати послугу на цей день"><span>ваш візит</span><b>${+d.slice(8)}</b></span>`
           : `<span class="dchip" data-m="${m.id}" data-day="${d}" title="Найближчий вільний день: ${esc(fmtDay(d, { weekday: 'long', day: 'numeric', month: 'long' }))}"><span>${esc(relDay(d).split(',')[0])}</span><b>${+d.slice(8)}</b></span>`).join('')
           : '<span class="dchip none">Немає вільного часу</span>'}</div></div></div>`;
     }).join('');
