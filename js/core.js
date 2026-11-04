@@ -59,6 +59,16 @@ function normPhone(p) {
   if (/^0\d{9}$/.test(d)) return '+38' + d; if (/^380\d{9}$/.test(d)) return '+' + d;
   if (/^3800\d{9}$/.test(d)) return '+380' + d.slice(4); if (/^80\d{9}$/.test(d)) return '+3' + d; if (d.length >= 10 && d.length <= 15) return '+' + d; return null;
 }
+// поля телефону (усі type="tel"): при натисканні вже стоїть +380 — далі лише решта цифр;
+// якщо нічого не дописали — поле знову порожнє; вставлений повний номер не дублює +380
+document.addEventListener('focusin', (e) => { const el = e.target;
+  if (!el.matches?.('input[type="tel"]') || el.value || el.disabled || el.readOnly) return;
+  el.value = '+380'; requestAnimationFrame(() => { try { el.setSelectionRange(el.value.length, el.value.length); } catch (x) { /* деякі браузери */ } }); });
+document.addEventListener('focusout', (e) => { const el = e.target; if (el.matches?.('input[type="tel"]') && /^\+?380$/.test(el.value.replace(/\s/g, ''))) el.value = ''; });
+document.addEventListener('paste', (e) => { const el = e.target;
+  if (!el.matches?.('input[type="tel"]') || el.value.replace(/\s/g, '') !== '+380') return;
+  const n = normPhone(e.clipboardData?.getData('text') || ''); if (!n) return;
+  e.preventDefault(); el.value = fmtPhone(n); el.dispatchEvent(new Event('input', { bubbles: true })); });
 function fmtPhone(p) { const m = String(p || '').match(/^\+380(\d{2})(\d{3})(\d{2})(\d{2})$/); return m ? `+380 ${m[1]} ${m[2]} ${m[3]} ${m[4]}` : p || ''; }
 const IC = {
   tg: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M21.9 4.3 18.6 20c-.2 1.1-.9 1.4-1.8.9l-5-3.7-2.4 2.3c-.3.3-.5.5-1 .5l.4-5.1 9.3-8.4c.4-.4-.1-.6-.6-.2L6 13.5l-4.9-1.5c-1.1-.3-1.1-1.1.2-1.6l19.2-7.4c.9-.3 1.7.2 1.4 1.3z"/></svg>',
