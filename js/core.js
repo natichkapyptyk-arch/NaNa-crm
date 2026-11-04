@@ -187,8 +187,11 @@ async function qrSvg(text, cell = 6) { await loadQr(); const q = qrcode(0, 'M');
 
 /* ---------- маршрути ---------- */
 function siteBase() { return location.href.replace(/#.*$/, ''); }
+// попередня сторінка — щоб кнопка «назад» у картці вела туди, звідки прийшли (календар, персонал…)
+let curHash = location.hash, prevHash = '';
 function go(h) { if (location.hash === h) route(); else location.hash = h; }
 async function route() {
+  if (location.hash !== curHash) { prevHash = curHash; curHash = location.hash; }
   hideTip(); while (sheets.length) sheets[sheets.length - 1].close();
   const h = decodeURIComponent(location.hash.replace(/^#/, ''));
   if (h.startsWith('/v/')) return Client.visit(h.slice(3));

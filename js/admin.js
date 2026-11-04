@@ -359,7 +359,10 @@ const Admin = (() => {
     }
     const roleOpts = ['master', 'admin', 'owner'].filter((r) => r !== 'owner' || Staff.isOwner() || p.role === 'owner');
     const bot = S().settings.tg_bot;
-    main.innerHTML = `<div class="pg-h">${boss ? `<a class="btn ico" href="#/staff/team" title="Назад до списку персоналу">${IC.back}</a>` : ''}<h1>${isNew ? 'Новий співробітник' : esc(fullName(p))}</h1></div>
+    // «назад» — туди, звідки відкрили картку (календар, дашборд, персонал); інакше власниці/адміну — список персоналу
+    const back = prevHash.startsWith('#/staff') && !prevHash.startsWith('#/staff/team/') ? prevHash : boss ? '#/staff/team' : '';
+    const backTip = /^#\/staff\/?(cal|$)/.test(back) ? 'Назад до календаря' : back.startsWith('#/staff/team') ? 'Назад до списку персоналу' : 'Назад';
+    main.innerHTML = `<div class="pg-h">${back ? `<a class="btn ico" href="${back}" title="${backTip}">${IC.back}</a>` : ''}<h1>${isNew ? 'Новий співробітник' : esc(fullName(p))}</h1></div>
       <div class="card"><div class="row wrap" style="gap:16px">
         <div style="text-align:center"><div id="ph-box">${avatar(p, 'xl')}</div>${can ? `<label class="btn sm mt" title="Завантажити фото (буде обрізано квадратом)">📷 Фото<input type="file" accept="image/*" id="ph-in" hidden></label>` : ''}</div>
         <div class="grow" style="min-width:220px"><div class="three"><div><label class="lb" for="f-ln">Прізвище</label><input class="inp" id="f-ln" value="${esc(p.last_name)}" ${can ? '' : 'disabled'}></div>
