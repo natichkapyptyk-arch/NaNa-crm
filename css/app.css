@@ -521,3 +521,6 @@ body.cal-full{overflow:hidden}
 body.cal-dragging,body.cal-dragging *{cursor:grabbing!important;-webkit-user-select:none;user-select:none}
 /* на компʼютері (меню зліва видно) смужка сітки на весь екран — світла, як сторінка */
 @media (min-width:900px){.cal-fbar{padding-top:0;height:54px;background:#fff;color:var(--ink);border-bottom:1.5px solid var(--line)} .cal-fbar .btn:not(.pri){background:#fff;border-color:var(--line2);color:var(--ink)} .cal-wrap.full{top:calc(var(--cf-t,0px) + 54px)}}
+/* сітка на весь екран: нижнє меню й кнопка «+ Запис» ховаються (у смужці зверху є свій «+») */
+body.cal-full .st-tabs,body.cal-full .cal-bar #c-new{display:none!important}
+.cal-wrap.full{max-height:none!important}

@@ -414,7 +414,7 @@ const Staff = (() => {
     on = !!on; S.calFull = on; document.body.classList.toggle('cal-full', on);
     calFullPos();
     const wrap = $('.cal-wrap', body), btn = $('#c-fs', body); if (!wrap) return;
-    wrap.classList.toggle('full', on);
+    wrap.classList.toggle('full', on); if (on) wrap.style.maxHeight = '';   // на весь екран — до самого низу, без обмеження висоти
     if (btn) { btn.innerHTML = on ? FS_OFF : FS_ON; btn.title = on ? 'Вийти з повноекранного режиму (Esc)' : 'Відкрити сітку на весь екран'; }
     $('.cal-fbar', body)?.remove();
     if (on) {
