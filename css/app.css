@@ -524,3 +524,16 @@ body.cal-dragging,body.cal-dragging *{cursor:grabbing!important;-webkit-user-sel
 /* сітка на весь екран: нижнє меню й кнопка «+ Запис» ховаються (у смужці зверху є свій «+») */
 body.cal-full .st-tabs,body.cal-full .cal-bar #c-new{display:none!important}
 .cal-wrap.full{max-height:none!important}
+/* сітка: вгору-вниз гортається .cal-wrap, вбік — лише стовпчики (.cal-xs) і шапка (.cal-hx) синхронно */
+.cal-wrap{overflow-x:hidden;overflow-y:auto;overscroll-behavior:contain}
+.cal-hd{position:sticky;top:0;z-index:6;display:flex;background:#fff}
+.cal-hd .cal-head.tm{width:var(--tw);flex:none;position:static}
+.cal-hx{flex:1;min-width:0;overflow-x:auto;overflow-y:hidden;overscroll-behavior-x:contain}
+.cal-hg{display:grid;min-width:100%;width:max-content}
+.cal-hg .cal-head{position:static}
+.cal-bd{display:flex;align-items:flex-start}
+.cal-bd .cal-times{position:relative;left:auto;width:var(--tw);flex:none}
+.cal-xs{flex:1;min-width:0;overflow-x:auto;overflow-y:hidden;overscroll-behavior-x:contain}
+/* на телефоні смужок прокрутки не видно; на компʼютері — тонка смужка під іменами, щоб гортати мишкою */
+@media (pointer:coarse){.cal-hx,.cal-xs{scrollbar-width:none}.cal-hx::-webkit-scrollbar,.cal-xs::-webkit-scrollbar{display:none}}
+@media (pointer:fine){.cal-xs{scrollbar-width:none}.cal-xs::-webkit-scrollbar{display:none}.cal-hx{scrollbar-width:thin}}

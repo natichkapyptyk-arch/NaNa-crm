@@ -311,11 +311,20 @@ const Staff = (() => {
       return `<div class="cal-col" data-col="${m.id}" style="height:${H}px" title="Натисніть на вільне місце, щоб записати клієнта">${lines}${off}${bl}${ap}</div>`;
     }).join('');
     const n = shown.length, phone = innerWidth < 600;   // на телефоні вужча колонка часу й майстрів — видно 2,5 майстра
-    body.innerHTML = `<div class="cal-wrap"><div class="cal-grid" style="grid-template-columns:${phone ? 46 : 56}px repeat(${n},minmax(${n > 1 ? (phone ? 128 : 150) : 200}px,1fr))">
-      <button type="button" class="cal-head tm cal-fs" id="c-fs" title="${S.calFull ? 'Вийти з повноекранного режиму (Esc)' : 'Відкрити сітку на весь екран'}">${S.calFull ? FS_OFF : FS_ON}</button>${shown.map((m) => canCard(m) ? `<a class="cal-head lnk" href="#/staff/team/${m.id}" title="Відкрити картку: ${esc(fullName(m))}">${avatar(m, 's')}<span class="ell">${esc(m.first_name)}</span></a>` : `<div class="cal-head">${avatar(m, 's')}<span class="ell">${esc(m.first_name)}</span></div>`).join('')}
-      <div class="cal-times" style="height:${H}px;position:sticky">${times}</div>${cols}</div></div>`;
+    // вгору-вниз гортається вся сітка (.cal-wrap), вбік — лише стовпчики майстрів (.cal-xs) разом із шапкою;
+    // так палець, що йде трохи навскіс, не тягне сітку по діагоналі
+    const tw = phone ? 46 : 56, cols_t = `repeat(${n},minmax(${n > 1 ? (phone ? 128 : 150) : 200}px,1fr))`;
+    body.innerHTML = `<div class="cal-wrap" style="--tw:${tw}px">
+      <div class="cal-hd"><button type="button" class="cal-head tm cal-fs" id="c-fs" title="${S.calFull ? 'Вийти з повноекранного режиму (Esc)' : 'Відкрити сітку на весь екран'}">${S.calFull ? FS_OFF : FS_ON}</button>
+        <div class="cal-hx"><div class="cal-hg" style="grid-template-columns:${cols_t}">${shown.map((m) => canCard(m) ? `<a class="cal-head lnk" href="#/staff/team/${m.id}" title="Відкрити картку: ${esc(fullName(m))}">${avatar(m, 's')}<span class="ell">${esc(m.first_name)}</span></a>` : `<div class="cal-head">${avatar(m, 's')}<span class="ell">${esc(m.first_name)}</span></div>`).join('')}</div></div></div>
+      <div class="cal-bd"><div class="cal-times" style="height:${H}px">${times}</div>
+        <div class="cal-xs"><div class="cal-grid" style="grid-template-columns:${cols_t}">${cols}</div></div></div></div>`;
     if (S.day === today()) { const nm = kParts(new Date(nowMs())).min; if (nm >= s0 && nm <= s1) $$('.cal-col', body).forEach((c) => c.insertAdjacentHTML('beforeend', `<div class="cal-now" style="top:${y(nm)}px"></div>`)); }
-    const wrap = $('.cal-wrap', body);
+    const wrap = $('.cal-wrap', body), xs = $('.cal-xs', body), hx = $('.cal-hx', body);
+    // шапка з іменами їде вбік разом зі стовпчиками (і навпаки — можна гортати за шапку)
+    let syncing = false;
+    const sync = (from, to) => () => { if (syncing) return; syncing = true; to.scrollLeft = from.scrollLeft; requestAnimationFrame(() => (syncing = false)); };
+    xs.addEventListener('scroll', sync(xs, hx), { passive: true }); hx.addEventListener('scroll', sync(hx, xs), { passive: true });
     calFull(body, S.calFull);
     // сітка займає весь екран до нижнього меню — гортається всередині, а не вся сторінка
     const fit = () => { if (!wrap.isConnected) return removeEventListener('resize', fit); if (wrap.classList.contains('full')) { wrap.style.maxHeight = ''; return; }
@@ -361,7 +370,7 @@ const Staff = (() => {
       if (!d.on) { if (Math.hypot(x - d.x0, y - d.y0) < 8) return; if (d.touch) { clearTimeout(d.t); d = null; return; } start(); }
       const wr = wrap.getBoundingClientRect();   // біля краю — сітка сама прокручується
       if (y < wr.top + 70) wrap.scrollTop -= 14; else if (y > wr.bottom - 40) wrap.scrollTop += 14;
-      if (x < wr.left + 60) wrap.scrollLeft -= 14; else if (x > wr.right - 30) wrap.scrollLeft += 14;
+      const xs = $('.cal-xs', body); if (xs) { if (x < wr.left + 60) xs.scrollLeft -= 14; else if (x > wr.right - 30) xs.scrollLeft += 14; }
       const col = colAt(x) || d.col; if (!col) return;
       const dur = durOf(d.g), cr = col.getBoundingClientRect();
       let m = Math.round((s0 + (y - d.dy - cr.top) / PX) / step) * step;
