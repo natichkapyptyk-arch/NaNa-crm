@@ -333,10 +333,10 @@ const Admin = (() => {
       <div class="chips scroll mb"><button class="chip ${!S().svcCat ? 'on' : ''}" data-c="" title="Усі категорії">Усі <span class="n">${all.filter((s) => s.is_active).length}</span></button>${cats.map((c) => `<button class="chip ${S().svcCat === c ? 'on' : ''}" data-c="${esc(c)}" title="Категорія ${esc(c)}">${esc(c)} <span class="n">${all.filter((s) => s.category === c && s.is_active).length}</span></button>`).join('')}
         <label class="chip" title="Показати також вимкнені послуги"><input type="checkbox" id="sv-off" ${S().svcOff ? 'checked' : ''} style="accent-color:var(--gr)"> вимкнені</label></div>
       ${cats.filter((c) => !S().svcCat || c === S().svcCat).map((c) => { const l = list.filter((s) => s.category === c); if (!l.length) return '';
-        return `<div class="s-cat">${esc(c)}<button class="btn ghost sm s-rc" data-rc="${esc(c)}" title="Перейменувати категорію «${esc(c)}»">✎ Перейменувати</button></div>` + l.map((s) => { const ms = S().ms.filter((x) => x.service_id === s.id && x.is_active); const prices = ms.map((x) => +x.price);
+        return `<div class="s-cat">${esc(c)}<button class="btn ghost sm s-rc" data-rc="${esc(c)}" title="Перейменувати категорію «${esc(c)}»">✎ Перейменувати</button></div>` + l.map((s, i) => { const sub = s.subgroup && s.subgroup !== l[i - 1]?.subgroup ? `<div class="s-sub">${esc(s.subgroup)}</div>` : ''; const ms = S().ms.filter((x) => x.service_id === s.id && x.is_active); const prices = ms.map((x) => +x.price);
           const pf = hasMsFrom() ? ms.some((x) => x.price_from) : s.price_from;
           const pr = (pf ? 'від ' : '') + (prices.length ? (Math.min(...prices) === Math.max(...prices) ? money(prices[0]) : money(Math.min(...prices)) + '–' + money(Math.max(...prices))) : money(s.price));
-          return `<div class="list-row ${s.is_active ? '' : 'off'}" data-s="${s.id}" title="Редагувати послугу: ціни, тривалість, хто виконує, фото">${(s.photos || [])[0] ? `<span class="s-ph" style="width:46px;height:46px;cursor:pointer"><img src="${esc(s.photos[0])}" alt="" loading="lazy"></span>` : '<span class="s-ph" style="width:46px;height:46px;display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--mut)" title="Немає фото — додайте в редагуванні">📷</span>'}<div class="grow"><div class="nm">${esc(s.name)} ${s.is_active ? '' : '<span class="pill g">вимкнено</span>'}</div>
+          return sub + `<div class="list-row ${s.is_active ? '' : 'off'}" data-s="${s.id}" title="Редагувати послугу: ціни, тривалість, хто виконує, фото">${(s.photos || [])[0] ? `<span class="s-ph" style="width:46px;height:46px;cursor:pointer"><img src="${esc(s.photos[0])}" alt="" loading="lazy"></span>` : '<span class="s-ph" style="width:46px;height:46px;display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--mut)" title="Немає фото — додайте в редагуванні">📷</span>'}<div class="grow"><div class="nm">${esc(s.name)} ${s.is_addon ? '<span class="pill i" title="Клієнт додає до основної послуги одним дотиком">+ додатково</span>' : ''}${s.is_active ? '' : '<span class="pill g">вимкнено</span>'}</div>
             <div class="sub">${durTxt(s.dur)} · ${ms.length ? ms.map((x) => esc(Staff.byId(x.staff_id)?.first_name || '')).join(', ') : '<span style="color:var(--bad)">немає майстра — клієнти не бачать</span>'}</div></div><div class="b nw">${pr}</div></div>`; }).join(''); }).join('')}`;
     $$('[data-c]', main).forEach((b) => (b.onclick = () => { S().svcCat = b.dataset.c; services(main); }));
     $('#sv-off').onchange = (e) => { S().svcOff = e.target.checked; services(main); };
@@ -367,7 +367,8 @@ const Admin = (() => {
     });
   }
   const hasFrom = () => S().services.some((x) => 'price_from' in x);   // поле «Ціна від» зʼявляється після оновлення бази
-  const hasMsFrom = () => S().ms.some((x) => 'price_from' in x);      // «від» окремо для кожної майстрині (після оновлення бази 2)
+  const hasMsFrom = () => S().ms.some((x) => 'price_from' in x);
+  const hasSub = () => S().services.some((x) => 'subgroup' in x);   // підгрупа й «додатково» (після оновлення бази 5)      // «від» окремо для кожної майстрині (після оновлення бази 2)
   function serviceSheet(id, done) {
     const sv = id ? Staff.svcById(id) : { category: S().svcCat || '', name: '', descr: '', dur: 60, price: 0, is_active: true, sort: 100 };
     const people = S().staff.filter((x) => x.is_active && (x.is_bookable || S().ms.some((m) => m.staff_id === x.id && m.service_id === id)));
@@ -375,6 +376,8 @@ const Admin = (() => {
     const s = sheet({ title: id ? 'Послуга' : 'Нова послуга', wide: true, body: `
       <div class="two"><div><label class="lb" for="sv-c">Категорія</label><input class="inp" id="sv-c" list="sv-cl" value="${esc(sv.category)}" placeholder="Брови, Вії, Манікюр…"><datalist id="sv-cl">${cats.map((c) => `<option value="${esc(c)}">`).join('')}</datalist></div>
       <div><label class="lb" for="sv-n">Назва <span class="req">*</span></label><input class="inp" id="sv-n" value="${esc(sv.name)}" maxlength="80"></div></div>
+      ${hasSub() ? `<div class="two"><div><label class="lb" for="sv-g">Підгрупа <span class="mut" style="font-weight:600">(необовʼязково)</span></label><input class="inp" id="sv-g" list="sv-gl" value="${esc(sv.subgroup || '')}" placeholder="Напр. Дизайн" maxlength="40" title="Окремий підзаголовок у категорії — і тут, і в онлайн-записі"><datalist id="sv-gl">${[...new Set(S().services.map((x) => x.subgroup).filter(Boolean))].map((g) => `<option value="${esc(g)}">`).join('')}</datalist></div>
+        <div style="display:flex;align-items:flex-end"><label class="sw" title="Клієнт не записується на неї окремо, а додає до основної послуги — одразу після неї, без перерви"><input type="checkbox" id="sv-ad" ${sv.is_addon ? 'checked' : ''}><i></i><span class="b">Додатково до основної</span></label></div></div>` : ''}
       <label class="lb" for="sv-d">Опис для клієнтів</label><input class="inp" id="sv-d" value="${esc(sv.descr || '')}" maxlength="160" placeholder="Що входить у послугу">
       <div class="three"><div><label class="lb" for="sv-u">Тривалість, хв</label><input class="inp" type="number" id="sv-u" min="5" step="5" value="${sv.dur}"></div>
       <div><label class="lb" for="sv-p">Ціна, ₴</label><input class="inp" type="number" id="sv-p" min="0" step="10" value="${+sv.price}"></div>
@@ -424,6 +427,7 @@ const Admin = (() => {
       if (id && category === sv.category) { const { data: cur } = await sb.from('services').select('category').eq('id', id).single(); if (cur?.category) category = cur.category; }
       const row = { category, name, descr: $('#sv-d', el).value.trim() || null, dur, price, sort: +$('#sv-o', el).value || 100, is_active: $('#sv-a', el).checked, photos };
       if ($('#sv-f', el)) row.price_from = $('#sv-f', el).checked;
+      if ($('#sv-g', el)) { row.subgroup = $('#sv-g', el).value.trim() || null; row.is_addon = $('#sv-ad', el).checked; }
       const r1 = id ? await sb.from('services').update(row).eq('id', id) : await sb.from('services').insert({ id: sid, ...row });
       if (r1.error) return toast(errMsg(r1.error), 'bad');
       const up = [], del = [];

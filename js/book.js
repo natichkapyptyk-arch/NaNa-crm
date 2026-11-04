@@ -3,6 +3,7 @@
 const Client = (() => {
   let C = null, B = null;               // каталог і зайнятість
   const st = { step: 'masters', cat: '', mid: null, sid: null, day: null, cart: [], edit: -1, done: null };
+  let cartK = 0;   // унікальний ключ позиції кошика (для «додатково» до основної послуги)
   const app = () => $('#app');
 
   /* ---------- дані ---------- */
@@ -42,7 +43,8 @@ const Client = (() => {
     const skip = opt.skip || [];
     const bz = (B.busy.get(mid) || []).filter((x) => !skip.some((y) => y[0] === x[0] && y[1] === x[1]));
     const bl = B.blocks.get(mid) || [];
-    const mine = st.cart.filter((x, i) => i !== (opt.ignore ?? -1)).map((x) => [x.s, x.e]).concat(opt.extra || []);
+    const ig = opt.ignore ?? -1, igK = st.cart[ig]?.k;
+    const mine = st.cart.filter((x, i) => i !== ig && !(igK && x.of === igK)).map((x) => [x.s, x.e]).concat(opt.extra || []);
     const out = [];
     for (let m = hh[0]; m + dur <= hh[1] && m <= last; m += step) {
       const a = base + m * 6e4, b = a + dur * 6e4;
@@ -122,12 +124,13 @@ const Client = (() => {
     const list = masterServices(m.id).map((x) => ({ ...C.svc.get(x.service_id), dur: x.dur, price: x.price }));
     const cats = [...new Set(list.map((s) => s.category))];
     const shown = st.cat && cats.includes(st.cat) ? [st.cat] : cats;
-    const rows = shown.map((c) => `<div class="s-cat">${esc(c)}</div>` + list.filter((s) => s.category === c).sort((a, b) => a.sort - b.sort).map((s) => {
+    const rows = shown.map((c) => `<div class="s-cat">${esc(c)}</div>` + list.filter((s) => s.category === c).sort((a, b) => a.sort - b.sort).map((s, i, arr) => {
+      const sub = s.subgroup && s.subgroup !== arr[i - 1]?.subgroup ? `<div class="s-sub">${esc(s.subgroup)}${s.is_addon ? ' <span>· додається до основної послуги</span>' : ''}</div>` : '';
       const inCart = st.cart.some((x) => x.sid === s.id && x.mid === m.id);
       const ph = (s.photos || [])[0];
-      return `<div class="s-row ${inCart ? 'inCart' : ''}" data-s="${s.id}" title="Обрати «${esc(s.name)}» і подивитись вільний час">
+      return sub + `<div class="s-row ${inCart ? 'inCart' : ''} ${s.is_addon ? 'addon' : ''}" data-s="${s.id}" title="${s.is_addon ? `Додати «${esc(s.name)}» до основної послуги` : `Обрати «${esc(s.name)}» і подивитись вільний час`}">
         ${ph ? `<button class="s-ph" data-gal="${s.id}" title="Подивитись фото робіт (${s.photos.length})"><img src="${esc(ph)}" alt="" loading="lazy">${s.photos.length > 1 ? `<span>${s.photos.length}</span>` : ''}</button>` : ''}
-        <div class="grow"><div class="nm">${esc(s.name)}${inCart ? ' <span class="pill booked">у візиті</span>' : ''}</div>${s.descr ? `<div class="ds">${esc(s.descr)}</div>` : ''}</div>
+        <div class="grow"><div class="nm">${s.is_addon ? '<span class="add-plus">+</span> ' : ''}${esc(s.name)}${inCart ? ' <span class="pill booked">у візиті</span>' : ''}</div>${s.descr ? `<div class="ds">${esc(s.descr)}</div>` : ''}</div>
         <div class="pr">${fromTxt(s.id, m.id)}${money(s.price)}<small>${durTxt(s.dur)}</small></div></div>`;
     }).join('')).join('');
     return `${stepsBar()}<div class="st-title"><button class="btn ghost ico" data-back="masters" title="Назад — до вибору майстра">${IC.back}</button>
@@ -139,14 +142,15 @@ const Client = (() => {
     const m = C.mas.get(st.mid), s = C.svc.get(st.sid), x = C.ms.get(st.mid)?.get(st.sid);
     if (!m || !s || !x) { st.step = 'masters'; return vMasters(); }
     const t = today(), days = [];
-    for (let i = 0; i <= C.settings.max_days; i++) { const d = addDays(t, i); days.push([d, slots(m.id, x.dur, d, { ignore: st.edit }).length]); }
+    const addDur = st.edit >= 0 ? addonsOf(st.cart[st.edit].k).reduce((t2, a) => t2 + a.dur, 0) : 0;   // основна + її «додатково» мають вміститись разом
+    for (let i = 0; i <= C.settings.max_days; i++) { const d = addDays(t, i); days.push([d, slots(m.id, x.dur + addDur, d, { ignore: st.edit }).length]); }
     if (!st.day || !days.find((d) => d[0] === st.day && d[1])) st.day = (days.find((d) => d[1]) || [])[0] || null;
     const strip = days.map(([d, n]) => `<button class="dpill ${d === st.day ? 'on' : ''} ${n ? '' : 'off'}" ${n ? `data-day="${d}"` : 'disabled'} title="${n ? esc(fmtDay(d, { weekday: 'long', day: 'numeric', month: 'long' })) + ': вільних віконець — ' + n : 'Немає вільного часу'}">
       <div class="w">${WD[isoDow(d)]}</div><div class="d">${+d.slice(8)}</div><div class="m">${esc(fmtDay(d, { month: 'short' }).replace('.', ''))}</div></button>`).join('');
     let body = '';
     if (!st.day) body = '<div class="empty"><div class="big">🗓</div>У найближчі дні вільного часу немає. Спробуйте іншого майстра або зателефонуйте нам.</div>';
     else {
-      const sl = slots(m.id, x.dur, st.day, { ignore: st.edit });
+      const sl = slots(m.id, x.dur + addDur, st.day, { ignore: st.edit });
       const g = [['Ранок', sl.filter((v) => v < 720)], ['День', sl.filter((v) => v >= 720 && v < 1020)], ['Вечір', sl.filter((v) => v >= 1020)]];
       body = `<div class="sm mut" style="margin:2px 0 4px"><b style="color:var(--ink)">${esc(fmtDay(st.day, { weekday: 'long', day: 'numeric', month: 'long' }))}</b></div>` +
         g.filter((v) => v[1].length).map(([n, v]) => `<div class="slots-h">${n}</div><div class="slots">${v.map((mm) => `<button class="slot" data-t="${mm}" title="Записатися на ${toHM(mm)}–${toHM(mm + x.dur)}">${toHM(mm)}</button>`).join('')}</div>`).join('');
@@ -160,8 +164,12 @@ const Client = (() => {
     st.cart.sort((a, b) => a.s - b.s);
     const days = new Set(st.cart.map((x) => dayOf(x.s)));
     const items = st.cart.map((x, i) => { const s = C.svc.get(x.sid), m = C.mas.get(x.mid);
+      if (x.of) return `<div class="cart-item sub"><div class="grow"><div class="b">+ ${esc(s.name)}</div><div class="sm mut">${fmtT(x.s)}–${fmtT(x.e)} · одразу після основної послуги</div>
+        <div class="row" style="margin-top:6px;gap:6px"><button class="btn sm red" data-del="${i}" title="Прибрати">Прибрати</button></div></div><div class="b nw">${fromTxt(x.sid, x.mid)}${money(x.price)}</div></div>`;
+      const ads = addonsFor(x);
       return `<div class="cart-item">${avatar(m, 's')}<div class="grow"><div class="b">${esc(s.name)}</div>
         <div class="sm mut">${esc(relDay(dayOf(x.s)))}, ${fmtT(x.s)}–${fmtT(x.e)} · ${esc(m.first_name)}</div>
+        ${ads.length ? `<div class="add-ons"><span class="sm mut">Додати:</span>${ads.map((a) => `<button class="chip" data-addon="${a.service_id}" data-of="${x.k}" title="Додати «${esc(C.svc.get(a.service_id).name)}» одразу після цієї послуги">+ ${esc(C.svc.get(a.service_id).name)} · ${fromTxt(a.service_id, x.mid)}${money(a.price)}</button>`).join('')}</div>` : ''}
         <div class="row" style="margin-top:6px;gap:6px"><button class="btn sm" data-edit="${i}" title="Обрати інший день або час для цієї послуги">Змінити час</button>
         <button class="btn sm red" data-del="${i}" title="Прибрати послугу з візиту">Прибрати</button></div></div><div class="b nw">${fromTxt(x.sid, x.mid)}${money(x.price)}</div></div>`; }).join('');
     const span = days.size === 1 ? `${fmtT(st.cart[0].s)}–${fmtT(Math.max(...st.cart.map((x) => x.e)))}` : `${days.size} ${plural(days.size, 'день', 'дні', 'днів')}`;
@@ -209,25 +217,63 @@ const Client = (() => {
     bind();
     const on = $('.dpill.on'); if (on) on.scrollIntoView({ block: 'nearest', inline: 'center' });
   }
+  /* ---------- «додатково» до основної послуги: одразу після неї, без перерви ---------- */
+  const isAddon = (sid) => !!C.svc.get(sid)?.is_addon;
+  const addonsOf = (k) => st.cart.filter((x) => x.of === k).sort((a, b) => a.s - b.s);
+  // чи вільний проміжок [a, b) у майстра: графік дня, чужі записи (з перервою), закритий час, інші послуги кошика
+  function fits(mid, a, b, skipKeys = []) {
+    const day = dayOf(new Date(a).toISOString()), hh = hoursOf(mid, day); if (!hh) return false;
+    const base = dayBase(day); if (a < base + hh[0] * 6e4 || b > base + hh[1] * 6e4) return false;
+    const buf = C.settings.buffer_min * 6e4;
+    if ((B.busy.get(mid) || []).some(([x, y]) => x < b + buf && y > a - buf)) return false;
+    if ((B.blocks.get(mid) || []).some(([x, y]) => x < b && y > a)) return false;
+    return !st.cart.some((x) => !skipKeys.includes(x.k) && x.s < b && x.e > a);
+  }
+  // переставити «додатково» одразу за основною (після зміни часу чи видалення); що не вміщається — прибрати
+  function rechain(k) {
+    const p = st.cart.find((x) => x.k === k); if (!p) { st.cart = st.cart.filter((x) => x.of !== k); return; }
+    let t = p.e; const gone = [];
+    for (const a of addonsOf(k)) { a.s = t; a.e = t + a.dur * 6e4;
+      if (!fits(a.mid, a.s, a.e, [a.k, ...addonsOf(k).map((x) => x.k)])) gone.push(a); else t = a.e; }
+    if (gone.length) { st.cart = st.cart.filter((x) => !gone.includes(x)); toast('Не вмістилось після основної послуги: ' + gone.map((x) => C.svc.get(x.sid).name).join(', '), 'bad', 5000); }
+  }
+  function addAddon(k, sid) {
+    const p = st.cart.find((x) => x.k === k); const x = C.ms.get(p.mid)?.get(sid); if (!p || !x) return;
+    if (addonsOf(k).some((a) => a.sid === sid)) return toast('Вже додано', 'bad');
+    const s = addonsOf(k).reduce((t, a) => Math.max(t, a.e), p.e), e = s + x.dur * 6e4;
+    if (!fits(p.mid, s, e, [])) return toast('Після цієї послуги в майстра немає часу на «' + C.svc.get(sid).name + '». Оберіть інший час основної послуги.', 'bad', 5000);
+    st.cart.push({ k: ++cartK, of: k, mid: p.mid, sid, s, e, dur: x.dur, price: +x.price });
+    toast('Додано: ' + C.svc.get(sid).name); render();
+  }
+  // «додатково», які майстер робить у категорії основної послуги
+  const addonsFor = (p) => masterServices(p.mid).filter((x) => isAddon(x.service_id) && C.svc.get(x.service_id).category === C.svc.get(p.sid).category && !addonsOf(p.k).some((a) => a.sid === x.service_id));
   function goStep(s) { st.step = s; render(); scrollTo({ top: 0, behavior: 'smooth' }); }
   function bind() {
     const a = app();
     $$('[data-cat]', a).forEach((b) => (b.onclick = () => { st.cat = b.dataset.cat; render(); }));
     $$('[data-cat2]', a).forEach((b) => (b.onclick = () => { st.cat = b.dataset.cat2; render(); }));
     $$('.m-card', a).forEach((c) => (c.onclick = (e) => { const d = e.target.closest('[data-day]'); st.mid = c.dataset.m; st.day = d ? d.dataset.day : null; st.edit = -1; goStep('services'); }));
-    $$('.s-row[data-s]', a).forEach((r) => (r.onclick = (e) => { if (e.target.closest('[data-gal]')) return; st.sid = r.dataset.s; goStep('time'); }));
-    $$('[data-gal]', a).forEach((b) => (b.onclick = (e) => { e.stopPropagation(); gallery(C.svc.get(b.dataset.gal), st.step === 'services' ? () => { st.sid = b.dataset.gal; goStep('time'); } : null); }));
+    const pickSvc = (sid) => {
+      if (isAddon(sid)) {   // «додатково» — до останньої основної послуги цього майстра в кошику
+        const main = st.cart.filter((x) => !x.of && x.mid === st.mid && C.svc.get(x.sid).category === C.svc.get(sid).category).sort((p, q) => q.s - p.s)[0];
+        if (!main) return toast('Це додаткова послуга — спершу оберіть основну (наприклад, манікюр), а потім додайте її одним дотиком', 'bad', 5000);
+        return addAddon(main.k, sid); }
+      st.sid = sid; goStep('time'); };
+    $$('.s-row[data-s]', a).forEach((r) => (r.onclick = (e) => { if (e.target.closest('[data-gal]')) return; pickSvc(r.dataset.s); }));
+    $$('[data-gal]', a).forEach((b) => (b.onclick = (e) => { e.stopPropagation(); gallery(C.svc.get(b.dataset.gal), st.step === 'services' ? () => pickSvc(b.dataset.gal) : null); }));
     $$('[data-back]', a).forEach((b) => (b.onclick = () => { if (b.dataset.back === 'masters') st.edit = -1; goStep(b.dataset.back); }));
     $$('[data-go]').forEach((b) => (b.onclick = () => { if (b.dataset.go === 'masters') st.edit = -1; goStep(b.dataset.go); }));
     $$('.dpill[data-day]', a).forEach((b) => (b.onclick = () => { st.day = b.dataset.day; const y = scrollY; render(); scrollTo(0, y); }));
     $$('.slot', a).forEach((b) => (b.onclick = () => {
       const x = C.ms.get(st.mid).get(st.sid); const s = dayBase(st.day) + +b.dataset.t * 6e4;
-      const item = { mid: st.mid, sid: st.sid, s, e: s + x.dur * 6e4, dur: x.dur, price: +x.price };
-      if (st.edit >= 0) st.cart[st.edit] = item; else st.cart.push(item);
+      const old = st.edit >= 0 ? st.cart[st.edit] : null;
+      const item = { k: old?.k || ++cartK, mid: st.mid, sid: st.sid, s, e: s + x.dur * 6e4, dur: x.dur, price: +x.price };
+      if (old) { st.cart[st.edit] = item; if (old.mid !== item.mid) st.cart = st.cart.filter((y) => y.of !== item.k); else rechain(item.k); } else st.cart.push(item);
       st.edit = -1; goStep('cart');
     }));
     $$('[data-edit]', a).forEach((b) => (b.onclick = () => { const i = +b.dataset.edit, x = st.cart[i]; st.edit = i; st.mid = x.mid; st.sid = x.sid; st.day = dayOf(x.s); goStep('time'); }));
-    $$('[data-del]', a).forEach((b) => (b.onclick = () => { st.cart.splice(+b.dataset.del, 1); render(); }));
+    $$('[data-del]', a).forEach((b) => (b.onclick = () => { const x = st.cart[+b.dataset.del]; st.cart = st.cart.filter((y) => y !== x && y.of !== x.k); if (x.of) rechain(x.of); render(); }));
+    $$('[data-addon]', a).forEach((b) => (b.onclick = () => addAddon(+b.dataset.of, b.dataset.addon)));
     $$('[data-new]', a).forEach((b) => (b.onclick = () => { st.done = null; st.cat = ''; goStep('masters'); }));
     const ics = $('#ics', a); if (ics) ics.onclick = () => downloadIcs(st.done.items, C.settings);
     const f = $('#cf', a); if (f) bindContacts(f);
