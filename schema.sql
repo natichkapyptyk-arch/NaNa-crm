@@ -707,14 +707,16 @@ create trigger staff_guard before update on staff for each row execute function 
 
 -- ===== Сповіщення =====
 create or replace function trg_appt_notify() returns trigger language plpgsql security definer set search_path = public as $$
-declare k text; t text; b text; v_src text; v_old uuid;
+declare k text; t text; b text; v_src text; v_old uuid; v_client boolean := false;
 begin
   if new.demo then return new; end if;
   if tg_op = 'INSERT' then
     select source into v_src from visits where id = new.visit_id;
     k := 'new'; t := case when v_src = 'online' then 'Новий онлайн-запис' else 'Новий запис' end;
+    v_client := v_src = 'online';
   elsif new.status = 'cancel' and old.status <> 'cancel' then
     k := 'cancel'; t := case when new.cancelled_by = 'client' then 'Клієнт скасував запис' else 'Запис скасовано' end;
+    v_client := new.cancelled_by = 'client';
   elsif new.starts_at <> old.starts_at or new.staff_id <> old.staff_id then
     k := 'move'; t := 'Запис перенесено'; v_old := old.staff_id;
   else
@@ -726,7 +728,9 @@ begin
   insert into notifications (staff_id, kind, title, body, appointment_id, day)
   select x.id, k, t, b, new.id, (new.starts_at at time zone 'Europe/Kyiv')::date from staff x
    where x.is_active and (x.id = new.staff_id or x.id = v_old or x.role in ('owner','admin'))
-     and coalesce((x.notify->>k)::boolean, true) and x.user_id is distinct from auth.uid();
+     and coalesce((x.notify->>k)::boolean, true)
+     -- автору зміни з панелі сповіщення не потрібне; онлайн-запис і скасування клієнтом — сповіщаємо всіх (навіть якщо записувались з телефона, де відкрита панель)
+     and (v_client or x.user_id is distinct from auth.uid());
   return new;
 end $$;
 drop trigger if exists appt_notify on appointments;
