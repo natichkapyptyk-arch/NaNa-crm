@@ -335,12 +335,13 @@ const Staff = (() => {
         ${a.cancel_reason ? `<dt>Причина</dt><dd>${esc(a.cancel_reason)}</dd>` : ''}${a.cancelled_by ? `<dt>Скасував(ла)</dt><dd>${a.cancelled_by === 'client' ? 'клієнт онлайн' : 'салон'}</dd>` : ''}
         ${a.visits?.comment ? `<dt>Коментар</dt><dd>${esc(a.visits.comment)}</dd>` : ''}</dl>
       <div class="sect"><h3>${esc(c.name || '')} <a class="btn sm ghost" href="javascript:void 0" id="a-cl" title="Відкрити картку клієнта з історією візитів">картка ${IC.fwd.replace('width="20" height="20"', 'width="14" height="14"')}</a></h3>
-        <div class="sm">${esc(fmtPhone(c.phone))} · зручно: <b>${esc(CONTACTS[c.contact]?.[0] || 'дзвінок')}</b>${c.instagram ? ' · @' + esc(c.instagram) : ''}</div>${c.note ? `<div class="hint">📝 ${esc(c.note)}</div>` : ''}${contactLinks(c)}</div>
+        <div class="sm">${esc(fmtPhone(c.phone))} · зручно: <b>${esc(CONTACTS[c.contact]?.[0] || 'дзвінок')}</b>${c.instagram ? ' · @' + esc(c.instagram) : ''}</div>${c.note ? `<div class="hint">📝 ${esc(c.note)}</div>` : ''}${contactLinks(c)}${a.status === 'booked' && Date.parse(a.starts_at) > nowMs() ? `<button class="btn sm mt" id="a-rem" title="Готовий текст нагадування для Viber, Telegram або SMS">${IC.bell} Нагадати про візит</button>` : ''}</div>
       <label class="lb mt" for="a-note">Нотатка до запису</label><textarea class="inp" id="a-note" rows="2" placeholder="Видно лише персоналу" ${mine ? '' : 'disabled'}>${esc(a.note || '')}</textarea>`,
       foot: actions });
     const note = $('#a-note', s.el);
     note.onchange = async () => { const { error } = await sb.from('appointments').update({ note: note.value.trim() || null }).eq('id', a.id); if (error) toast(errMsg(error), 'bad'); else { a.note = note.value.trim(); toast('Нотатку збережено'); } };
     $('#a-cl', s.el).onclick = () => { s.close(); clientSheet(c.id); };
+    const rb = $('#a-rem', s.el); if (rb) rb.onclick = () => remindSheet(a.id, c);
     $$('[data-act]', s.el).forEach((b) => (b.onclick = async () => {
       const act = b.dataset.act;
       if (act === 'done') return paySheet(a, () => { s.close(); refresh(); });
@@ -700,7 +701,7 @@ const Staff = (() => {
         <div class="kpi"><div class="l">Останній візит</div><div class="v" style="font-size:17px">${last ? esc(relDay(dayOf(last.starts_at))) : '—'}</div>${last ? `<div class="d mut">${daysBetween(dayOf(last.starts_at), today())} дн. тому</div>` : ''}</div>
         <div class="kpi"><div class="l">Скасувань / неявок</div><div class="v">${hist.filter((x) => x.status === 'cancel').length} / ${hist.filter((x) => x.status === 'noshow').length}</div></div></div>
       ${fav ? `<div class="hint mt">💛 Улюблена послуга: <b>${esc(svcById(fav[0])?.name || '')}</b> (${fav[1]} р.)</div>` : ''}
-      ${next ? `<div class="hint">📅 Наступний запис: <b>${esc(relDay(dayOf(next.starts_at)))}, ${fmtT(next.starts_at)}</b></div>` : ''}
+      ${next ? `<div class="hint row wrap" style="gap:8px">📅 Наступний запис: <b>${esc(relDay(dayOf(next.starts_at)))}, ${fmtT(next.starts_at)}</b><button class="btn sm" id="c-rem" title="Готовий текст нагадування для Viber, Telegram або SMS">${IC.bell} Нагадати</button></div>` : ''}
       <div class="sect"><h3>Дані клієнта</h3>
         <div class="two"><div><label class="lb" for="c-n">Імʼя</label><input class="inp" id="c-n" value="${esc(c.name)}"></div><div><label class="lb" for="c-p">Телефон</label><input class="inp" id="c-p" type="tel" value="${esc(c.phone)}"></div></div><div id="c-dup"></div>
         <label class="lb">Зручний звʼязок</label><div class="chips" id="c-c">${Object.entries(CONTACTS).map(([k, [n]]) => `<button class="chip ${c.contact === k ? 'on' : ''}" data-cc="${k}" title="Клієнту зручно: ${n}">${n}</button>`).join('')}</div>
@@ -723,6 +724,86 @@ const Staff = (() => {
       toast('Збережено'); S.clientsCache = null; $('.sh-h h2', s.el).textContent = name;
     });
     $('#c-book', s.el).onclick = () => { s.close(); newAppt({ client: c, mid: isBoss() ? null : S.me.id }); };
+    const rb = $('#c-rem', s.el); if (rb) rb.onclick = () => remindSheet(next.id, c);
+    if (isBoss() && (await mergeOk()) && s.ov.isConnected) {
+      $('#c-save', s.el).insertAdjacentHTML('afterend', `<button class="btn mt" id="c-merge" title="Якщо це та сама людина, що й в іншій картці — зібрати все в одну" style="margin-left:8px">⇄ Обʼєднати з іншим клієнтом</button>`);
+      $('#c-merge', s.el).onclick = () => mergeSheet(c, s);
+    }
+  }
+
+  /* ================= нагадування клієнту ================= */
+  async function remindSheet(apptId, c) {
+    const s = sheet({ title: 'Нагадати про візит', body: '<div class="spin"></div>' });
+    const body = $('.sh-b', s.el);
+    const { data: a0, error } = await sb.from('appointments').select('visit_id').eq('id', apptId).single();
+    if (error) { body.innerHTML = `<div class="empty">${esc(errMsg(error))}</div>`; return; }
+    const [{ data: list }, { data: v }] = await Promise.all([
+      sb.from('appointments').select('starts_at,service_id,staff_id').eq('visit_id', a0.visit_id).eq('status', 'booked').order('starts_at'),
+      sb.from('visits').select('token').eq('id', a0.visit_id).single()]);
+    if (!list?.length) { body.innerHTML = '<div class="empty">Немає майбутніх записів для нагадування</div>'; return; }
+    const set = S.settings, t0 = list[0].starts_at, nm = String(c.name || '').trim().split(/\s+/)[0];
+    const site = String(set.site_url || location.origin + location.pathname).replace(/#.*$/, '');
+    const txt = [`Вітаємо${nm ? ', ' + nm : ''}! 💛`, `Нагадуємо про ваш запис у ${set.salon_name || 'NaNa studio'}:`,
+      `📅 ${fmtDay(dayOf(t0), { weekday: 'long', day: 'numeric', month: 'long' })} о ${fmtT(t0)}`,
+      ...list.map((x) => `• ${list.length > 1 ? fmtT(x.starts_at) + ' ' : ''}${svcById(x.service_id)?.name || ''} — майстер ${byId(x.staff_id)?.first_name || ''}`),
+      set.address ? `📍 ${set.address}` : '', v?.token ? `Переглянути, перенести чи скасувати: ${site}#/v/${v.token}` : '',
+      'Якщо плани змінились — напишіть нам, будь ласка.'].filter(Boolean).join('\n');
+    const p = String(c.phone || '').replace(/[^\d+]/g, ''), pref = c.contact === 'call' ? 'sms' : c.contact;
+    const B = [['viber', `${IC.vb} Viber`], ['telegram', `${IC.tg} Telegram`], ['sms', '💬 SMS'], ...(c.instagram ? [['instagram', `${IC.ig} Instagram`]] : []), ['copy', '📋 Лише скопіювати']];
+    body.innerHTML = `<div class="sm mb"><b>${esc(c.name || '')}</b> · ${esc(fmtPhone(c.phone))}</div>
+      <textarea class="inp" id="rm-t" rows="9">${esc(txt)}</textarea>
+      <div class="hint">Текст можна змінити. Натисніть месенджер — текст скопіюється й відкриється чат клієнта, залишиться лише вставити. Клієнти, які підключили Telegram-бота салону, отримують нагадування й автоматично.</div>
+      <div class="contact-btns">${B.map(([k, n]) => `<button class="btn sm ${k === pref ? 'pri' : ''}" data-rm="${k}" title="${k === 'copy' ? 'Скопіювати текст' : 'Скопіювати текст і відкрити ' + k}${k === pref ? ' — клієнту так зручніше' : ''}">${n}</button>`).join('')}</div>`;
+    $$('[data-rm]', s.el).forEach((b) => (b.onclick = async () => {
+      const k = b.dataset.rm, text = $('#rm-t', s.el).value;
+      let ok = false; try { await navigator.clipboard.writeText(text); ok = true; } catch (e) { /* без доступу до буфера */ }
+      if (k === 'sms') { location.href = `sms:${p}?&body=${encodeURIComponent(text)}`; return; }
+      if (k === 'copy') return toast(ok ? 'Текст скопійовано' : 'Не вдалося скопіювати — виділіть текст вручну', ok ? '' : 'bad');
+      const url = { viber: `viber://chat?number=${encodeURIComponent(p)}`, telegram: `https://t.me/${p}`, instagram: `https://instagram.com/${encodeURIComponent(String(c.instagram || '').replace(/^@/, ''))}` }[k];
+      toast(ok ? 'Текст скопійовано — вставте його в чат' : 'Скопіюйте текст вручну', ok ? '' : 'bad', 4000);
+      if (k === 'viber') location.href = url; else window.open(url, '_blank', 'noopener');
+    }));
+  }
+
+  /* ================= обʼєднання дублів ================= */
+  async function mergeOk() {   // кнопка зʼявляється, лише коли в базі є функція client_merge
+    if (S.mergeOk == null) { const { error } = await sb.rpc('client_merge', { p_from: null, p_to: null });
+      S.mergeOk = !(error && (error.code === 'PGRST202' || /could not find the function/i.test(error.message || ''))); }
+    return S.mergeOk;
+  }
+  function mergeSheet(c, cardSheet) {
+    const s = sheet({ title: 'Обʼєднати клієнтів', body: `<div class="hint mb">Знайдіть іншу картку тієї ж людини, що й <b>${esc(c.name)}</b> (${esc(fmtPhone(c.phone))}).</div>
+      <div class="search">${IC.search}<input class="inp" id="mg-q" placeholder="Пошук: імʼя або телефон" autocomplete="off" autofocus></div><div id="mg-sg"></div>` });
+    const q = $('#mg-q', s.el), sg = $('#mg-sg', s.el); let tmr;
+    q.oninput = () => { clearTimeout(tmr); tmr = setTimeout(async () => {
+      const v = q.value.trim().replace(/[,()*%\\]/g, ' ').trim(), digits = v.replace(/\D/g, '');
+      if (v.length < 2) { sg.innerHTML = ''; return; }
+      let rq = sb.from('clients').select('id,name,phone,contact,instagram').neq('id', c.id).limit(8);
+      rq = digits.length >= 3 ? rq.ilike('phone', '%' + digits + '%') : rq.ilike('name', '%' + v + '%');
+      const { data } = await rq;
+      sg.innerHTML = `<div class="sugg">${(data || []).map((x) => `<div data-mg="${x.id}" title="Обрати цю картку"><b>${esc(x.name)}</b> <span class="mut sm">${esc(fmtPhone(x.phone))}</span></div>`).join('') || '<div class="mut" style="cursor:default">Нікого не знайдено</div>'}</div>`;
+      $$('[data-mg]', sg).forEach((d) => (d.onclick = () => pick(data.find((x) => x.id === d.dataset.mg))));
+    }, 220); };
+    const cnt = async (id) => (await sb.from('appointments').select('id', { count: 'exact', head: true }).eq('client_id', id).eq('status', 'done')).count || 0;
+    async function pick(x) {
+      const [n1, n2] = await Promise.all([cnt(c.id), cnt(x.id)]);
+      let keep = n2 > n1 ? x.id : c.id;
+      const row = (y, n) => `<label class="list-row" style="margin:0 0 8px"><input type="radio" name="mg-k" value="${y.id}" ${y.id === keep ? 'checked' : ''} style="accent-color:var(--gr)"><div class="grow"><div class="nm">${esc(y.name)}</div><div class="sub">${esc(fmtPhone(y.phone))} · ${n} ${plural(n, 'візит', 'візити', 'візитів')}</div></div></label>`;
+      const draw = () => { const drop = keep === c.id ? x : c, kp = keep === c.id ? c : x;
+        $('.sh-b', s.el).innerHTML = `<div class="b mb">Яку картку залишити?</div>${row(c, n1)}${row(x, n2)}
+          <div class="dup" style="display:block">Усі візити, записи й оплати з картки «${esc(drop.name)}» перейдуть у «${esc(kp.name)}». Її номер і нотатки допишуться в нотатки, а сама картка зникне. <b>Це не можна скасувати.</b></div>`;
+        $$('[name="mg-k"]', s.el).forEach((r) => (r.onchange = () => { keep = r.value; draw(); })); };
+      draw();
+      s.el.insertAdjacentHTML('beforeend', `<div class="sh-f"><button class="btn" id="mg-back" title="Обрати іншу картку">Назад</button><button class="btn red" id="mg-ok" title="Обʼєднати дві картки в одну">Обʼєднати</button></div>`);
+      $('#mg-back', s.el).onclick = () => { s.close(); mergeSheet(c, cardSheet); };
+      $('#mg-ok', s.el).onclick = (e) => busy(e.currentTarget, async () => {
+        const from = keep === c.id ? x.id : c.id;
+        const { error } = await sb.rpc('client_merge', { p_from: from, p_to: keep });
+        if (error) return toast(errMsg(error), 'bad', 5000);
+        S.clientsCache = null; s.close(); cardSheet?.close(); toast('Клієнтів обʼєднано'); clientSheet(keep);
+        if (location.hash.startsWith('#/staff/clients')) open('clients');
+      });
+    }
   }
 
   return { open, quick, pwLink, S, isBoss, isOwner, masters, byId, svcById, msOf, payPct, reload, newAppt, clientSheet, loginPage, dayData, hoursFor };

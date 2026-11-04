@@ -546,6 +546,29 @@ language sql stable security definer set search_path = public as $$
   group by c.id
 $$;
 
+-- обʼєднання дублів клієнтів: усе з p_from → p_to, p_from видаляється (лише власниця/адмін)
+create or replace function client_merge(p_from uuid, p_to uuid) returns uuid
+language plpgsql security definer set search_path = public as $$
+declare f clients;
+begin
+  if not coalesce(is_boss(), false) then raise exception 'Обʼєднувати клієнтів може лише власниця або адміністратор'; end if;
+  if p_from is null or p_to is null or p_from = p_to then raise exception 'Оберіть дві різні картки клієнтів'; end if;
+  select * into f from clients where id = p_from for update;
+  if not found or not exists (select 1 from clients where id = p_to) then raise exception 'Клієнта не знайдено'; end if;
+  -- усе з картки-дубля переходить до основної
+  update visits set client_id = p_to where client_id = p_from;
+  update appointments set client_id = p_to where client_id = p_from;
+  update tg_chats set client_id = p_to where client_id = p_from;
+  delete from clients where id = p_from;
+  -- порожні поля основної картки доповнюються; номер і нотатки дубля — у нотатки
+  update clients t set instagram = coalesce(t.instagram, f.instagram), birthday = coalesce(t.birthday, f.birthday),
+    tg_chat_id = coalesce(t.tg_chat_id, f.tg_chat_id), demo = t.demo and f.demo,
+    note = nullif(concat_ws(E'\n', t.note, 'Інший номер: ' || f.phone || ' (картка «' || f.name || '»)',
+                            case when f.note is distinct from t.note then f.note end), '')
+  where t.id = p_to;
+  return p_to;
+end $$;
+
 -- вхід / пароль співробітника (без пошти: логін → логін@nana.local)
 create or replace function nana_priv.auth_upsert(p_user uuid, p_email text, p_password text) returns uuid
 language plpgsql security definer set search_path = public, extensions as $$
@@ -804,7 +827,7 @@ create policy p_tgchats_boss on tg_chats for select to authenticated using ((sel
 revoke execute on all functions in schema nana_priv from public, anon, authenticated;
 do $$ declare f text; begin
   foreach f in array array['slot_check(uuid,timestamptz,timestamptz,uuid,boolean,uuid)','staff_book(uuid,text,text,text,uuid,uuid,timestamptz,int,numeric,text,boolean,uuid)',
-    'staff_move(uuid,uuid,timestamptz,int,boolean)','appt_status(uuid,text,numeric,text,text)','clients_stats()','staff_set_login(uuid,text,text)',
+    'staff_move(uuid,uuid,timestamptz,int,boolean)','appt_status(uuid,text,numeric,text,text)','clients_stats()','client_merge(uuid,uuid)','staff_set_login(uuid,text,text)',
     'team_link(boolean,boolean)','demo_clear()','me()','my_role()','is_boss()','is_owner()','my_master()'] loop
     execute 'revoke execute on function ' || f || ' from public, anon';
     execute 'grant execute on function ' || f || ' to authenticated';
