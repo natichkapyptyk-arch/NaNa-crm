@@ -201,12 +201,31 @@ const Admin = (() => {
     const apList = (list) => list.map((a) => `<div class="m-row click" data-cl="${a.client_id}" title="Відкрити картку клієнта"><div class="grow"><div class="b sm ell">${esc(one(a.clients)?.name || '—')} · ${esc(Staff.byId(a.staff_id)?.first_name || '')}</div>
         <div class="xs mut ell">${dt(a.starts_at)}, ${fmtT(a.starts_at)} · ${esc(Staff.svcById(a.service_id)?.name || '')}</div></div>
         <div class="r"><span class="pill ${a.status}">${STATUS[a.status]}</span><div class="sm b" style="margin-top:3px">${money(a.price)}</div></div></div>`).join('') || '<div class="empty">Немає записів за цей період</div>';
+    // список записів з категоріями: рядок-фільтр угорі, а в «Усі» — розділи по категоріях з кількістю й сумою
+    const catSheet = (title, list) => {
+      const catOf = (a) => Staff.svcById(a.service_id)?.category || 'Інше';
+      const ord = (c) => Math.min(...S().services.filter((x) => x.category === c).map((x) => +x.sort || 0), 9999);
+      const cats = [...new Set(list.map(catOf))].sort((a, b) => ord(a) - ord(b) || a.localeCompare(b, 'uk'));
+      const sum = (l) => l.reduce((t, a) => t + +a.price, 0);
+      let cur = '';
+      const s = listSheet(title, `<div class="chips scroll mb" id="cs-cats"></div><div id="cs-list"></div>`);
+      const draw = () => {
+        $('#cs-cats', s.el).innerHTML = `<button class="chip ${!cur ? 'on' : ''}" data-cc="" title="Усі категорії">Усі <span class="n">${list.length}</span></button>`
+          + cats.map((c) => `<button class="chip ${cur === c ? 'on' : ''}" data-cc="${esc(c)}" title="Лише ${esc(c)}">${esc(c)} <span class="n">${list.filter((a) => catOf(a) === c).length}</span></button>`).join('');
+        const one = (c) => { const l = list.filter((a) => catOf(a) === c);
+          return `<div class="s-cat" style="display:flex;justify-content:space-between"><span>${esc(c)} · ${l.length}</span><span>${money(sum(l))}</span></div>${apList(l)}`; };
+        $('#cs-list', s.el).innerHTML = list.length ? (cur ? one(cur) : cats.map(one).join('')) : apList([]);
+        $$('[data-cc]', s.el).forEach((b) => (b.onclick = () => { cur = b.dataset.cc; draw(); }));
+        $$('[data-cl]', s.el).forEach((r) => (r.onclick = () => Staff.clientSheet(r.dataset.cl)));
+      };
+      draw();
+    };
     const listSheet = (title, html, foot = '') => { const s = sheet({ title, wide: true, body: `<div class="sm mut mb">${perTxt}</div>${html}`, foot });
       $$('[data-cl]', s.el).forEach((r) => (r.onclick = () => Staff.clientSheet(r.dataset.cl))); return s; };
     const K = {
       rev: () => jump('d-txcard'), avg: () => jump('d-masters'), load: () => jump('d-masters'), comm: () => jump('d-masters'),
-      done: () => listSheet(`Завершені візити: ${done}`, apList(ap.filter((a) => a.status === 'done'))),
-      cancel: () => listSheet(`Скасовано / не прийшли: ${cancel} / ${noshow}`, apList(ap.filter((a) => a.status === 'cancel' || a.status === 'noshow'))),
+      done: () => catSheet(`Завершені візити: ${done}`, ap.filter((a) => a.status === 'done')),
+      cancel: () => catSheet(`Скасовано / не прийшли: ${cancel} / ${noshow}`, ap.filter((a) => a.status === 'cancel' || a.status === 'noshow')),
       newcl: () => { const nc = cls.filter((c) => { const d = dayOf(c.created_at); return d >= st.from && d <= st.to; }).sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at));
         listSheet(`Нові клієнти: ${nc.length}`, nc.map((c) => `<div class="m-row click" data-cl="${c.id}" title="Відкрити картку клієнта"><span class="ava s y">${esc(c.name[0] || '?')}</span><div class="grow"><div class="b sm ell">${esc(c.name)}</div>
           <div class="xs mut ell">${esc(fmtPhone(c.phone))} · додано ${dt(c.created_at)}</div></div><div class="r sm">${c.visits} ${plural(c.visits, 'візит', 'візити', 'візитів')}</div></div>`).join('') || '<div class="empty">Нових клієнтів за цей період немає</div>'); },
