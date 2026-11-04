@@ -63,8 +63,10 @@ const Client = (() => {
     return out;
   }
   const cartTotal = () => st.cart.reduce((a, x) => a + +x.price, 0);
-  const fromTxt = (sid) => (C.svc.get(sid)?.price_from ? 'від ' : '');            // ціна «від» (кінцева залежить від роботи)
-  const cartFrom = () => (st.cart.some((x) => C.svc.get(x.sid)?.price_from) ? 'від ' : '');
+  // ціна «від» (кінцева залежить від роботи): у майстрині, а якщо база ще стара — у послуги
+  const isFrom = (sid, mid) => { const x = mid && C.ms.get(mid)?.get(sid); return x && 'price_from' in x ? !!x.price_from : !!C.svc.get(sid)?.price_from; };
+  const fromTxt = (sid, mid) => (isFrom(sid, mid) ? 'від ' : '');
+  const cartFrom = () => (st.cart.some((x) => isFrom(x.sid, x.mid)) ? 'від ' : '');
   const cartDur = () => st.cart.reduce((a, x) => a + x.dur, 0);
 
   /* ---------- шапка ---------- */
@@ -126,7 +128,7 @@ const Client = (() => {
       return `<div class="s-row ${inCart ? 'inCart' : ''}" data-s="${s.id}" title="Обрати «${esc(s.name)}» і подивитись вільний час">
         ${ph ? `<button class="s-ph" data-gal="${s.id}" title="Подивитись фото робіт (${s.photos.length})"><img src="${esc(ph)}" alt="" loading="lazy">${s.photos.length > 1 ? `<span>${s.photos.length}</span>` : ''}</button>` : ''}
         <div class="grow"><div class="nm">${esc(s.name)}${inCart ? ' <span class="pill booked">у візиті</span>' : ''}</div>${s.descr ? `<div class="ds">${esc(s.descr)}</div>` : ''}</div>
-        <div class="pr">${fromTxt(s.id)}${money(s.price)}<small>${durTxt(s.dur)}</small></div></div>`;
+        <div class="pr">${fromTxt(s.id, m.id)}${money(s.price)}<small>${durTxt(s.dur)}</small></div></div>`;
     }).join('')).join('');
     return `${stepsBar()}<div class="st-title"><button class="btn ghost ico" data-back="masters" title="Назад — до вибору майстра">${IC.back}</button>
       ${avatar(m, 's')}<h2>${esc(m.first_name)}: послуги</h2></div>
@@ -161,7 +163,7 @@ const Client = (() => {
       return `<div class="cart-item">${avatar(m, 's')}<div class="grow"><div class="b">${esc(s.name)}</div>
         <div class="sm mut">${esc(relDay(dayOf(x.s)))}, ${fmtT(x.s)}–${fmtT(x.e)} · ${esc(m.first_name)}</div>
         <div class="row" style="margin-top:6px;gap:6px"><button class="btn sm" data-edit="${i}" title="Обрати інший день або час для цієї послуги">Змінити час</button>
-        <button class="btn sm red" data-del="${i}" title="Прибрати послугу з візиту">Прибрати</button></div></div><div class="b nw">${fromTxt(x.sid)}${money(x.price)}</div></div>`; }).join('');
+        <button class="btn sm red" data-del="${i}" title="Прибрати послугу з візиту">Прибрати</button></div></div><div class="b nw">${fromTxt(x.sid, x.mid)}${money(x.price)}</div></div>`; }).join('');
     const span = days.size === 1 ? `${fmtT(st.cart[0].s)}–${fmtT(Math.max(...st.cart.map((x) => x.e)))}` : `${days.size} ${plural(days.size, 'день', 'дні', 'днів')}`;
     return `${stepsBar()}<div class="st-title"><h2>Ваш візит</h2></div>
       <div class="card">${items}<div class="cart-tot"><span>Разом <span class="sm mut" style="font-weight:600">· ${durTxt(cartDur())} · ${esc(span)}</span></span><span>${cartFrom()}${money(cartTotal())}</span></div></div>
@@ -272,7 +274,7 @@ const Client = (() => {
         ${ph.length > 1 ? `<button class="btn ico g-prev" title="Попереднє фото">${IC.back}</button><button class="btn ico g-next" title="Наступне фото">${IC.fwd}</button>` : ''}</div>
       ${ph.length > 1 ? `<div class="g-th">${ph.map((u, k) => `<img src="${esc(u)}" data-k="${k}" class="${k ? '' : 'on'}" alt="" title="Фото ${k + 1}">`).join('')}</div>` : ''}
       ${sv.descr ? `<p class="mut" style="margin:10px 0 0">${esc(sv.descr)}</p>` : ''}`,
-      foot: onPick ? `<button class="btn pri lg" id="g-ok" title="Обрати цю послугу">Обрати · ${fromTxt(sv.id)}${money(x ? x.price : sv.price)}</button>` : '' });
+      foot: onPick ? `<button class="btn pri lg" id="g-ok" title="Обрати цю послугу">Обрати · ${fromTxt(sv.id, st.mid)}${money(x ? x.price : sv.price)}</button>` : '' });
     const show = (k) => { i = (k + ph.length) % ph.length; $('#g-img', g.el).src = ph[i]; $$('.g-th img', g.el).forEach((t) => t.classList.toggle('on', +t.dataset.k === i)); };
     $$('.g-th img', g.el).forEach((t) => (t.onclick = () => show(+t.dataset.k)));
     const pv = $('.g-prev', g.el); if (pv) { pv.onclick = () => show(i - 1); $('.g-next', g.el).onclick = () => show(i + 1); }

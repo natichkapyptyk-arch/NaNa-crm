@@ -391,7 +391,9 @@ table.tbl{width:100%;border-collapse:collapse;font-size:13.5px;background:#fff}
 .ms-row:last-child{border-bottom:0}
 .ms-row .inp{min-height:38px;padding:6px 8px}
 .ms-row input[type=checkbox]{width:20px;height:20px;accent-color:var(--gr)}
-@media (max-width:520px){.ms-row{grid-template-columns:auto 1fr 70px 82px}}
+.ms-row:has(.ms-from){grid-template-columns:auto 1fr 84px 96px auto} .ms-from{display:flex;align-items:center;gap:4px;font-size:13px;font-weight:700;color:var(--mut);cursor:pointer;white-space:nowrap}
+.ms-from input[type=checkbox]{width:18px;height:18px}
+@media (max-width:520px){.ms-row{grid-template-columns:auto 1fr 70px 82px} .ms-row:has(.ms-from){grid-template-columns:auto 1fr 64px 76px auto}}
 .wh-row{display:grid;grid-template-columns:110px 1fr 1fr;gap:10px;align-items:center;padding:8px 0;border-bottom:1px solid #EEEEE8}
 .wh-row:last-child{border-bottom:0}
 .mcal{display:grid;grid-template-columns:repeat(7,1fr);gap:6px}

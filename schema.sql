@@ -104,6 +104,11 @@ create table if not exists master_services (
   primary key (staff_id, service_id)
 );
 
+alter table master_services add column if not exists price_from boolean not null default false;   -- ціна «від» у майстрині
+update master_services ms set price_from = true from services s where s.id = ms.service_id and s.price_from;   -- одноразове перенесення
+update services set price_from = false where price_from;
+
+
 -- ===== Графік =====
 create table if not exists work_hours (               -- звичайний тиждень (1 = пн … 7 = нд)
   staff_id uuid not null references staff(id) on delete cascade,
@@ -325,7 +330,7 @@ create or replace function pub_catalog() returns jsonb language sql stable secur
     'masters', coalesce((select jsonb_agg(jsonb_build_object('id', m.id, 'first_name', m.first_name, 'last_name', m.last_name,
                  'photo_url', m.photo_url, 'bio', m.bio, 'experience', m.experience) order by m.sort, m.first_name)
                  from staff m where m.is_active and m.is_bookable), '[]'),
-    'ms', coalesce((select jsonb_agg(jsonb_build_object('staff_id', ms.staff_id, 'service_id', ms.service_id, 'dur', ms.dur, 'price', ms.price))
+    'ms', coalesce((select jsonb_agg(jsonb_build_object('staff_id', ms.staff_id, 'service_id', ms.service_id, 'dur', ms.dur, 'price', ms.price, 'price_from', ms.price_from))
                  from master_services ms join services s on s.id = ms.service_id join staff m on m.id = ms.staff_id
                  where ms.is_active and s.is_active and m.is_active and m.is_bookable), '[]'),
     'hours', coalesce((select jsonb_agg(jsonb_build_object('m', staff_id, 'w', weekday, 's', to_char(start_time, 'HH24:MI'),

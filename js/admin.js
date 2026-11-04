@@ -267,7 +267,8 @@ const Admin = (() => {
         <label class="chip" title="Показати також вимкнені послуги"><input type="checkbox" id="sv-off" ${S().svcOff ? 'checked' : ''} style="accent-color:var(--gr)"> вимкнені</label></div>
       ${cats.filter((c) => !S().svcCat || c === S().svcCat).map((c) => { const l = list.filter((s) => s.category === c); if (!l.length) return '';
         return `<div class="s-cat">${esc(c)}<button class="btn ghost sm s-rc" data-rc="${esc(c)}" title="Перейменувати категорію «${esc(c)}»">✎ Перейменувати</button></div>` + l.map((s) => { const ms = S().ms.filter((x) => x.service_id === s.id && x.is_active); const prices = ms.map((x) => +x.price);
-          const pr = (s.price_from ? 'від ' : '') + (prices.length ? (Math.min(...prices) === Math.max(...prices) ? money(prices[0]) : money(Math.min(...prices)) + '–' + money(Math.max(...prices))) : money(s.price));
+          const pf = hasMsFrom() ? ms.some((x) => x.price_from) : s.price_from;
+          const pr = (pf ? 'від ' : '') + (prices.length ? (Math.min(...prices) === Math.max(...prices) ? money(prices[0]) : money(Math.min(...prices)) + '–' + money(Math.max(...prices))) : money(s.price));
           return `<div class="list-row ${s.is_active ? '' : 'off'}" data-s="${s.id}" title="Редагувати послугу: ціни, тривалість, хто виконує, фото">${(s.photos || [])[0] ? `<span class="s-ph" style="width:46px;height:46px;cursor:pointer"><img src="${esc(s.photos[0])}" alt="" loading="lazy"></span>` : '<span class="s-ph" style="width:46px;height:46px;display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--mut)" title="Немає фото — додайте в редагуванні">📷</span>'}<div class="grow"><div class="nm">${esc(s.name)} ${s.is_active ? '' : '<span class="pill g">вимкнено</span>'}</div>
             <div class="sub">${durTxt(s.dur)} · ${ms.length ? ms.map((x) => esc(Staff.byId(x.staff_id)?.first_name || '')).join(', ') : '<span style="color:var(--bad)">немає майстра — клієнти не бачать</span>'}</div></div><div class="b nw">${pr}</div></div>`; }).join(''); }).join('')}`;
     $$('[data-c]', main).forEach((b) => (b.onclick = () => { S().svcCat = b.dataset.c; services(main); }));
@@ -299,6 +300,7 @@ const Admin = (() => {
     });
   }
   const hasFrom = () => S().services.some((x) => 'price_from' in x);   // поле «Ціна від» зʼявляється після оновлення бази
+  const hasMsFrom = () => S().ms.some((x) => 'price_from' in x);      // «від» окремо для кожної майстрині (після оновлення бази 2)
   function serviceSheet(id, done) {
     const sv = id ? Staff.svcById(id) : { category: S().svcCat || '', name: '', descr: '', dur: 60, price: 0, is_active: true, sort: 100 };
     const people = S().staff.filter((x) => x.is_active && (x.is_bookable || S().ms.some((m) => m.staff_id === x.id && m.service_id === id)));
@@ -311,13 +313,13 @@ const Admin = (() => {
       <div><label class="lb" for="sv-p">Ціна, ₴</label><input class="inp" type="number" id="sv-p" min="0" step="10" value="${+sv.price}"></div>
       <div><label class="lb" for="sv-o">Порядок</label><input class="inp" type="number" id="sv-o" value="${sv.sort}" title="Менше число — вище в списку"></div></div>
       <label class="sw mt" title="Вимкнена послуга не показується клієнтам"><input type="checkbox" id="sv-a" ${sv.is_active ? 'checked' : ''}><i></i><span class="b">Послуга доступна для запису</span></label>
-      ${hasFrom() ? `<label class="sw mt" title="Клієнти бачать ціну як «від 1 400 ₴» — коли кінцева сума залежить від роботи"><input type="checkbox" id="sv-f" ${sv.price_from ? 'checked' : ''}><i></i><span class="b">Ціна «від»</span></label>` : ''}
+      ${hasFrom() && !hasMsFrom() ? `<label class="sw mt" title="Клієнти бачать ціну як «від 1 400 ₴» — коли кінцева сума залежить від роботи"><input type="checkbox" id="sv-f" ${sv.price_from ? 'checked' : ''}><i></i><span class="b">Ціна «від»</span></label>` : ''}
       <div class="sect"><h3>📷 Фото робіт <span class="mut sm" style="font-weight:600">до 6 — перше показується в списку</span></h3><div class="sv-phs" id="sv-phs"></div></div>
       <div class="sect"><h3>Хто виконує — і за скільки <button class="btn sm" id="sv-all" title="Поставити всім обраним майстрам тривалість і ціну зверху" style="margin-left:auto">Як зверху всім</button></h3>
-        <div class="hint" style="margin:-4px 0 8px">Кожен майстер може мати свою ціну й тривалість.</div>
+        <div class="hint" style="margin:-4px 0 8px">Кожен майстер може мати свою ціну й тривалість${hasMsFrom() ? '; «від» — клієнти бачать ціну як «від …»' : ''}.</div>
         ${people.map((p) => { const x = S().ms.find((m) => m.staff_id === p.id && m.service_id === id && m.is_active);
           return `<div class="ms-row"><input type="checkbox" data-p="${p.id}" ${x ? 'checked' : ''} title="${esc(p.first_name)} виконує цю послугу"><span class="row" style="gap:8px">${avatar(p, 's')}<b class="ell">${esc(fullName(p))}</b></span>
-            <input class="inp" type="number" min="5" step="5" data-pu="${p.id}" value="${x ? x.dur : sv.dur}" title="Тривалість у цього майстра, хв"><input class="inp" type="number" min="0" step="10" data-pp="${p.id}" value="${x ? +x.price : +sv.price}" title="Ціна у цього майстра, ₴"></div>`; }).join('') || '<div class="mut">Немає майстрів</div>'}</div>`,
+            <input class="inp" type="number" min="5" step="5" data-pu="${p.id}" value="${x ? x.dur : sv.dur}" title="Тривалість у цього майстра, хв"><input class="inp" type="number" min="0" step="10" data-pp="${p.id}" value="${x ? +x.price : +sv.price}" title="Ціна у цього майстра, ₴">${hasMsFrom() ? `<label class="ms-from" title="Клієнти бачать у ${esc(p.first_name)} ціну як «від …»"><input type="checkbox" data-pf="${p.id}" ${x?.price_from ? 'checked' : ''}>від</label>` : ''}</div>`; }).join('') || '<div class="mut">Немає майстрів</div>'}</div>`,
       foot: `<button class="btn" data-x2 title="Закрити без збереження">Скасувати</button><button class="btn pri" id="sv-ok" title="Зберегти послугу">Зберегти</button>` });
     const el = s.el;
     const sid = id || crypto.randomUUID();
@@ -359,7 +361,7 @@ const Admin = (() => {
       if (r1.error) return toast(errMsg(r1.error), 'bad');
       const up = [], del = [];
       $$('[data-p]', el).forEach((c) => { const pid = c.dataset.p;
-        if (c.checked) { const u = +$(`[data-pu="${pid}"]`, el).value, p = +$(`[data-pp="${pid}"]`, el).value; up.push({ staff_id: pid, service_id: sid, dur: u >= 5 ? u : dur, price: p >= 0 ? p : price, is_active: true }); }
+        if (c.checked) { const u = +$(`[data-pu="${pid}"]`, el).value, p = +$(`[data-pp="${pid}"]`, el).value; up.push({ staff_id: pid, service_id: sid, dur: u >= 5 ? u : dur, price: p >= 0 ? p : price, is_active: true, ...(hasMsFrom() ? { price_from: !!$(`[data-pf="${pid}"]`, el)?.checked } : {}) }); }
         else if (S().ms.some((m) => m.staff_id === pid && m.service_id === sid)) del.push(pid); });
       if (up.length) { const { error } = await sb.from('master_services').upsert(up); if (error) return toast(errMsg(error), 'bad'); }
       if (del.length) { const { error } = await sb.from('master_services').delete().eq('service_id', sid).in('staff_id', del); if (error) return toast(errMsg(error), 'bad'); }
