@@ -334,6 +334,9 @@ const Staff = (() => {
         ${pay ? `<dt>Оплачено</dt><dd>${money(pay.amount)} · ${esc(pay.method)}</dd>` : ''}
         ${a.cancel_reason ? `<dt>Причина</dt><dd>${esc(a.cancel_reason)}</dd>` : ''}${a.cancelled_by ? `<dt>Скасував(ла)</dt><dd>${a.cancelled_by === 'client' ? 'клієнт онлайн' : 'салон'}</dd>` : ''}
         ${a.visits?.comment ? `<dt>Коментар</dt><dd>${esc(a.visits.comment)}</dd>` : ''}</dl>
+      ${mine && ['booked', 'done'].includes(a.status) ? `<div class="row wrap mt" style="gap:8px">
+        ${a.status === 'booked' || isBoss() ? `<button class="btn sm" id="a-svc" title="Якщо фактично зробили іншу послугу — змінити її, ціну й тривалість">✎ Змінити послугу</button>` : ''}
+        <button class="btn sm" id="a-add" title="Додати до цього візиту ще одну послугу (одразу після цієї)">${IC.plus} Додати послугу</button></div>` : ''}
       <div class="sect"><h3>${esc(c.name || '')} <a class="btn sm ghost" href="javascript:void 0" id="a-cl" title="Відкрити картку клієнта з історією візитів">картка ${IC.fwd.replace('width="20" height="20"', 'width="14" height="14"')}</a></h3>
         <div class="sm">${esc(fmtPhone(c.phone))} · зручно: <b>${esc(CONTACTS[c.contact]?.[0] || 'дзвінок')}</b>${c.instagram ? ' · @' + esc(c.instagram) : ''}</div>${c.note ? `<div class="hint">📝 ${esc(c.note)}</div>` : ''}${contactLinks(c)}${a.status === 'booked' && Date.parse(a.starts_at) > nowMs() ? `<button class="btn sm mt" id="a-rem" title="Готовий текст нагадування для Viber, Telegram або SMS">${IC.bell} Нагадати про візит</button>` : ''}</div>
       <label class="lb mt" for="a-note">Нотатка до запису</label><textarea class="inp" id="a-note" rows="2" placeholder="Видно лише персоналу" ${mine ? '' : 'disabled'}>${esc(a.note || '')}</textarea>`,
@@ -341,6 +344,8 @@ const Staff = (() => {
     const note = $('#a-note', s.el);
     note.onchange = async () => { const { error } = await sb.from('appointments').update({ note: note.value.trim() || null }).eq('id', a.id); if (error) toast(errMsg(error), 'bad'); else { a.note = note.value.trim(); toast('Нотатку збережено'); } };
     $('#a-cl', s.el).onclick = () => { s.close(); clientSheet(c.id); };
+    const sb1 = $('#a-svc', s.el); if (sb1) sb1.onclick = () => changeSvcSheet(a, () => { s.close(); refresh(); });
+    const ab = $('#a-add', s.el); if (ab) ab.onclick = () => { s.close(); newAppt({ client: { id: c.id, name: c.name, phone: c.phone }, mid: a.staff_id, day: dayOf(a.ends_at), min: kParts(a.ends_at).min, visit: a.visit_id }); };
     const rb = $('#a-rem', s.el); if (rb) rb.onclick = () => remindSheet(a.id, c);
     $$('[data-act]', s.el).forEach((b) => (b.onclick = async () => {
       const act = b.dataset.act;
@@ -412,6 +417,37 @@ const Staff = (() => {
       if (min != null) onPick(min);
     });
   }
+  /* ---------- змінити послугу в записі (фактично зробили іншу) ---------- */
+  async function svcEditOk() {   // працює, коли в базі є функція appt_service
+    if (S.svcEditOk == null) { const { error } = await sb.rpc('appt_service', { p_appt: null, p_service: null });
+      S.svcEditOk = !(error && (error.code === 'PGRST202' || /could not find the function/i.test(error.message || ''))); }
+    return S.svcEditOk;
+  }
+  async function changeSvcSheet(a, done) {
+    if (!(await svcEditOk())) return toast('Зміна послуги ще не увімкнена в базі — потрібне оновлення бази', 'bad', 5000);
+    const own = msOf(a.staff_id), other = S.services.filter((x) => x.is_active && !own.some((o) => o.service_id === x.id));
+    const st = { sid: a.service_id };
+    const s = sheet({ title: 'Змінити послугу', body: `<div class="sm mut mb">${esc(a.clients?.name || '')} · ${esc(relDay(dayOf(a.starts_at)))}, ${fmtT(a.starts_at)} · ${esc(byId(a.staff_id)?.first_name || '')}</div>
+      <label class="lb" for="cs-s">Послуга</label><select class="inp" id="cs-s">${own.length ? `<optgroup label="Послуги майстра">${own.map((x) => `<option value="${x.service_id}">${esc(x.svc.name)} — ${durTxt(x.dur)} · ${money(x.price)}</option>`).join('')}</optgroup>` : ''}
+        <optgroup label="${own.length ? 'Інші послуги' : 'Усі послуги'}">${other.map((x) => `<option value="${x.id}">${esc(x.name)} — ${durTxt(x.dur)} · ${money(x.price)}</option>`).join('')}</optgroup></select>
+      <div class="two"><div><label class="lb" for="cs-u">Тривалість, хв</label><input class="inp" id="cs-u" type="number" min="5" step="5"></div><div><label class="lb" for="cs-p">Ціна, ₴</label><input class="inp" id="cs-p" type="number" min="0" step="10"></div></div>
+      <div class="hint">Початок лишається ${fmtT(a.starts_at)}, кінець зміниться за новою тривалістю.${a.status === 'done' ? ' Візит уже оплачено — суму оплати змініть окремо кнопкою «Змінити оплату».' : ''}</div>`,
+      foot: `<button class="btn" data-x2 title="Закрити без змін">Скасувати</button><button class="btn pri" id="cs-ok" title="Зберегти іншу послугу">Зберегти</button>` });
+    const sel = $('#cs-s', s.el), u = $('#cs-u', s.el), pr = $('#cs-p', s.el);
+    const fill = (keep) => { const o = S.ms.find((x) => x.staff_id === a.staff_id && x.service_id === sel.value && x.is_active), sv = svcById(sel.value);
+      if (keep) { u.value = Math.round((Date.parse(a.ends_at) - Date.parse(a.starts_at)) / 6e4); pr.value = +a.price; }
+      else { u.value = o?.dur || sv?.dur || ''; pr.value = +(o?.price ?? sv?.price ?? 0); } };
+    if ([...sel.options].some((o) => o.value === a.service_id)) sel.value = a.service_id; fill(true);
+    sel.onchange = () => fill(false);
+    $('[data-x2]', s.el).onclick = s.close;
+    $('#cs-ok', s.el).onclick = (e) => busy(e.currentTarget, async () => {
+      const dur = +u.value, price = +pr.value;
+      if (!sel.value) return toast('Оберіть послугу', 'bad'); if (!(dur >= 5) || !(price >= 0)) return toast('Перевірте тривалість і ціну', 'bad');
+      const r = await withForce((force) => sb.rpc('appt_service', { p_appt: a.id, p_service: sel.value, p_dur: dur, p_price: price, p_force: force }));
+      if (r.cancelled) return; if (r.error) return toast(errMsg(r.error), 'bad', 5000);
+      s.close(); toast('Послугу змінено'); done();
+    });
+  }
   async function withForce(fn) {   // якщо час поза графіком/зайнятий — запитати «все одно?»
     let { error } = await fn(false);
     if (error && /^CHECK:/.test(error.message)) {
@@ -443,11 +479,11 @@ const Staff = (() => {
   }
 
   /* ================= новий запис ================= */
-  function newAppt({ mid = null, day = today(), min = null, client = null } = {}) {
+  function newAppt({ mid = null, day = today(), min = null, client = null, visit = null } = {}) {
     const ms = masters();
     if (!mid) mid = ms.length === 1 ? ms[0].id : null;
     const st = { mid, day, min, client, sid: null, dur: null, price: null, contact: 'call' };
-    const s = sheet({ title: 'Новий запис', wide: false, body: `
+    const s = sheet({ title: visit ? 'Додати послугу до візиту' : 'Новий запис', wide: false, body: `
       <label class="lb">Клієнт <span class="req">*</span></label><div id="na-c"></div>
       <label class="lb" for="na-m">Майстер <span class="req">*</span></label>
       <select class="inp" id="na-m" ${isBoss() ? '' : 'disabled'}><option value="">— оберіть майстра —</option>${ms.map((m) => `<option value="${m.id}" ${m.id === mid ? 'selected' : ''}>${esc(fullName(m))}</option>`).join('')}</select>
@@ -463,7 +499,7 @@ const Staff = (() => {
       const c = $('#na-c', el);
       if (st.client) {
         c.innerHTML = `<div class="list-row" style="cursor:default;margin:0"><span class="ava s y">${esc((st.client.name || '?')[0])}</span><div class="grow"><div class="nm">${esc(st.client.name)}</div><div class="sub">${esc(fmtPhone(st.client.phone))}</div></div><button class="btn ghost ico sm" id="na-cx" title="Обрати іншого клієнта">${IC.x}</button></div>`;
-        $('#na-cx', c).onclick = () => { st.client = null; drawClient(); };
+        if (visit) $('#na-cx', c)?.remove(); else $('#na-cx', c).onclick = () => { st.client = null; drawClient(); };   // у візиті клієнт той самий
         return;
       }
       c.innerHTML = `<div class="search">${IC.search}<input class="inp" id="na-q" placeholder="Пошук: імʼя або телефон" autocomplete="off" autofocus></div><div id="na-sg"></div>
@@ -522,9 +558,9 @@ const Staff = (() => {
       if (!st.mid) bad.push('майстра'); if (!st.sid) bad.push('послугу'); if (st.min == null) bad.push('час');
       if (bad.length) return toast('Оберіть ' + bad.join(', '), 'bad');
       const r = await withForce((force) => sb.rpc('staff_book', { p_client: cl?.id || null, p_name: name, p_phone: phone, p_contact: st.contact, p_staff: st.mid, p_service: st.sid,
-        p_start: kDate(st.day, st.min).toISOString(), p_dur: st.dur, p_price: st.price, p_note: $('#na-n', el).value, p_force: force, p_visit: null }));
+        p_start: kDate(st.day, st.min).toISOString(), p_dur: st.dur, p_price: st.price, p_note: $('#na-n', el).value, p_force: force, p_visit: visit }));
       if (r.cancelled) return; if (r.error) return toast(errMsg(r.error), 'bad', 5000);
-      s.close(); toast('Запис створено'); S.clientsCache = null;
+      s.close(); toast(visit ? 'Послугу додано до візиту' : 'Запис створено'); S.clientsCache = null;
       if (location.hash.startsWith('#/staff/cal')) go('#/staff/cal/' + st.day); else go('#/staff/cal/' + st.day);
     });
   }
