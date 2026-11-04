@@ -275,7 +275,7 @@ h3{font-size:16px}
 .cal-bar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:12px}
 .cal-day{font-weight:800;font-size:17px;min-width:150px;text-align:center;padding:0 4px}
 .cal-wrap{background:#fff;border:1.5px solid var(--line);border-radius:var(--r);box-shadow:var(--sh);overflow:auto;max-height:calc(100vh - 230px);position:relative}
-.cal-grid{display:grid;position:relative;min-width:100%}
+.cal-grid{display:grid;position:relative;min-width:100%;width:max-content}
 .cal-head{position:sticky;top:0;z-index:5;background:#fff;border-bottom:1.5px solid var(--line);display:flex;align-items:center;gap:8px;padding:8px 10px;font-weight:800;font-size:14px;min-height:52px}
 .cal-head.tm{left:0;z-index:7;border-right:1.5px solid var(--line)}
 .cal-times{position:sticky;left:0;z-index:4;background:#fff;border-right:1.5px solid var(--line)}
