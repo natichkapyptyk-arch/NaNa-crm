@@ -425,11 +425,11 @@ const Staff = (() => {
   }
   async function changeSvcSheet(a, done) {
     if (!(await svcEditOk())) return toast('Зміна послуги ще не увімкнена в базі — потрібне оновлення бази', 'bad', 5000);
-    const own = msOf(a.staff_id), other = S.services.filter((x) => x.is_active && !own.some((o) => o.service_id === x.id));
+    const own = msOf(a.staff_id);   // лише послуги, закріплені за цим майстром
+    if (!own.length) return toast(`У ${byId(a.staff_id)?.first_name || 'майстра'} немає закріплених послуг — додайте їх у «Послуги»`, 'bad', 5000);
     const st = { sid: a.service_id };
     const s = sheet({ title: 'Змінити послугу', body: `<div class="sm mut mb">${esc(a.clients?.name || '')} · ${esc(relDay(dayOf(a.starts_at)))}, ${fmtT(a.starts_at)} · ${esc(byId(a.staff_id)?.first_name || '')}</div>
-      <label class="lb" for="cs-s">Послуга</label><select class="inp" id="cs-s">${own.length ? `<optgroup label="Послуги майстра">${own.map((x) => `<option value="${x.service_id}">${esc(x.svc.name)} — ${durTxt(x.dur)} · ${money(x.price)}</option>`).join('')}</optgroup>` : ''}
-        <optgroup label="${own.length ? 'Інші послуги' : 'Усі послуги'}">${other.map((x) => `<option value="${x.id}">${esc(x.name)} — ${durTxt(x.dur)} · ${money(x.price)}</option>`).join('')}</optgroup></select>
+      <label class="lb" for="cs-s">Послуга <span class="mut" style="font-weight:600">· лише послуги ${esc(byId(a.staff_id)?.first_name || 'майстра')}</span></label><select class="inp" id="cs-s">${own.map((x) => `<option value="${x.service_id}">${esc(x.svc.name)} — ${durTxt(x.dur)} · ${money(x.price)}</option>`).join('')}</select>
       <div class="two"><div><label class="lb" for="cs-u">Тривалість, хв</label><input class="inp" id="cs-u" type="number" min="5" step="5"></div><div><label class="lb" for="cs-p">Ціна, ₴</label><input class="inp" id="cs-p" type="number" min="0" step="10"></div></div>
       <div class="hint">Початок лишається ${fmtT(a.starts_at)}, кінець зміниться за новою тривалістю.${a.status === 'done' ? ' Візит уже оплачено — суму оплати змініть окремо кнопкою «Змінити оплату».' : ''}</div>`,
       foot: `<button class="btn" data-x2 title="Закрити без змін">Скасувати</button><button class="btn pri" id="cs-ok" title="Зберегти іншу послугу">Зберегти</button>` });
@@ -437,7 +437,7 @@ const Staff = (() => {
     const fill = (keep) => { const o = S.ms.find((x) => x.staff_id === a.staff_id && x.service_id === sel.value && x.is_active), sv = svcById(sel.value);
       if (keep) { u.value = Math.round((Date.parse(a.ends_at) - Date.parse(a.starts_at)) / 6e4); pr.value = +a.price; }
       else { u.value = o?.dur || sv?.dur || ''; pr.value = +(o?.price ?? sv?.price ?? 0); } };
-    if ([...sel.options].some((o) => o.value === a.service_id)) sel.value = a.service_id; fill(true);
+    if ([...sel.options].some((o) => o.value === a.service_id)) { sel.value = a.service_id; fill(true); } else fill(false);
     sel.onchange = () => fill(false);
     $('[data-x2]', s.el).onclick = s.close;
     $('#cs-ok', s.el).onclick = (e) => busy(e.currentTarget, async () => {
@@ -459,7 +459,7 @@ const Staff = (() => {
   function moveSheet(a) {
     const st = { mid: a.staff_id, day: dayOf(a.starts_at), min: kParts(a.starts_at).min, dur: Math.round((Date.parse(a.ends_at) - Date.parse(a.starts_at)) / 6e4) };
     const s = sheet({ title: 'Перенести запис', body: `<div class="sm mut mb">${esc(svcById(a.service_id)?.name)} · ${esc(a.clients?.name || '')} · зараз ${esc(relDay(st.day))}, ${fmtT(a.starts_at)}</div>
-      ${isBoss() ? `<label class="lb" for="mv-m">Майстер</label><select class="inp" id="mv-m">${masters().map((m) => `<option value="${m.id}" ${m.id === st.mid ? 'selected' : ''}>${esc(fullName(m))}</option>`).join('')}</select>` : ''}
+      ${isBoss() ? `<label class="lb" for="mv-m">Майстер <span class="mut" style="font-weight:600">· хто виконує цю послугу</span></label><select class="inp" id="mv-m">${masters().filter((m) => m.id === st.mid || msOf(m.id).some((x) => x.service_id === a.service_id)).map((m) => `<option value="${m.id}" ${m.id === st.mid ? 'selected' : ''}>${esc(fullName(m))}</option>`).join('')}</select>` : ''}
       <div class="two"><div><label class="lb" for="mv-d">Дата</label><input class="inp" type="date" id="mv-d" value="${st.day}"></div>
       <div><label class="lb" for="mv-u">Тривалість, хв</label><input class="inp" type="number" id="mv-u" min="5" step="5" value="${st.dur}"></div></div>
       <label class="lb">Час</label><div id="mv-t"></div>`,
@@ -526,10 +526,11 @@ const Staff = (() => {
     // майстер і послуга
     const msel = $('#na-m', el), ssel = $('#na-s', el);
     const fillSvc = () => {
+      // лише послуги, закріплені за майстром (інших майстер не виконує)
       const own = st.mid ? msOf(st.mid) : [];
-      const other = S.services.filter((x) => x.is_active && !own.some((o) => o.service_id === x.id));
-      ssel.innerHTML = `<option value="">— оберіть послугу —</option>` + (own.length ? `<optgroup label="Послуги майстра">${own.map((x) => `<option value="${x.service_id}">${esc(x.svc.name)} — ${durTxt(x.dur)} · ${money(x.price)}</option>`).join('')}</optgroup>` : '') +
-        `<optgroup label="${own.length ? 'Інші послуги' : 'Усі послуги'}">${other.map((x) => `<option value="${x.id}">${esc(x.name)} — ${durTxt(x.dur)} · ${money(x.price)}</option>`).join('')}</optgroup>`;
+      ssel.innerHTML = !st.mid ? `<option value="">— спершу оберіть майстра —</option>`
+        : !own.length ? `<option value="">— у майстра немає послуг (додайте в «Послуги») —</option>`
+        : `<option value="">— оберіть послугу —</option>` + own.map((x) => `<option value="${x.service_id}">${esc(x.svc.name)} — ${durTxt(x.dur)} · ${money(x.price)}</option>`).join('');
       if (st.sid && [...ssel.options].some((o) => o.value === st.sid)) ssel.value = st.sid; else st.sid = null;
       pickSvc();
     };

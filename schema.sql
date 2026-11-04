@@ -463,6 +463,7 @@ begin
   select coalesce(p_dur, ms.dur, s.dur), coalesce(p_price, ms.price, s.price) into v_dur, v_price
     from services s left join master_services ms on ms.service_id = s.id and ms.staff_id = p_staff where s.id = p_service;
   if v_dur is null then raise exception 'Оберіть послугу'; end if;
+  if not exists (select 1 from master_services x where x.staff_id = p_staff and x.service_id = p_service and x.is_active) then raise exception 'Цей майстер не виконує обрану послугу'; end if;
   if v_client is null then
     v_phone := norm_phone(p_phone);
     if v_phone is null then raise exception 'Вкажіть правильний номер телефону'; end if;
@@ -491,6 +492,7 @@ begin
   select * into a from appointments where id = p_appt;
   if a.id is null or not is_staff() then raise exception 'Немає доступу'; end if;
   if not (is_boss() or (a.staff_id = me() and p_staff = me())) then raise exception 'Майстер може змінювати лише свої записи'; end if;
+  if p_staff <> a.staff_id then if not exists (select 1 from master_services x where x.staff_id = p_staff and x.service_id = a.service_id and x.is_active) then raise exception 'Цей майстер не виконує обрану послугу'; end if; end if;
   v_dur := coalesce(p_dur, extract(epoch from (a.ends_at - a.starts_at))::int / 60);
   perform pg_advisory_xact_lock(hashtext(p_staff::text));
   v_err := slot_check(p_staff, p_start, p_start + make_interval(mins => v_dur), a.id, false, a.visit_id);
@@ -516,6 +518,7 @@ begin
   select coalesce(p_dur, ms.dur, s.dur), coalesce(p_price, ms.price, s.price) into v_dur, v_price
     from services s left join master_services ms on ms.service_id = s.id and ms.staff_id = a.staff_id where s.id = p_service;
   if v_dur is null then raise exception 'Оберіть послугу'; end if;
+  if not exists (select 1 from master_services x where x.staff_id = a.staff_id and x.service_id = p_service and x.is_active) then raise exception 'Цей майстер не виконує обрану послугу'; end if;
   if v_dur < 5 or v_price < 0 then raise exception 'Перевірте тривалість і ціну'; end if;
   perform pg_advisory_xact_lock(hashtext(a.staff_id::text));
   v_err := slot_check(a.staff_id, a.starts_at, a.starts_at + make_interval(mins => v_dur), a.id, false, a.visit_id);
