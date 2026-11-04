@@ -1,0 +1,16 @@
+{
+  "name": "NaNa studio — онлайн-запис",
+  "short_name": "NaNa studio",
+  "description": "Онлайн-запис у NaNa studio: брови, вії, манікюр, педикюр, макіяж, укладки. Львів, просп. Свободи 41.",
+  "lang": "uk",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#4E4E4C",
+  "theme_color": "#4E4E4C",
+  "icons": [
+    { "src": "img/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "img/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" }
+  ]
+}

@@ -462,3 +462,19 @@ table.tbl{width:100%;border-collapse:collapse;font-size:13.5px;background:#fff}
 .ms-all:hover{text-decoration:underline}
 .ms-q{margin:4px 0 4px}
 .ms-row[hidden],.ms-cat[hidden]{display:none}
+/* ===== телефон ===== */
+/* місячний графік: 7 колонок завжди влазять у ширину екрана */
+.mcal{grid-template-columns:repeat(7,minmax(0,1fr))}
+@media (max-width:520px){
+  .mcal{gap:4px} .mcal .c{min-height:50px;padding:4px 3px;font-size:10.5px;border-radius:8px;overflow-wrap:anywhere}
+  .mcal .c b{font-size:13px} .mcal .c.off .xs{display:none}
+  .ms-row input[type=checkbox]{width:22px;height:22px} .ms-all{padding:6px 4px}
+}
+/* iPhone не збільшує сторінку, коли натискаєш на поле (шрифт полів 16px) */
+@supports (-webkit-touch-callout:none){input,select,textarea,.inp{font-size:16px!important}}
+/* інструкція «Встановити на телефон» */
+.inst{margin:10px 0 4px;padding-left:22px;display:grid;gap:9px;line-height:1.45} .mt0{margin-top:0}
+/* у встановленому застосунку — без «виділення» при довгому натисканні на кнопки */
+@media (display-mode:standalone){.st-tabs a,.btn,.chip{-webkit-touch-callout:none;-webkit-user-select:none;user-select:none}}
+/* застосунок на iPhone: шапка сторінки запису не заходить під «чубчик» */
+.cl-hero{padding-top:max(18px,calc(env(safe-area-inset-top) + 8px))}

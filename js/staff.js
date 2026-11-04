@@ -113,16 +113,20 @@ const Staff = (() => {
     const nav = NAV();
     $('#st-nav').innerHTML = nav.map(([k, n, ic]) => `<a href="#/staff/${k}" class="${k === page ? 'on' : ''}" title="${TIPS[k]}">${ic}<span>${n}</span></a>`).join('') +
       `<div class="sep"></div><a href="#" target="_blank" title="Відкрити сторінку онлайн-запису, яку бачать клієнти">${IC.globe.replace('width="14" height="14"', 'width="20" height="20"')}<span>Сторінка запису</span></a>
+       ${isStandalone() ? '' : `<a href="javascript:void 0" id="nav-app" title="Встановити панель як застосунок на телефон або компʼютер">📲<span>На телефон</span></a>`}
        <a href="javascript:void 0" id="nav-out" title="Вийти з програми на цьому пристрої">${IC.out}<span>Вийти</span></a>`;
     $('#nav-out').onclick = logout;
+    const na = $('#nav-app'); if (na) na.onclick = () => installApp(true);
     const main4 = ['cal', 'clients', 'sched', isBoss() ? 'dash' : 'earn'];
     $('#st-tabs').innerHTML = nav.filter((x) => main4.includes(x[0])).map(([k, n, ic]) => `<a href="#/staff/${k}" class="${k === page ? 'on' : ''}" title="${TIPS[k]}">${ic}<span>${n.replace('Мій заробіток', 'Заробіток')}</span></a>`).join('') +
       `<a href="javascript:void 0" id="tab-more" class="${main4.includes(page) ? '' : 'on'}" title="Інші розділи">${IC.more}<span>Ще</span></a>`;
     $('#tab-more').onclick = () => {
       const s = sheet({ title: 'Розділи', body: nav.filter((x) => !main4.includes(x[0])).map(([k, n, ic]) => `<a class="list-row" href="#/staff/${k}" title="${TIPS[k]}"><span style="width:22px">${ic}</span><div class="grow nm">${n}</div>${IC.fwd}</a>`).join('') +
         `<a class="list-row" href="#" target="_blank" title="Сторінка, яку бачать клієнти"><span style="width:22px">${IC.globe}</span><div class="grow nm">Сторінка онлайн-запису</div></a>
+         ${isStandalone() ? '' : `<div class="list-row" id="m-app" title="Іконка NaNa на екрані телефона — відкривається одразу календар"><span style="width:22px;text-align:center">📲</span><div class="grow nm">Встановити на телефон</div>${IC.fwd}</div>`}
          <div class="list-row" id="m-out" title="Вийти з програми"><span style="width:22px">${IC.out}</span><div class="grow nm">Вийти</div></div>` });
       $$('a.list-row', s.el).forEach((a) => a.addEventListener('click', () => s.close()));
+      const ma = $('#m-app', s.el); if (ma) ma.onclick = () => { s.close(); installApp(true); };
       $('#m-out', s.el).onclick = () => { s.close(); logout(); };
     };
     const t = nav.find((x) => x[0] === page); $('#st-ttl').textContent = t ? t[1] : '';
@@ -248,6 +252,11 @@ const Staff = (() => {
     $('#c-new').onclick = () => newAppt({ mid: S.calSel !== 'all' ? S.calSel : isBoss() ? null : S.me.id, day: S.day });
     $('#c-block').onclick = () => blockSheet({ mid: S.calSel !== 'all' ? S.calSel : isBoss() ? null : S.me.id, day: S.day });
     $$('[data-sel]', main).forEach((b) => (b.onclick = () => { S.calSel = b.dataset.sel; pCal(main, S.day); }));
+    // телефон: провести пальцем вліво / вправо по списку — наступний / попередній день
+    if (S.calMode !== 'grid') { let x0 = null, y0 = 0;
+      body.addEventListener('touchstart', (e) => { const t = e.touches[0]; x0 = t.clientX > 24 && t.clientX < innerWidth - 24 ? t.clientX : null; y0 = t.clientY; }, { passive: true });
+      body.addEventListener('touchend', (e) => { if (x0 == null) return; const t = e.changedTouches[0], dx = t.clientX - x0, dy = t.clientY - y0; x0 = null;
+        if (Math.abs(dx) > 70 && Math.abs(dx) > Math.abs(dy) * 1.8) nav(addDays(S.day, dx < 0 ? 1 : -1)); }, { passive: true }); }
     $('#c-cn').onchange = (e) => { S.showCancel = e.target.checked; pCal(main, S.day); };
   }
   // картку майстра з календаря відкривають власниця/адмін (будь-яку) і майстер (лише свою)

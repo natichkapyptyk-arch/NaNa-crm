@@ -278,6 +278,27 @@ function loadQr() {
 }
 async function qrSvg(text, cell = 6) { await loadQr(); const q = qrcode(0, 'M'); q.addData(text); q.make(); return q.createSvgTag({ cellSize: cell, margin: 2, scalable: true }); }
 
+/* ---------- застосунок на телефоні (іконка на головному екрані) ---------- */
+let installEvt = null;
+const isStandalone = () => matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
+const isIOS = () => /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+window.addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); installEvt = e; });
+window.addEventListener('appinstalled', () => { installEvt = null; toast('Застосунок встановлено — шукайте іконку NaNa на екрані телефона', 'ok', 5000); });
+if ('serviceWorker' in navigator) window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
+// панель персоналу встановлюється окремим застосунком «NaNa CRM», що відкривається одразу на календарі
+function setManifest(staff) { const l = document.getElementById('mf'), h = staff ? 'manifest-staff.webmanifest' : 'manifest.webmanifest'; if (l && l.getAttribute('href') !== h) l.setAttribute('href', h); }
+async function installApp(staff = true) {
+  if (isStandalone()) return toast('Ви вже в застосунку 🙂');
+  if (installEvt) { const e = installEvt; installEvt = null; e.prompt(); await e.userChoice.catch(() => null); return; }
+  const what = staff ? 'панель салону' : 'сторінку запису';
+  const steps = isIOS()
+    ? [`Відкрийте ${what} у <b>Safari</b> (саме цю сторінку).`, 'Натисніть кнопку <b>«Поділитися»</b> — квадрат зі стрілкою вгору внизу екрана.', 'Прогорніть і оберіть <b>«На екран „Додому“»</b>.', 'Натисніть <b>«Додати»</b> — на екрані зʼявиться іконка NaNa.']
+    : [`Відкрийте ${what} в <b>Chrome</b> (саме цю сторінку).`, 'Натисніть меню <b>⋮</b> угорі праворуч.', 'Оберіть <b>«Додати на головний екран»</b> або <b>«Установити застосунок»</b>.', 'Підтвердіть — на екрані зʼявиться іконка NaNa.'];
+  sheet({ title: 'Встановити на телефон', body: `<p class="mt0">Сайт працюватиме як звичайний застосунок: іконка на екрані, відкривається на весь екран, без адресного рядка${staff ? ', одразу на календарі' : ''}.</p>
+    <ol class="inst">${steps.map((x) => `<li>${x}</li>`).join('')}</ol>
+    ${staff ? '<div class="hint">Після встановлення один раз увійдіть у застосунку своїм логіном і паролем (або за посиланням швидкого входу).</div>' : ''}` });
+}
+
 /* ---------- маршрути ---------- */
 function siteBase() { return location.href.replace(/#.*$/, ''); }
 // попередня сторінка — щоб кнопка «назад» у картці вела туди, звідки прийшли (календар, персонал…)
@@ -310,6 +331,7 @@ async function route() {
   if (location.hash !== curHash) { prevHash = curHash; curHash = location.hash; }
   hideTip(); while (sheets.length) sheets[sheets.length - 1].close();
   const h = decodeURIComponent(location.hash.replace(/^#/, ''));
+  setManifest(h === 'staff' || h.startsWith('/staff') || h.startsWith('/team/'));
   if (h.startsWith('/v/')) return Client.visit(h.slice(3));
   if (h.startsWith('/team/')) return Staff.quick(h.slice(6));
   if (h.startsWith('/pw/')) return Staff.pwLink(h.slice(4));
