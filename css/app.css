@@ -43,6 +43,10 @@ img{max-width:100%}
 .btn.wide{width:100%}
 .btn.ico{width:42px;padding:0}
 .btn.ico.sm{width:34px}
+.btn svg{width:18px;height:18px;flex:none}
+.btn.lg svg{width:20px;height:20px}
+.btn.sm svg{width:16px;height:16px}
+.list-row svg,.chip svg,.it svg{width:20px;height:20px;flex:none}
 .btn .badge{background:var(--bad);color:#fff;border-radius:999px;font-size:11px;min-width:18px;height:18px;padding:0 5px;display:inline-flex;align-items:center;justify-content:center}
 
 label.lb{display:block;font-size:13px;font-weight:700;color:var(--ink2);margin:14px 0 6px}
@@ -58,6 +62,7 @@ input[type=date].inp,input[type=time].inp{-webkit-appearance:none;appearance:non
 .errtxt{font-size:13px;color:var(--bad);margin-top:6px}
 .two{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 .three{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px}
+@media (max-width:560px){.three{grid-template-columns:1fr 1fr}}
 
 /* перемикач */
 .sw{position:relative;display:inline-flex;align-items:center;gap:10px;cursor:pointer;user-select:none}
@@ -241,7 +246,8 @@ h3{font-size:16px}
   .st-tabs a{flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;padding:5px 2px;border-radius:11px;text-decoration:none;font-size:11px;font-weight:700;color:var(--mut);border:1.5px solid transparent}
   .st-tabs a svg{width:23px;height:23px}
   .st-tabs a.on{color:#2B2B29;background:var(--yels);border-color:#DCE07A}
-  .st-top .brand b,.st-top .me span{display:none}
+  .st-top .brand b,.st-top .me .nm{display:none}
+  .st-top .me{padding:3px}
   .st-top{gap:8px}
 }
 .pg-h{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:14px}

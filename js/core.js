@@ -56,7 +56,8 @@ function sinceTxt(d) {
 /* ---------- телефон і контакти ---------- */
 function normPhone(p) {
   const d = String(p || '').replace(/\D/g, '');
-  if (/^0\d{9}$/.test(d)) return '+38' + d; if (/^380\d{9}$/.test(d)) return '+' + d; if (d.length >= 10 && d.length <= 15) return '+' + d; return null;
+  if (/^0\d{9}$/.test(d)) return '+38' + d; if (/^380\d{9}$/.test(d)) return '+' + d;
+  if (/^3800\d{9}$/.test(d)) return '+380' + d.slice(4); if (/^80\d{9}$/.test(d)) return '+3' + d; if (d.length >= 10 && d.length <= 15) return '+' + d; return null;
 }
 function fmtPhone(p) { const m = String(p || '').match(/^\+380(\d{2})(\d{3})(\d{2})(\d{2})$/); return m ? `+380 ${m[1]} ${m[2]} ${m[3]} ${m[4]}` : p || ''; }
 const IC = {
@@ -95,7 +96,8 @@ function contactLinks(c) {   // кнопки «зателефонувати / н
   return `<div class="contact-btns">${h}</div>`;
 }
 function avatar(p, cls = '') {
-  const n = ((p.first_name || p.name || '?').trim()[0] || '?') + ((p.last_name || '').trim()[0] || '');
+  const ini = (x) => (String(x || '').match(/\p{L}/u) || [''])[0];
+  const n = (ini(p.first_name || p.name) || '?') + ini(p.last_name);
   return p.photo_url ? `<img class="ava ${cls}" src="${esc(p.photo_url)}" alt="" loading="lazy">` : `<span class="ava ${cls}">${esc(n.toUpperCase())}</span>`;
 }
 const fullName = (s) => [s.first_name, s.last_name].filter(Boolean).join(' ');

@@ -1,7 +1,11 @@
 # Інструкція для Claude — СРМ салону краси (NaNa-crm)
 
 ## Як влаштовано
-- Сайт — один файл `index.html` (клієнти — основне посилання, персонал — `#staff`).
+- Сайт: `index.html` + `css/app.css` + `js/` (`core.js` — помічники й час Києва, `book.js` — онлайн-запис і «Мій запис» `#/v/<токен>`, `staff.js` — панель персоналу `#/staff/...`: календар, графік, клієнти, `admin.js` — дашборд, заробіток, послуги, персонал, налаштування). Логотип і іконки — `img/`.
+- **Після змін у css/js онови `?v=` в `index.html`** (копія на vapors.app кешує js/css на тиждень).
+- База — `schema.sql` (уся база, можна запускати повторно). Edge Functions — `supabase/functions/` (`tg-bot` — Telegram-бот @NaNa_studiobot, `team-login` — вхід за посиланням). Токен бота — секрет `TELEGRAM_BOT_TOKEN` у Supabase.
+- Копія сайту — vapors.app/nana (репозиторій PachoErerra/crm, папка `public/nana/`): оновлювати лише на прохання, перед цим перевірити зміни.
+- Час салону — Europe/Kyiv. Нічого з демо-даних не вважати справжнім (`demo = true`).
 - База — Supabase, проєкт `arkwtpihdaqnwhdcjpqf`. У `index.html` лише публічний anon key; секретний `service_role` ніколи не додавати в репозиторій.
 - Будь-який коміт у `main` → Netlify сам оновлює сайт за ~1 хвилину.
 

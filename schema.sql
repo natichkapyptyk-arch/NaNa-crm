@@ -250,6 +250,8 @@ create or replace function norm_phone(p text) returns text language sql immutabl
   select case
     when d ~ '^0\d{9}$' then '+38' || d
     when d ~ '^380\d{9}$' then '+' || d
+    when d ~ '^3800\d{9}$' then '+380' || substr(d, 5)
+    when d ~ '^80\d{9}$' then '+3' || d
     when length(d) between 10 and 15 then '+' || d
   end from (select regexp_replace(coalesce(p, ''), '\D', '', 'g') d) x
 $$;
