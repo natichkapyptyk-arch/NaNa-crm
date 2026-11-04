@@ -553,9 +553,14 @@ const Admin = (() => {
           <label class="sw" title="Вимкніть, якщо людина більше не працює — історія збережеться"><input type="checkbox" id="f-ac" ${p.is_active ? 'checked' : ''} ${boss && !self ? '' : 'disabled'}><i></i><span class="b">Працює в салоні</span></label></div>
           ${!isNew ? `<a class="btn wide mt" href="#/staff/sched/${p.id}" title="Години роботи, вихідні, закритий час">${IC.clock} Графік роботи</a>` : ''}</div>
         <div class="card full"><h3>Послуги, які виконує ${boss ? '' : '<span class="mut sm" style="font-weight:600">(змінює власниця)</span>'}</h3>
-          ${[...new Set(svcs.map((s) => s.category))].map((c) => `<div class="s-cat" style="margin-top:10px">${esc(c)}</div>` + svcs.filter((s) => s.category === c).map((s) => { const x = myS.find((m) => m.service_id === s.id);
-            return `<div class="ms-row"><input type="checkbox" data-sv="${s.id}" ${x ? 'checked' : ''} ${boss ? '' : 'disabled'} title="Виконує «${esc(s.name)}»"><span class="ell sm b">${esc(s.name)}</span>
-              <input class="inp" type="number" min="5" step="5" data-su="${s.id}" value="${x ? x.dur : s.dur}" ${boss ? '' : 'disabled'} title="Тривалість, хв"><input class="inp" type="number" min="0" step="10" data-sp="${s.id}" value="${x ? +x.price : +s.price}" ${boss ? '' : 'disabled'} title="Ціна, ₴"></div>`; }).join('')).join('')}
+          ${(() => { // спершу послуги, які майстер виконує, потім усі інші (по категоріях)
+            const row = (s) => { const x = myS.find((m) => m.service_id === s.id);
+              return `<div class="ms-row"><input type="checkbox" data-sv="${s.id}" ${x ? 'checked' : ''} ${boss ? '' : 'disabled'} title="Виконує «${esc(s.name)}»"><span class="ell sm b">${esc(s.name)}</span>
+              <input class="inp" type="number" min="5" step="5" data-su="${s.id}" value="${x ? x.dur : s.dur}" ${boss ? '' : 'disabled'} title="Тривалість, хв"><input class="inp" type="number" min="0" step="10" data-sp="${s.id}" value="${x ? +x.price : +s.price}" ${boss ? '' : 'disabled'} title="Ціна, ₴"></div>`; };
+            const byCat = (l) => [...new Set(l.map((s) => s.category))].map((c) => `<div class="s-cat" style="margin-top:10px">${esc(c)}</div>` + l.filter((s) => s.category === c).map(row).join('')).join('');
+            const mine = svcs.filter((s) => myS.some((m) => m.service_id === s.id)), rest = svcs.filter((s) => !mine.includes(s));
+            return (mine.length ? `<div class="ms-grp">✓ Виконує <span class="mut">· ${mine.length}</span></div>${byCat(mine)}` : `<div class="mut sm" style="margin-top:6px">Ще не вибрано жодної послуги — позначте нижче.</div>`)
+              + (rest.length ? `<div class="ms-grp other">Інші послуги салону <span class="mut">· ${rest.length}</span></div>${byCat(rest)}` : ''); })()}
           <div class="hint">Колонки: тривалість (хв) і ціна (₴) саме в цього майстра.</div></div>
         <div class="card"><h3>Сповіщення</h3>
           <div class="col">${[['new', 'Нові записи'], ['cancel', 'Скасування'], ['move', 'Перенесення']].map(([k, n]) => `<label class="sw" title="Отримувати сповіщення: ${n.toLowerCase()}"><input type="checkbox" data-nt="${k}" ${nt[k] !== false ? 'checked' : ''} ${can ? '' : 'disabled'}><i></i><span>${n}</span></label>`).join('')}
