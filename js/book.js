@@ -63,6 +63,8 @@ const Client = (() => {
     return out;
   }
   const cartTotal = () => st.cart.reduce((a, x) => a + +x.price, 0);
+  const fromTxt = (sid) => (C.svc.get(sid)?.price_from ? 'від ' : '');            // ціна «від» (кінцева залежить від роботи)
+  const cartFrom = () => (st.cart.some((x) => C.svc.get(x.sid)?.price_from) ? 'від ' : '');
   const cartDur = () => st.cart.reduce((a, x) => a + x.dur, 0);
 
   /* ---------- шапка ---------- */
@@ -84,7 +86,7 @@ const Client = (() => {
   }
   function bottomBar() {
     if (!st.cart.length || ['cart', 'contacts', 'done'].includes(st.step)) return '';
-    return `<div class="bbar"><div class="in"><div class="sum"><div class="sm mut">У візиті: ${st.cart.length} ${plural(st.cart.length, 'послуга', 'послуги', 'послуг')} · ${durTxt(cartDur())}</div><b>${money(cartTotal())}</b></div>
+    return `<div class="bbar"><div class="in"><div class="sum"><div class="sm mut">У візиті: ${st.cart.length} ${plural(st.cart.length, 'послуга', 'послуги', 'послуг')} · ${durTxt(cartDur())}</div><b>${cartFrom()}${money(cartTotal())}</b></div>
       <button class="btn pri lg" data-go="cart" title="Переглянути вибрані послуги й перейти до оформлення">Оформити ${IC.fwd}</button></div></div>`;
   }
   function myVisitsCard() {
@@ -124,7 +126,7 @@ const Client = (() => {
       return `<div class="s-row ${inCart ? 'inCart' : ''}" data-s="${s.id}" title="Обрати «${esc(s.name)}» і подивитись вільний час">
         ${ph ? `<button class="s-ph" data-gal="${s.id}" title="Подивитись фото робіт (${s.photos.length})"><img src="${esc(ph)}" alt="" loading="lazy">${s.photos.length > 1 ? `<span>${s.photos.length}</span>` : ''}</button>` : ''}
         <div class="grow"><div class="nm">${esc(s.name)}${inCart ? ' <span class="pill booked">у візиті</span>' : ''}</div>${s.descr ? `<div class="ds">${esc(s.descr)}</div>` : ''}</div>
-        <div class="pr">${money(s.price)}<small>${durTxt(s.dur)}</small></div></div>`;
+        <div class="pr">${fromTxt(s.id)}${money(s.price)}<small>${durTxt(s.dur)}</small></div></div>`;
     }).join('')).join('');
     return `${stepsBar()}<div class="st-title"><button class="btn ghost ico" data-back="masters" title="Назад — до вибору майстра">${IC.back}</button>
       ${avatar(m, 's')}<h2>${esc(m.first_name)}: послуги</h2></div>
@@ -159,10 +161,10 @@ const Client = (() => {
       return `<div class="cart-item">${avatar(m, 's')}<div class="grow"><div class="b">${esc(s.name)}</div>
         <div class="sm mut">${esc(relDay(dayOf(x.s)))}, ${fmtT(x.s)}–${fmtT(x.e)} · ${esc(m.first_name)}</div>
         <div class="row" style="margin-top:6px;gap:6px"><button class="btn sm" data-edit="${i}" title="Обрати інший день або час для цієї послуги">Змінити час</button>
-        <button class="btn sm red" data-del="${i}" title="Прибрати послугу з візиту">Прибрати</button></div></div><div class="b nw">${money(x.price)}</div></div>`; }).join('');
+        <button class="btn sm red" data-del="${i}" title="Прибрати послугу з візиту">Прибрати</button></div></div><div class="b nw">${fromTxt(x.sid)}${money(x.price)}</div></div>`; }).join('');
     const span = days.size === 1 ? `${fmtT(st.cart[0].s)}–${fmtT(Math.max(...st.cart.map((x) => x.e)))}` : `${days.size} ${plural(days.size, 'день', 'дні', 'днів')}`;
     return `${stepsBar()}<div class="st-title"><h2>Ваш візит</h2></div>
-      <div class="card">${items}<div class="cart-tot"><span>Разом <span class="sm mut" style="font-weight:600">· ${durTxt(cartDur())} · ${esc(span)}</span></span><span>${money(cartTotal())}</span></div></div>
+      <div class="card">${items}<div class="cart-tot"><span>Разом <span class="sm mut" style="font-weight:600">· ${durTxt(cartDur())} · ${esc(span)}</span></span><span>${cartFrom()}${money(cartTotal())}</span></div></div>
       <div class="col mt"><button class="btn lg" data-go="masters" title="Додати до візиту ще одну послугу — у цього або іншого майстра">${IC.plus} Додати ще послугу</button>
       <button class="btn pri lg" data-go="contacts" title="Перейти до введення імені й телефону">Далі — контакти ${IC.fwd}</button></div>`;
   }
@@ -178,8 +180,8 @@ const Client = (() => {
         <div id="f-ig-w" class="${me.contact === 'instagram' ? '' : 'hide'}"><label class="lb" for="f-ig">Ваш нік в Instagram</label><input class="inp" id="f-ig" value="${esc(me.instagram || '')}" placeholder="@nickname" maxlength="40"></div>
         <label class="lb" for="f-cm">Коментар <span class="mut" style="font-weight:600">(необовʼязково)</span></label><textarea class="inp" id="f-cm" rows="2" maxlength="300" placeholder="Побажання майстру, алергії тощо"></textarea>
         <div class="errtxt hide" id="f-err"></div>
-        <div class="cart-tot"><span>${st.cart.length} ${plural(st.cart.length, 'послуга', 'послуги', 'послуг')}</span><span>${money(cartTotal())}</span></div>
-        <button class="btn pri lg wide mt" id="f-go" title="Підтвердити запис (Ctrl/⌘+Enter)">Записатися · ${money(cartTotal())}</button>
+        <div class="cart-tot"><span>${st.cart.length} ${plural(st.cart.length, 'послуга', 'послуги', 'послуг')}</span><span>${cartFrom()}${money(cartTotal())}</span></div>
+        <button class="btn pri lg wide mt" id="f-go" title="Підтвердити запис (Ctrl/⌘+Enter)">Записатися · ${cartFrom()}${money(cartTotal())}</button>
         <div class="hint" style="text-align:center">Оплата в салоні після послуги. Скасувати чи перенести можна онлайн не пізніше ніж за ${C.settings.cancel_hours} год.</div>
       </form>`;
   }
@@ -270,7 +272,7 @@ const Client = (() => {
         ${ph.length > 1 ? `<button class="btn ico g-prev" title="Попереднє фото">${IC.back}</button><button class="btn ico g-next" title="Наступне фото">${IC.fwd}</button>` : ''}</div>
       ${ph.length > 1 ? `<div class="g-th">${ph.map((u, k) => `<img src="${esc(u)}" data-k="${k}" class="${k ? '' : 'on'}" alt="" title="Фото ${k + 1}">`).join('')}</div>` : ''}
       ${sv.descr ? `<p class="mut" style="margin:10px 0 0">${esc(sv.descr)}</p>` : ''}`,
-      foot: onPick ? `<button class="btn pri lg" id="g-ok" title="Обрати цю послугу">Обрати · ${money(x ? x.price : sv.price)}</button>` : '' });
+      foot: onPick ? `<button class="btn pri lg" id="g-ok" title="Обрати цю послугу">Обрати · ${fromTxt(sv.id)}${money(x ? x.price : sv.price)}</button>` : '' });
     const show = (k) => { i = (k + ph.length) % ph.length; $('#g-img', g.el).src = ph[i]; $$('.g-th img', g.el).forEach((t) => t.classList.toggle('on', +t.dataset.k === i)); };
     $$('.g-th img', g.el).forEach((t) => (t.onclick = () => show(+t.dataset.k)));
     const pv = $('.g-prev', g.el); if (pv) { pv.onclick = () => show(i - 1); $('.g-next', g.el).onclick = () => show(i + 1); }
