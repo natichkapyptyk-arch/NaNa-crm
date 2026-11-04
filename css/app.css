@@ -492,7 +492,7 @@ button.cal-fs{justify-content:center;padding:0;border:0;border-bottom:1.5px soli
 button.cal-fs:hover{background:var(--yels);color:var(--ink)}
 body.cal-full{overflow:hidden}
 .cal-fbar{position:fixed;left:0;right:0;top:0;z-index:95;height:calc(54px + env(safe-area-inset-top));padding:env(safe-area-inset-top) 12px 0;background:var(--gr);color:#fff;display:flex;align-items:center;gap:8px}
-.cal-fbar b{font-size:15px;text-transform:capitalize;min-width:0}
+.cal-fbar b{font-size:15px;min-width:0} .cal-fbar b::first-letter{text-transform:uppercase}
 .cal-fbar .btn:not(.pri){background:transparent;border-color:rgba(255,255,255,.3);color:#fff}
 .cal-wrap.full{position:fixed;left:0;right:0;bottom:0;top:calc(54px + env(safe-area-inset-top));z-index:94;max-height:none;border:0;border-radius:0;box-shadow:none;padding-bottom:env(safe-area-inset-bottom)}
 @media (max-width:520px){.cal-fbar .cf-t{display:none}}
