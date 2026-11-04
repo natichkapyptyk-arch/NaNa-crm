@@ -252,6 +252,15 @@ const Staff = (() => {
   }
   // картку майстра з календаря відкривають власниця/адмін (будь-яку) і майстер (лише свою)
   const canCard = (m) => isBoss() || m.id === S.me.id;
+  // візит: послуги одного клієнта в одного майстра підряд (без розриву) показуються одним блоком
+  function visitGroups(list) {
+    const out = [];
+    list.forEach((a) => { const last = out[out.length - 1];
+      if (last && a.status !== 'cancel' && last.status !== 'cancel' && last.items[0].visit_id === a.visit_id && Math.abs(Date.parse(a.starts_at) - Date.parse(last.items[last.items.length - 1].ends_at)) <= 6e4) {
+        last.items.push(a); if (a.status === 'booked') last.status = 'booked';
+      } else out.push({ status: a.status, items: [a] }); });
+    return out;
+  }
   const apHtml = (a) => `<span class="t">${fmtT(a.starts_at)}–${fmtT(a.ends_at)}${a.visits?.source === 'online' ? ' 🌐' : ''}</span><b>${esc(a.clients?.name || '')}</b>${esc(svcById(a.service_id)?.name || '')}`;
   function drawGrid(body, shown, dd, appts) {
     const PX = 1.25;
@@ -267,8 +276,11 @@ const Staff = (() => {
       const off = !hh ? `<div class="off" style="top:0;height:${H}px"></div>` : (hh[0] > s0 ? `<div class="off" style="top:0;height:${y(hh[0])}px"></div>` : '') + (hh[1] < s1 ? `<div class="off" style="top:${y(hh[1])}px;height:${H - y(hh[1])}px"></div>` : '');
       const bl = dd.blocks.filter((b) => b.staff_id === m.id).map((b) => { const a = dayOf(b.starts_at) < S.day ? 0 : kParts(b.starts_at).min, e = dayOf(b.ends_at) > S.day ? 1440 : kParts(b.ends_at).min;
         return `<div class="blk" data-blk="${b.id}" style="top:${y(Math.max(a, s0))}px;height:${Math.max(18, (Math.min(e, s1) - Math.max(a, s0)) * PX)}px" title="Закритий час: ${esc(b.reason)}. Натисніть, щоб відкрити">${IC.lock} ${esc(b.reason)}</div>`; }).join('');
-      const ap = appts.filter((a) => a.staff_id === m.id).map((a) => { const st = kParts(a.starts_at).min, en = dayOf(a.ends_at) === S.day ? kParts(a.ends_at).min : 1440;
-        return `<div class="ap ${a.status}" data-ap="${a.id}" style="top:${y(st)}px;height:${Math.max(24, (en - st) * PX - 2)}px" title="${esc(STATUS[a.status])}: ${esc(a.clients?.name)} — ${esc(svcById(a.service_id)?.name)}">${apHtml(a)}</div>`; }).join('');
+      const ap = visitGroups(appts.filter((a) => a.staff_id === m.id)).map((g) => { const a = g.items[0], z = g.items[g.items.length - 1];
+        const st = kParts(a.starts_at).min, en = dayOf(z.ends_at) === S.day ? kParts(z.ends_at).min : 1440, box = `style="top:${y(st)}px;height:${Math.max(24, (en - st) * PX - 2)}px"`;
+        if (g.items.length === 1) return `<div class="ap ${a.status}" data-ap="${a.id}" ${box} title="${esc(STATUS[a.status])}: ${esc(a.clients?.name)} — ${esc(svcById(a.service_id)?.name)}">${apHtml(a)}</div>`;
+        return `<div class="ap grp ${g.status}" data-ap="${a.id}" ${box} title="Візит: ${g.items.length} ${plural(g.items.length, 'послуга', 'послуги', 'послуг')} — ${esc(a.clients?.name)}"><span class="t">${fmtT(a.starts_at)}–${fmtT(z.ends_at)}${a.visits?.source === 'online' ? ' 🌐' : ''} · ${g.items.length} ${plural(g.items.length, 'послуга', 'послуги', 'послуг')}</span><b>${esc(a.clients?.name || '')}</b>`
+          + g.items.map((x) => `<div class="ap-ln ${x.status}" data-ap="${x.id}" title="Відкрити: ${esc(svcById(x.service_id)?.name)}">${fmtT(x.starts_at)} ${esc(svcById(x.service_id)?.name || '')}</div>`).join('') + `</div>`; }).join('');
       return `<div class="cal-col" data-col="${m.id}" style="height:${H}px" title="Натисніть на вільне місце, щоб записати клієнта">${lines}${off}${bl}${ap}</div>`;
     }).join('');
     const n = shown.length;
@@ -293,15 +305,18 @@ const Staff = (() => {
       const bl = dd.blocks.filter((b) => b.staff_id === m.id);
       return `<h4>${canCard(m) ? `<a class="m-lnk" href="#/staff/team/${m.id}" title="Відкрити картку: ${esc(fullName(m))}">${avatar(m, 's')} ${esc(fullName(m))}</a>` : `${avatar(m, 's')} ${esc(fullName(m))}`} <span class="mut sm" style="font-weight:600">${hh ? toHM(hh[0]) + '–' + toHM(hh[1]) : 'вихідний'} · ${list.length} ${plural(list.length, 'запис', 'записи', 'записів')}</span></h4>` +
         bl.map((b) => `<div class="ap-row noshow" data-blk="${b.id}" title="Закритий час. Натисніть, щоб відкрити"><div class="tm">${fmtT(b.starts_at)}<small>${fmtT(b.ends_at)}</small></div><div class="grow">${IC.lock} <b>${esc(b.reason)}</b></div></div>`).join('') +
-        (list.map((a) => `<div class="ap-row ${a.status}" data-ap="${a.id}" title="Відкрити запис"><div class="tm">${fmtT(a.starts_at)}<small>${fmtT(a.ends_at)}</small></div>
-          <div class="grow"><div class="b ell">${esc(a.clients?.name || '')}${a.visits?.source === 'online' ? ' <span class="pill i" title="Клієнт записався онлайн">онлайн</span>' : ''}</div><div class="sm mut ell">${esc(svcById(a.service_id)?.name || '')}</div></div>
-          <div style="text-align:right"><span class="pill ${a.status}">${STATUS[a.status]}</span><div class="sm b" style="margin-top:4px">${money(a.payments?.amount ?? a.price)}</div></div></div>`).join('') ||
+        (visitGroups(list).map((g) => { const a = g.items[0], z = g.items[g.items.length - 1], many = g.items.length > 1;
+          return `<div class="ap-row ${g.status}" data-ap="${a.id}" title="Відкрити запис"><div class="tm">${fmtT(a.starts_at)}<small>${fmtT(z.ends_at)}</small></div>
+          <div class="grow"><div class="b ell">${esc(a.clients?.name || '')}${a.visits?.source === 'online' ? ' <span class="pill i" title="Клієнт записався онлайн">онлайн</span>' : ''}</div>`
+          + (many ? g.items.map((x) => `<div class="sm mut ell ap-ln" data-ap="${x.id}" title="Відкрити: ${esc(svcById(x.service_id)?.name)}">${fmtT(x.starts_at)} · ${esc(svcById(x.service_id)?.name || '')}</div>`).join('') : `<div class="sm mut ell">${esc(svcById(a.service_id)?.name || '')}</div>`) + `</div>
+          <div style="text-align:right"><span class="pill ${g.status}">${STATUS[g.status]}</span><div class="sm b" style="margin-top:4px">${money(g.items.reduce((t, x) => t + +(x.payments?.amount ?? x.price), 0))}</div></div></div>`; }).join('') ||
           (hh ? `<div class="ap-row" style="border-left-color:var(--line2);cursor:pointer" data-new="${m.id}" title="Створити запис до ${esc(m.first_name)}"><div class="grow mut">Записів немає — ${IC.plus} записати</div></div>` : ''));
     }).join('')}</div>`;
     $$('[data-new]', body).forEach((r) => (r.onclick = () => newAppt({ mid: r.dataset.new, day: S.day })));
     bindDay(body, dd);
   }
   function bindDay(body, dd) {
+    S.dayAppts = dd.appts;
     $$('[data-ap]', body).forEach((el) => (el.onclick = (e) => { e.stopPropagation(); openAppt(dd.appts.find((a) => a.id === el.dataset.ap)); }));
     $$('[data-blk]', body).forEach((el) => (el.onclick = async (e) => {
       e.stopPropagation(); const b = dd.blocks.find((x) => x.id === el.dataset.blk); const m = byId(b.staff_id);
@@ -333,7 +348,7 @@ const Staff = (() => {
         <dt>Майстер</dt><dd>${esc(fullName(m || {}))}</dd><dt>Ціна</dt><dd>${money(a.price)}</dd>
         ${pay ? `<dt>Оплачено</dt><dd>${money(pay.amount)} · ${esc(pay.method)}</dd>` : ''}
         ${a.cancel_reason ? `<dt>Причина</dt><dd>${esc(a.cancel_reason)}</dd>` : ''}${a.cancelled_by ? `<dt>Скасував(ла)</dt><dd>${a.cancelled_by === 'client' ? 'клієнт онлайн' : 'салон'}</dd>` : ''}
-        ${a.visits?.comment ? `<dt>Коментар</dt><dd>${esc(a.visits.comment)}</dd>` : ''}</dl>
+        ${a.visits?.comment ? `<dt>Коментар</dt><dd>${esc(a.visits.comment)}</dd>` : ''}</dl><div id="a-visit"></div>
       ${mine && ['booked', 'done'].includes(a.status) ? `<div class="row wrap mt" style="gap:8px">
         ${a.status === 'booked' || isBoss() ? `<button class="btn sm" id="a-svc" title="Якщо фактично зробили іншу послугу — змінити її, ціну й тривалість">✎ Змінити послугу</button>` : ''}
         <button class="btn sm" id="a-add" title="Додати до цього візиту ще одну послугу (одразу після цієї)">${IC.plus} Додати послугу</button></div>` : ''}
@@ -345,7 +360,16 @@ const Staff = (() => {
     note.onchange = async () => { const { error } = await sb.from('appointments').update({ note: note.value.trim() || null }).eq('id', a.id); if (error) toast(errMsg(error), 'bad'); else { a.note = note.value.trim(); toast('Нотатку збережено'); } };
     $('#a-cl', s.el).onclick = () => { s.close(); clientSheet(c.id); };
     const sb1 = $('#a-svc', s.el); if (sb1) sb1.onclick = () => changeSvcSheet(a, () => { s.close(); refresh(); });
-    const ab = $('#a-add', s.el); if (ab) ab.onclick = () => { s.close(); newAppt({ client: { id: c.id, name: c.name, phone: c.phone }, mid: a.staff_id, day: dayOf(a.ends_at), min: kParts(a.ends_at).min, visit: a.visit_id }); };
+    // усі послуги цього візиту (як в EasyWeek): список + нова послуга стає одразу після останньої
+    const vq = sb.from('appointments').select('id,starts_at,ends_at,service_id,staff_id,price,status').eq('visit_id', a.visit_id).neq('status', 'cancel').order('starts_at');
+    vq.then(({ data: vis }) => { if (!vis || vis.length < 2 || !s.ov.isConnected) return;
+      $('#a-visit', s.el).innerHTML = `<div class="sect" style="margin-top:12px"><h3 style="margin-bottom:6px">Послуги у візиті <span class="pill g">${vis.length}</span></h3>${vis.map((x) => `<div class="vis-ln ${x.id === a.id ? 'on' : ''}" ${x.id === a.id ? '' : `data-vis="${x.id}" title="Відкрити цю послугу"`}>
+        <div class="grow"><div class="b ell">${esc(svcById(x.service_id)?.name || '')}</div><div class="xs mut">${fmtT(x.starts_at)}–${fmtT(x.ends_at)} · ${esc(byId(x.staff_id)?.first_name || '')}</div></div><b class="nw">${money(x.price)}</b></div>`).join('')}
+        <div class="row sp sm b" style="padding:6px 2px 0"><span>Разом</span><span>${money(vis.reduce((t, x) => t + +x.price, 0))}</span></div></div>`;
+      $$('[data-vis]', s.el).forEach((r) => (r.onclick = () => { const o = (S.dayAppts || []).find((x) => x.id === r.dataset.vis); if (o) { s.close(); openAppt(o); } })); });
+    const ab = $('#a-add', s.el); if (ab) ab.onclick = async () => {
+      const { data: vis } = await vq; const end = (vis || []).reduce((t, x) => Math.max(t, Date.parse(x.ends_at)), Date.parse(a.ends_at));
+      s.close(); newAppt({ client: { id: c.id, name: c.name, phone: c.phone }, mid: a.staff_id, day: dayOf(new Date(end).toISOString()), min: kParts(new Date(end).toISOString()).min, visit: a.visit_id }); };
     const rb = $('#a-rem', s.el); if (rb) rb.onclick = () => remindSheet(a.id, c);
     $$('[data-act]', s.el).forEach((b) => (b.onclick = async () => {
       const act = b.dataset.act;
@@ -489,7 +513,7 @@ const Staff = (() => {
       <select class="inp" id="na-m" ${isBoss() ? '' : 'disabled'}><option value="">— оберіть майстра —</option>${ms.map((m) => `<option value="${m.id}" ${m.id === mid ? 'selected' : ''}>${esc(fullName(m))}</option>`).join('')}</select>
       <label class="lb" for="na-s">Послуга <span class="req">*</span></label><select class="inp" id="na-s"></select>
       <div class="two"><div><label class="lb" for="na-u">Тривалість, хв</label><input class="inp" id="na-u" type="number" min="5" step="5"></div><div><label class="lb" for="na-p">Ціна, ₴</label><input class="inp" id="na-p" type="number" min="0" step="10"></div></div>
-      <label class="lb" for="na-d">Дата <span class="req">*</span></label><input class="inp" id="na-d" type="date" value="${day}">
+      <label class="lb ${visit ? 'hide' : ''}" for="na-d">Дата <span class="req">*</span></label><input class="inp ${visit ? 'hide' : ''}" id="na-d" type="date" value="${day}">
       <label class="lb">Час <span class="req">*</span></label><div id="na-t"><div class="hint">Спершу оберіть майстра й послугу</div></div>
       <label class="lb" for="na-n">Нотатка</label><input class="inp" id="na-n" placeholder="Видно лише персоналу">`,
       foot: `<button class="btn" data-x2 title="Закрити без збереження">Скасувати</button><button class="btn pri" id="na-ok" title="Створити запис (Ctrl/⌘+Enter)">Записати</button>` });
@@ -541,7 +565,9 @@ const Staff = (() => {
       $('#na-u', el).value = st.dur || ''; $('#na-p', el).value = st.price != null ? +st.price : '';
       drawTime();
     };
-    const drawTime = () => { if (!st.mid || !st.dur) { $('#na-t', el).innerHTML = '<div class="hint">Спершу оберіть майстра й послугу</div>'; return; }
+    const drawTime = () => {
+      if (visit) { $('#na-t', el).innerHTML = `<div class="hint" style="margin:0">Одразу після попередньої послуги, без перерви: <b>${toHM(st.min)}${st.dur ? '–' + toHM(st.min + st.dur) : ''}</b></div>`; return; }
+      if (!st.mid || !st.dur) { $('#na-t', el).innerHTML = '<div class="hint">Спершу оберіть майстра й послугу</div>'; return; }
       timePicker($('#na-t', el), { mid: st.mid, dur: st.dur, day: st.day, min: st.min, onPick: (m) => (st.min = m) }); };
     msel.onchange = () => { st.mid = msel.value || null; fillSvc(); };
     ssel.onchange = pickSvc;
