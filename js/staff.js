@@ -896,8 +896,8 @@ const Staff = (() => {
     const site = String(set.site_url || location.origin + location.pathname).replace(/#.*$/, '');
     const days = last ? daysBetween(dayOf(last), today()) : 0;
     const txt = [`Вітаємо${nm ? ', ' + nm : ''}! 💛`,
-      `Давно не бачились у ${set.salon_name || 'NaNa studio'}${days >= 60 ? ` — минуло вже ${days >= 90 ? Math.floor(days / 30) + ' міс.' : days + ' днів'}` : ''}. Ми скучили!`,
-      fav ? `Можемо записати вас на «${fav.name}»${mst?.first_name ? ` до майстра ${mst.first_name}` : ''} у зручний для вас час.` : 'Будемо раді бачити вас знову — підберемо зручний час.',
+      `Давно не бачились у ${set.salon_name || 'NaNa studio'}${days >= 60 ? ` — минуло вже ${days >= 90 ? Math.floor(days / 30) + ' ' + plural(Math.floor(days / 30), 'місяць', 'місяці', 'місяців') : days + ' днів'}` : ''}. Ми скучили!`,
+      fav ? `Можемо записати вас на «${fav.name}»${mst?.first_name ? ` (майстер — ${mst.first_name})` : ''} у зручний для вас час.` : 'Будемо раді бачити вас знову — підберемо зручний час.',
       `Записатися онлайн: ${site}`,
       'Або просто напишіть у відповідь, коли вам зручно 😊'].join('\n');
     msgBox(s, c, txt, 7, `Останній візит: <b>${last ? esc(fmtDay(dayOf(last), { day: 'numeric', month: 'long', year: 'numeric' })) : '—'}</b>${fav ? ` · улюблена послуга: <b>${esc(fav.name)}</b>` : ''}. Текст можна змінити. Натисніть месенджер — текст скопіюється й відкриється чат клієнта, залишиться лише вставити.`);
