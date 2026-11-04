@@ -448,3 +448,7 @@ table.tbl{width:100%;border-collapse:collapse;font-size:13.5px;background:#fff}
 .spin{width:34px;height:34px;border-radius:50%;border:3.5px solid var(--line);border-top-color:var(--gr);animation:sp 0.8s linear infinite;margin:40px auto}
 @keyframes sp{to{transform:rotate(360deg)}}
 @media print{.st-top,.st-nav,.st-tabs,.bbar{display:none!important}}
+/* «Нагадати» в списку клієнтів */
+.list-row .inv-b{flex:none;gap:5px;color:var(--warn);border-color:#EBD3A6}
+.list-row .inv-b svg{width:16px;height:16px}
+@media (max-width:560px){.list-row .inv-b span{display:none}.list-row .inv-b{padding:6px 9px}}

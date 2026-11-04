@@ -778,9 +778,11 @@ const Staff = (() => {
         return `<div class="list-row" data-c="${c.id}" title="Відкрити картку клієнта"><span class="ava s ${isStale(c) ? '' : 'y'}">${esc(c.name[0] || '?')}</span><div class="grow">
           <div class="nm ell">${esc(c.name)} ${isStale(c) ? `<span class="pill w" title="Не було понад ${stale} днів і немає запису — варто нагадати про себе">не було ${ld} ${plural(ld, 'день', 'дні', 'днів')}</span>` : ''}${c.next_visit ? `<span class="pill booked" title="Найближчий запис">${esc(relDay(dayOf(c.next_visit)))}</span>` : ''}${c.demo ? ' <span class="pill g">демо</span>' : ''}</div>
           <div class="sub ell">${esc(fmtPhone(c.phone))} · ${c.last_visit ? 'був(ла) ' + esc(relDay(dayOf(c.last_visit))) : 'ще не був(ла)'} · ${c.visits} ${plural(c.visits, 'візит', 'візити', 'візитів')}${isBoss() ? ' · ' + money(c.spent) : ''}</div></div>
+          ${isStale(c) ? `<button class="btn sm inv-b" data-inv="${c.id}" title="Готовий текст запрошення — відкрити Viber / Telegram клієнта">${IC.bell}<span>Нагадати</span></button>` : ''}
           <span class="mut" style="width:20px" title="Зручний спосіб звʼязку: ${esc(CONTACTS[c.contact]?.[0] || '')}">${CONTACTS[c.contact]?.[1] || ''}</span></div>`; }).join('') +
         (list.length > 300 ? `<div class="hint" style="text-align:center">Показано 300 з ${list.length}. Уточніть пошук.</div>` : '') || '<div class="card empty"><div class="big">🔎</div>Нікого не знайдено</div>';
       $$('[data-c]', main).forEach((r) => (r.onclick = () => clientSheet(r.dataset.c)));
+      $$('[data-inv]', main).forEach((b) => (b.onclick = (e) => { e.stopPropagation(); inviteSheet(rows.find((x) => x.id === b.dataset.inv)); }));
     };
     draw();
     let tmr; $('#cl-q').oninput = (e) => { clearTimeout(tmr); tmr = setTimeout(() => { S.cq = e.target.value.trim(); draw(); }, 150); };
@@ -811,6 +813,7 @@ const Staff = (() => {
         <div class="kpi"><div class="l">Останній візит</div><div class="v" style="font-size:17px">${last ? esc(relDay(dayOf(last.starts_at))) : '—'}</div>${last ? `<div class="d mut">${daysBetween(dayOf(last.starts_at), today())} дн. тому</div>` : ''}</div>
         <div class="kpi"><div class="l">Скасувань / неявок</div><div class="v">${hist.filter((x) => x.status === 'cancel').length} / ${hist.filter((x) => x.status === 'noshow').length}</div></div></div>
       ${fav ? `<div class="hint mt">💛 Улюблена послуга: <b>${esc(svcById(fav[0])?.name || '')}</b> (${fav[1]} р.)</div>` : ''}
+      ${!next && last && daysBetween(dayOf(last.starts_at), today()) >= S.settings.stale_days ? `<div class="hint row wrap" style="gap:8px">⏳ Не було ${daysBetween(dayOf(last.starts_at), today())} днів і немає запису<button class="btn sm" id="c-inv" title="Готовий текст запрошення для Viber, Telegram або SMS">${IC.bell} Нагадати</button></div>` : ''}
       ${next ? `<div class="hint row wrap" style="gap:8px">📅 Наступний запис: <b>${esc(relDay(dayOf(next.starts_at)))}, ${fmtT(next.starts_at)}</b><button class="btn sm" id="c-rem" title="Готовий текст нагадування для Viber, Telegram або SMS">${IC.bell} Нагадати</button></div>` : ''}
       <div class="sect"><h3>Дані клієнта</h3>
         <div class="two"><div><label class="lb" for="c-n">Імʼя</label><input class="inp" id="c-n" value="${esc(c.name)}"></div><div><label class="lb" for="c-p">Телефон</label><input class="inp" id="c-p" type="tel" value="${esc(c.phone)}"></div></div><div id="c-dup"></div>
@@ -835,6 +838,7 @@ const Staff = (() => {
     });
     $('#c-book', s.el).onclick = () => { s.close(); newAppt({ client: c, mid: isBoss() ? null : S.me.id }); };
     const rb = $('#c-rem', s.el); if (rb) rb.onclick = () => remindSheet(next.id, c);
+    const ib = $('#c-inv', s.el); if (ib) ib.onclick = () => inviteSheet({ ...c, last_visit: last.starts_at });
     if (isBoss() && (await mergeOk()) && s.ov.isConnected) {
       $('#c-save', s.el).insertAdjacentHTML('afterend', `<button class="btn mt" id="c-merge" title="Якщо це та сама людина, що й в іншій картці — зібрати все в одну" style="margin-left:8px">⇄ Обʼєднати з іншим клієнтом</button>`);
       $('#c-merge', s.el).onclick = () => mergeSheet(c, s);
@@ -858,21 +862,45 @@ const Staff = (() => {
       ...list.map((x) => `• ${list.length > 1 ? fmtT(x.starts_at) + ' ' : ''}${svcById(x.service_id)?.name || ''} — майстер ${byId(x.staff_id)?.first_name || ''}`),
       set.address ? `📍 ${set.address}` : '', v?.token ? `Переглянути, перенести чи скасувати: ${site}#/v/${v.token}` : '',
       'Якщо плани змінились — напишіть нам, будь ласка.'].filter(Boolean).join('\n');
+    msgBox(s, c, txt, 9, 'Текст можна змінити. Натисніть месенджер — текст скопіюється й відкриється чат клієнта, залишиться лише вставити. Клієнти, які підключили Telegram-бота салону, отримують нагадування й автоматично.');
+  }
+  // текст + кнопки Viber / Telegram / SMS / Instagram: копіює текст і відкриває чат клієнта
+  function msgBox(s, c, txt, rows, hint, onSent = () => {}) {
+    const body = $('.sh-b', s.el);
     const p = String(c.phone || '').replace(/[^\d+]/g, ''), pref = c.contact === 'call' ? 'sms' : c.contact;
     const B = [['viber', `${IC.vb} Viber`], ['telegram', `${IC.tg} Telegram`], ['sms', '💬 SMS'], ...(c.instagram ? [['instagram', `${IC.ig} Instagram`]] : []), ['copy', '📋 Лише скопіювати']];
     body.innerHTML = `<div class="sm mb"><b>${esc(c.name || '')}</b> · ${esc(fmtPhone(c.phone))}</div>
-      <textarea class="inp" id="rm-t" rows="9">${esc(txt)}</textarea>
-      <div class="hint">Текст можна змінити. Натисніть месенджер — текст скопіюється й відкриється чат клієнта, залишиться лише вставити. Клієнти, які підключили Telegram-бота салону, отримують нагадування й автоматично.</div>
+      <textarea class="inp" id="rm-t" rows="${rows}">${esc(txt)}</textarea>
+      <div class="hint">${hint}</div>
       <div class="contact-btns">${B.map(([k, n]) => `<button class="btn sm ${k === pref ? 'pri' : ''}" data-rm="${k}" title="${k === 'copy' ? 'Скопіювати текст' : 'Скопіювати текст і відкрити ' + k}${k === pref ? ' — клієнту так зручніше' : ''}">${n}</button>`).join('')}</div>`;
     $$('[data-rm]', s.el).forEach((b) => (b.onclick = async () => {
       const k = b.dataset.rm, text = $('#rm-t', s.el).value;
       let ok = false; try { await navigator.clipboard.writeText(text); ok = true; } catch (e) { /* без доступу до буфера */ }
+      onSent(k);
       if (k === 'sms') { location.href = `sms:${p}?&body=${encodeURIComponent(text)}`; return; }
       if (k === 'copy') return toast(ok ? 'Текст скопійовано' : 'Не вдалося скопіювати — виділіть текст вручну', ok ? '' : 'bad');
       const url = { viber: `viber://chat?number=${encodeURIComponent(p)}`, telegram: `https://t.me/${p}`, instagram: `https://instagram.com/${encodeURIComponent(String(c.instagram || '').replace(/^@/, ''))}` }[k];
       toast(ok ? 'Текст скопійовано — вставте його в чат' : 'Скопіюйте текст вручну', ok ? '' : 'bad', 4000);
       if (k === 'viber') location.href = url; else window.open(url, '_blank', 'noopener');
     }));
+  }
+
+  /* ================= запросити знову (застарілі клієнти) ================= */
+  async function inviteSheet(c) {
+    const s = sheet({ title: 'Запросити знову', body: '<div class="spin"></div>' });
+    const { data: hist } = await sb.from('appointments').select('starts_at,service_id,staff_id').eq('client_id', c.id).eq('status', 'done').order('starts_at', { ascending: false }).limit(50);
+    if (!s.ov.isConnected) return;
+    const done = hist || [], top = (key) => Object.entries(done.reduce((m, x) => ((m[x[key]] = (m[x[key]] || 0) + 1), m), {})).sort((a, b) => b[1] - a[1])[0]?.[0];
+    const fav = svcById(top('service_id')), mst = byId(top('staff_id')), last = done[0]?.starts_at || c.last_visit;
+    const set = S.settings, nm = String(c.name || '').trim().split(/\s+/)[0];
+    const site = String(set.site_url || location.origin + location.pathname).replace(/#.*$/, '');
+    const days = last ? daysBetween(dayOf(last), today()) : 0;
+    const txt = [`Вітаємо${nm ? ', ' + nm : ''}! 💛`,
+      `Давно не бачились у ${set.salon_name || 'NaNa studio'}${days >= 60 ? ` — минуло вже ${days >= 90 ? Math.floor(days / 30) + ' міс.' : days + ' днів'}` : ''}. Ми скучили!`,
+      fav ? `Можемо записати вас на «${fav.name}»${mst?.first_name ? ` до майстра ${mst.first_name}` : ''} у зручний для вас час.` : 'Будемо раді бачити вас знову — підберемо зручний час.',
+      `Записатися онлайн: ${site}`,
+      'Або просто напишіть у відповідь, коли вам зручно 😊'].join('\n');
+    msgBox(s, c, txt, 7, `Останній візит: <b>${last ? esc(fmtDay(dayOf(last), { day: 'numeric', month: 'long', year: 'numeric' })) : '—'}</b>${fav ? ` · улюблена послуга: <b>${esc(fav.name)}</b>` : ''}. Текст можна змінити. Натисніть месенджер — текст скопіюється й відкриється чат клієнта, залишиться лише вставити.`);
   }
 
   /* ================= обʼєднання дублів ================= */
