@@ -156,6 +156,7 @@ const Staff = (() => {
     const pages = { cal: pCal, clients: pClients, sched: pSched, dash: Admin.dash, earn: Admin.earn, services: Admin.services, team: Admin.team, settings: Admin.settings };
     const allowed = NAV().map((x) => x[0]);
     const p = allowed.includes(page) ? page : 'cal';
+    if (p !== 'cal' && S.calFull) { S.calFull = false; document.body.classList.remove('cal-full'); if (document.fullscreenElement) document.exitFullscreen().catch(() => {}); }
     shell(p);
     const main = $('#st-main'); main.innerHTML = '<div class="spin"></div>';
     try { await pages[p](main, arg); } catch (e) { console.error(e); main.innerHTML = `<div class="card empty"><div class="big">😕</div>${esc(errMsg(e))}<div class="mt"><button class="btn" onclick="location.reload()" title="Перезавантажити сторінку">Оновити</button></div></div>`; }
@@ -262,7 +263,7 @@ const Staff = (() => {
     $('#c-prev').onclick = () => nav(addDays(S.day, -1)); $('#c-next').onclick = () => nav(addDays(S.day, 1));
     const t = $('#c-today'); if (t) t.onclick = () => nav(today());
     $('#c-date').onchange = (e) => e.target.value && nav(e.target.value);
-    $('#c-mode').onclick = () => { S.calMode = S.calMode === 'grid' ? 'list' : 'grid'; ls.set('calMode', S.calMode); pCal(main, S.day); };
+    $('#c-mode').onclick = () => { S.calMode = S.calMode === 'grid' ? 'list' : 'grid'; ls.set('calMode', S.calMode); if (S.calMode !== 'grid') calFull(body, false, true); pCal(main, S.day); };
     $('#c-new').onclick = () => newAppt({ mid: S.calSel !== 'all' ? S.calSel : isBoss() ? null : S.me.id, day: S.day });
     $('#c-block').onclick = () => blockSheet({ mid: S.calSel !== 'all' ? S.calSel : isBoss() ? null : S.me.id, day: S.day });
     $$('[data-sel]', main).forEach((b) => (b.onclick = () => { S.calSel = b.dataset.sel; pCal(main, S.day); }));
@@ -308,10 +309,12 @@ const Staff = (() => {
     }).join('');
     const n = shown.length;
     body.innerHTML = `<div class="cal-wrap"><div class="cal-grid" style="grid-template-columns:56px repeat(${n},minmax(${n > 1 ? 150 : 220}px,1fr))">
-      <div class="cal-head tm"></div>${shown.map((m) => canCard(m) ? `<a class="cal-head lnk" href="#/staff/team/${m.id}" title="Відкрити картку: ${esc(fullName(m))}">${avatar(m, 's')}<span class="ell">${esc(m.first_name)}</span></a>` : `<div class="cal-head">${avatar(m, 's')}<span class="ell">${esc(m.first_name)}</span></div>`).join('')}
+      <button type="button" class="cal-head tm cal-fs" id="c-fs" title="${S.calFull ? 'Вийти з повноекранного режиму (Esc)' : 'Відкрити сітку на весь екран'}">${S.calFull ? FS_OFF : FS_ON}</button>${shown.map((m) => canCard(m) ? `<a class="cal-head lnk" href="#/staff/team/${m.id}" title="Відкрити картку: ${esc(fullName(m))}">${avatar(m, 's')}<span class="ell">${esc(m.first_name)}</span></a>` : `<div class="cal-head">${avatar(m, 's')}<span class="ell">${esc(m.first_name)}</span></div>`).join('')}
       <div class="cal-times" style="height:${H}px;position:sticky">${times}</div>${cols}</div></div>`;
     if (S.day === today()) { const nm = kParts(new Date(nowMs())).min; if (nm >= s0 && nm <= s1) $$('.cal-col', body).forEach((c) => c.insertAdjacentHTML('beforeend', `<div class="cal-now" style="top:${y(nm)}px"></div>`)); }
     const wrap = $('.cal-wrap', body);
+    calFull(body, S.calFull);
+    $('#c-fs', body).onclick = () => calFull(body, !S.calFull, true);
     const first = appts[0] ? kParts(appts[0].starts_at).min : S.day === today() ? kParts(new Date(nowMs())).min : s0 + 60;
     wrap.scrollTop = Math.max(0, y(first) - 60);
     $$('.cal-col', body).forEach((c) => (c.onclick = (e) => {
@@ -322,6 +325,30 @@ const Staff = (() => {
     }));
     bindDay(body, dd);
   }
+  // сітка на весь екран: верхня смужка з датою й кнопками, сітка — на весь екран (і браузер на весь екран, де можна)
+  const FS_ON = '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg>';
+  const FS_OFF = '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5"/></svg>';
+  function calFull(body, on, user = false) {
+    S.calFull = on; document.body.classList.toggle('cal-full', on);
+    const wrap = $('.cal-wrap', body), btn = $('#c-fs', body); if (!wrap) return;
+    wrap.classList.toggle('full', on);
+    if (btn) { btn.innerHTML = on ? FS_OFF : FS_ON; btn.title = on ? 'Вийти з повноекранного режиму (Esc)' : 'Відкрити сітку на весь екран'; }
+    $('.cal-fbar', body)?.remove();
+    if (on) {
+      const lbl = relDay(S.day) === fmtDay(S.day, { weekday: 'short', day: 'numeric', month: 'short' }) ? fmtDay(S.day, { weekday: 'long', day: 'numeric', month: 'long' }) : relDay(S.day) + ', ' + fmtDay(S.day, { day: 'numeric', month: 'long' });
+      wrap.insertAdjacentHTML('beforebegin', `<div class="cal-fbar"><button class="btn ico sm" data-fd="-1" title="Попередній день">${IC.back}</button><b class="ell">${esc(lbl)}</b><button class="btn ico sm" data-fd="1" title="Наступний день">${IC.fwd}</button>
+        ${S.day !== today() ? '<button class="btn sm" data-fd="0" title="Повернутись до сьогодні">Сьогодні</button>' : ''}<div class="grow"></div>
+        <button class="btn sm pri" id="cf-new" title="Створити новий запис">${IC.plus}<span class="cf-t"> Запис</span></button><button class="btn ico sm" id="cf-x" title="Вийти з повноекранного режиму (Esc)">${IC.x}</button></div>`);
+      $$('[data-fd]', body).forEach((b) => (b.onclick = () => go('#/staff/cal/' + (+b.dataset.fd ? addDays(S.day, +b.dataset.fd) : today()))));
+      $('#cf-new', body).onclick = () => $('#c-new')?.click();
+      $('#cf-x', body).onclick = () => calFull(body, false, true);
+      if (user && document.documentElement.requestFullscreen && !document.fullscreenElement) document.documentElement.requestFullscreen().catch(() => {});
+    } else if (user && document.fullscreenElement) document.exitFullscreen().catch(() => {});
+  }
+  // Esc / вихід з повноекранного режиму браузера — закрити й нашу «повноекранну» сітку
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && S.calFull && !sheets.length && $('#c-body')) calFull($('#c-body'), false, true); });
+  document.addEventListener('fullscreenchange', () => { if (!document.fullscreenElement && S.calFull && $('#c-body')) calFull($('#c-body'), false); });
+
   function drawList(body, shown, dd, appts) {
     body.innerHTML = `<div class="cal-list">${shown.map((m) => {
       const list = appts.filter((a) => a.staff_id === m.id); const hh = hoursFor(m.id, S.day, dd.over);
