@@ -385,7 +385,54 @@ const Staff = (() => {
       });
     }));
   }
-  function paySheet(a, done) {
+  // «Завершити й оплатити»: якщо у візиті кілька незавершених послуг — закриваємо всі разом (кожна — своя оплата)
+  async function paySheet(a, done) {
+    if (a.status === 'booked' && a.visit_id) {
+      const { data: vis } = await sb.from('appointments').select('id,staff_id,service_id,starts_at,price,status').eq('visit_id', a.visit_id).eq('status', 'booked').order('starts_at');
+      const mineOk = (x) => isBoss() || x.staff_id === S.me.id;
+      const items = (vis || []).filter(mineOk);
+      if (items.length > 1) return payVisitSheet(a, items, (vis || []).filter((x) => !mineOk(x)), done);
+    }
+    return paySingle(a, done);
+  }
+  function payVisitSheet(a, items, others, done) {
+    const methods = S.settings.pay_methods || ['Готівка'];
+    let method = methods[0];
+    const s = sheet({ title: 'Оплата візиту', body: `<div class="sm mut mb">${esc(a.clients?.name || '')} · ${items.length} ${plural(items.length, 'послуга', 'послуги', 'послуг')}</div>
+      <div id="pv-l">${items.map((x) => `<label class="pv-row"><input type="checkbox" data-pv="${x.id}" checked title="Завершити й оплатити цю послугу">
+        <div class="grow"><div class="b ell">${esc(svcById(x.service_id)?.name || '')}</div><div class="xs mut">${fmtT(x.starts_at)} · ${esc(byId(x.staff_id)?.first_name || '')} · ціна ${money(x.price)}</div></div>
+        <input class="inp" type="number" inputmode="decimal" min="0" step="1" data-pa="${x.id}" value="${+x.price}" title="Сума за цю послугу, ₴"></label>`).join('')}</div>
+      <div class="pv-tot"><span>Разом</span><b id="pv-sum"></b></div>
+      <div class="hint">Суму кожної послуги можна змінити, якщо була знижка чи доплата.${others.length ? ` Послуги інших майстрів (${others.map((x) => esc(svcById(x.service_id)?.name || '')).join(', ')}) завершують вони.` : ''}</div>
+      <label class="lb">Спосіб оплати</label><div class="chips" id="p-m">${methods.map((x) => `<button class="chip ${x === method ? 'on y' : ''}" data-m="${esc(x)}" title="Оплата: ${esc(x)}">${esc(x)}</button>`).join('')}</div>
+      <div id="p-qr" class="mt"></div>
+      <div class="hint mt">Майстрам: <b id="pv-co"></b></div>`,
+      foot: `<button class="btn" data-x2 title="Закрити без змін">Скасувати</button><button class="btn pri" id="p-ok" title="Завершити й оплатити обрані послуги (Ctrl/⌘+Enter)">✓ Зберегти</button>` });
+    const sel = () => items.filter((x) => $(`[data-pv="${x.id}"]`, s.el).checked).map((x) => ({ x, v: $(`[data-pa="${x.id}"]`, s.el).value }));
+    const upd = async () => {
+      const l = sel(); const tot = l.reduce((t, r) => t + (+r.v || 0), 0);
+      $('#pv-sum', s.el).textContent = money(tot) + (l.length < items.length ? ` · ${l.length} з ${items.length}` : '');
+      const per = {}; l.forEach((r) => (per[r.x.staff_id] = (per[r.x.staff_id] || 0) + Math.round((+r.v || 0) * payPct(r.x.staff_id)) / 100));
+      $('#pv-co', s.el).textContent = Object.entries(per).map(([id, m]) => `${byId(id)?.first_name || ''} ${money(m)}`).join(' · ') || '—';
+      $('#p-ok', s.el).textContent = l.length ? `✓ Зберегти · ${money(tot)}` : '✓ Зберегти';
+      const box = $('#p-qr', s.el);
+      if (/qr|apple|google|картк/i.test(method) && S.settings.pay_link) box.innerHTML = `<div class="qr-box">${await qrSvg(S.settings.pay_link)}</div><div class="hint" style="text-align:center">Клієнт сканує камерою телефону</div>`; else box.innerHTML = '';
+    };
+    $$('[data-pv],[data-pa]', s.el).forEach((x) => (x.oninput = x.onchange = upd)); upd();
+    $$('[data-m]', s.el).forEach((b) => (b.onclick = () => { method = b.dataset.m; $$('[data-m]', s.el).forEach((x) => { x.classList.toggle('on', x === b); x.classList.toggle('y', x === b); }); upd(); }));
+    $('[data-x2]', s.el).onclick = s.close;
+    s.el.addEventListener('keydown', (e) => { if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') $('#p-ok', s.el).click(); });
+    $('#p-ok', s.el).onclick = (e) => busy(e.currentTarget, async () => {
+      const l = sel(); if (!l.length) return toast('Позначте хоча б одну послугу', 'bad');
+      const bad = l.filter((r) => r.v === '' || !(+r.v >= 0)); if (bad.length) { bad.forEach((r) => $(`[data-pa="${r.x.id}"]`, s.el).classList.add('err')); return toast('Перевірте суми', 'bad'); }
+      let ok = 0, sum = 0;
+      for (const r of l) { const { error } = await sb.rpc('appt_status', { p_appt: r.x.id, p_status: 'done', p_amount: +r.v, p_method: method });
+        if (error) { toast(`${svcById(r.x.service_id)?.name}: ${errMsg(error)}`, 'bad', 6000); break; } ok++; sum += +r.v; }
+      if (!ok) return;
+      s.close(); toast(`Оплату збережено · ${ok} ${plural(ok, 'послуга', 'послуги', 'послуг')} · ${money(sum)}`); done();
+    });
+  }
+  function paySingle(a, done) {
     const methods = S.settings.pay_methods || ['Готівка'];
     let method = a.payments?.method || methods[0];
     const s = sheet({ title: 'Оплата', body: `<div class="sm mut mb">${esc(svcById(a.service_id)?.name)} · ${esc(a.clients?.name || '')}</div>

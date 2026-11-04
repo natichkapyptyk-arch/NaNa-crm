@@ -315,6 +315,9 @@ a.cal-head.lnk{color:inherit;text-decoration:none;cursor:pointer;transition:back
 .cal-list .ap-ln{cursor:pointer} .cal-list .ap-ln:hover{color:var(--ink);text-decoration:underline}
 .vis-ln{display:flex;align-items:center;gap:10px;padding:8px 10px;border:1.5px solid var(--line);border-radius:10px;margin-bottom:6px;cursor:pointer;background:#fff} .vis-ln:hover{border-color:var(--gr)}
 .vis-ln.on{cursor:default;background:var(--yels);border-color:#DCE07A}
+.pv-row{display:flex;align-items:center;gap:10px;padding:8px 10px;border:1.5px solid var(--line);border-radius:10px;margin-bottom:6px;background:#fff;cursor:pointer}
+.pv-row input[type=checkbox]{width:20px;height:20px;accent-color:var(--gr);flex:none} .pv-row .inp{width:110px;min-height:40px;padding:6px 10px;font-weight:800;text-align:right;flex:none}
+.pv-row:has(input[type=checkbox]:not(:checked)){opacity:.55} .pv-tot{display:flex;justify-content:space-between;align-items:center;padding:8px 4px 2px;font-size:16px} .pv-tot b{font-size:22px}
 .cal-now{position:absolute;left:0;right:0;height:0;border-top:2px solid var(--bad);z-index:6;pointer-events:none}
 .cal-now:before{content:'';position:absolute;left:-1px;top:-6px;width:10px;height:10px;border-radius:50%;background:var(--bad)}
 .cal-list .ap-row{display:flex;gap:12px;align-items:center;padding:12px 14px;border:1.5px solid var(--line);border-left:5px solid var(--yel2);border-radius:var(--r2);background:#fff;margin-bottom:8px;cursor:pointer;transition:all .12s}
