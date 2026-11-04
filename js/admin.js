@@ -74,7 +74,7 @@ const Admin = (() => {
     else { pFrom = addDays(st.from, -len); pTo = addDays(st.from, -1); }
     const [pf, pt] = tsRange(pFrom, pTo);
     const [ap, pays, prevPays, prevAp, exp, over, blocks, cls] = await Promise.all([
-      qAll(() => sb.from('appointments').select('id,visit_id,client_id,staff_id,service_id,starts_at,ends_at,price,status,demo,visits(source)').gte('starts_at', f).lt('starts_at', t).order('starts_at')),
+      qAll(() => sb.from('appointments').select('id,visit_id,client_id,staff_id,service_id,starts_at,ends_at,price,status,demo,visits(source),clients(name)').gte('starts_at', f).lt('starts_at', t).order('starts_at')),
       qAll(() => sb.from('payments').select('id,appointment_id,staff_id,amount,method,commission,paid_at,appointments(starts_at,service_id,visit_id,clients(name))').gte('paid_at', f).lt('paid_at', t).order('paid_at', { ascending: false })),
       qAll(() => sb.from('payments').select('amount,appointments(visit_id)').gte('paid_at', pf).lt('paid_at', pt)),
       qAll(() => sb.from('appointments').select('status').gte('starts_at', pf).lt('starts_at', pt)),
@@ -131,14 +131,14 @@ const Admin = (() => {
     const peak = Object.entries(hrs).sort((a, b) => b[1] - a[1])[0];
 
     body.innerHTML = `<div class="kpis">
-        <div class="kpi main"><div class="l">Виручка</div><div class="v">${money(rev)}</div>${delta(rev, prevRev).replace('class="d', 'style="color:#E9EBA0" class="d')}</div>
-        <div class="kpi"><div class="l">Завершених візитів</div><div class="v">${done}</div>${delta(done, prevDone)}</div>
-        <div class="kpi"><div class="l">Середній чек</div><div class="v">${money(avg)}</div>${delta(avg, prevAvg)}</div>
-        <div class="kpi"><div class="l">Завантаженість майстрів</div><div class="v">${load}%</div><div class="d mut" title="Зайнятий час / робочий час за графіком">${durTxt(busyMin())} з ${durTxt(av.tot)}</div></div>
-        <div class="kpi"><div class="l">До виплати майстрам</div><div class="v">${money(comm)}</div><div class="d mut">за відсотками з карток</div></div>
-        <div class="kpi"><div class="l">Прибуток салону</div><div class="v">${money(rev - comm - expSum)}</div><div class="d mut" title="Виручка − виплати майстрам − витрати">після виплат і витрат</div></div>
-        <div class="kpi"><div class="l">Нових клієнтів</div><div class="v">${newCl}</div><div class="d mut">онлайн-записів: ${pct(online, ap.length)}%</div></div>
-        <div class="kpi"><div class="l">Скасовано / не прийшли</div><div class="v">${cancel} / ${noshow}</div><div class="d mut">${pct(cancel + noshow, ap.length)}% від усіх записів</div></div>
+        <div class="kpi main click" data-k="rev" role="button" tabindex="0" title="Показати всі оплати за період"><div class="l">Виручка</div><div class="v">${money(rev)}</div>${delta(rev, prevRev).replace('class="d', 'style="color:#E9EBA0" class="d')}</div>
+        <div class="kpi click" data-k="done" role="button" tabindex="0" title="Список завершених візитів за період"><div class="l">Завершених візитів</div><div class="v">${done}</div>${delta(done, prevDone)}</div>
+        <div class="kpi click" data-k="avg" role="button" tabindex="0" title="Середній чек кожного майстра — у таблиці «Майстри»"><div class="l">Середній чек</div><div class="v">${money(avg)}</div>${delta(avg, prevAvg)}</div>
+        <div class="kpi click" data-k="load" role="button" tabindex="0" title="Завантаженість кожного майстра — у таблиці «Майстри»"><div class="l">Завантаженість майстрів</div><div class="v">${load}%</div><div class="d mut" title="Зайнятий час / робочий час за графіком">${durTxt(busyMin())} з ${durTxt(av.tot)}</div></div>
+        <div class="kpi click" data-k="comm" role="button" tabindex="0" title="Скільки кожному майстру — у таблиці «Майстри»"><div class="l">До виплати майстрам</div><div class="v">${money(comm)}</div><div class="d mut">за відсотками з карток</div></div>
+        <div class="kpi click" data-k="profit" role="button" tabindex="0" title="Як рахується прибуток і всі витрати за період"><div class="l">Прибуток салону</div><div class="v">${money(rev - comm - expSum)}</div><div class="d mut" title="Виручка − виплати майстрам − витрати">після виплат і витрат</div></div>
+        <div class="kpi click" data-k="newcl" role="button" tabindex="0" title="Список нових клієнтів за період"><div class="l">Нових клієнтів</div><div class="v">${newCl}</div><div class="d mut">онлайн-записів: ${pct(online, ap.length)}%</div></div>
+        <div class="kpi click" data-k="cancel" role="button" tabindex="0" title="Список скасованих записів і неявок за період"><div class="l">Скасовано / не прийшли</div><div class="v">${cancel} / ${noshow}</div><div class="d mut">${pct(cancel + noshow, ap.length)}% від усіх записів</div></div>
         <a class="kpi click" href="#/staff/clients/stale" title="Клієнти, які не були понад ${S().settings.stale_days} днів і не мають запису — відкрити список" style="text-decoration:none"><div class="l">Застарілі клієнти</div><div class="v" style="color:var(--warn)">${stale}</div><div class="d mut">не були ${S().settings.stale_days}+ днів →</div></a>
       </div>
       <div class="dgrid">
@@ -150,7 +150,7 @@ const Admin = (() => {
           ${exp.length || true ? `<div class="sect"><h3>Витрати: ${money(expSum)} <button class="btn sm" id="d-exp" title="Додати витрату (оренда, матеріали…)" style="margin-left:auto">${IC.plus} Витрата</button></h3>
             ${exp.slice(0, 6).map((x) => `<div class="row sp sm" style="padding:4px 0"><span>${esc(fmtDay(x.day, { day: 'numeric', month: 'short' }))} · ${esc(x.category)}${x.note ? ' · <span class="mut">' + esc(x.note) + '</span>' : ''}</span><b>${money(x.amount)}</b></div>`).join('') || '<div class="mut sm">Витрат не внесено</div>'}</div>` : ''}</div>
         <div class="card"><h3>Популярні послуги</h3>${svTop.map(([id, x]) => `<div class="hbar"><div class="t"><span class="ell">${esc(Staff.svcById(id)?.name || '—')}</span><span class="nw">${x.n} × · ${money(x.r)}</span></div><div class="tr"><i class="y" style="width:${(x.r / svMax) * 100}%"></i></div></div>`).join('') || '<div class="empty">Немає даних</div>'}</div>
-        <div class="card full"><h3>Майстри</h3><div class="tbl-wrap d-only"><table class="tbl"><thead><tr><th>Майстер</th><th class="r">Візити</th><th class="r">Виручка</th><th class="r">Сер. чек</th><th class="r">Завантаж.</th><th class="r">%</th><th class="r">До виплати</th></tr></thead>
+        <div class="card full" id="d-masters"><h3>Майстри</h3><div class="tbl-wrap d-only"><table class="tbl"><thead><tr><th>Майстер</th><th class="r">Візити</th><th class="r">Виручка</th><th class="r">Сер. чек</th><th class="r">Завантаж.</th><th class="r">%</th><th class="r">До виплати</th></tr></thead>
           <tbody>${mrows.map((x) => `<tr class="click" data-st="${x.m.id}" title="Відкрити картку майстра"><td><div class="row" style="gap:8px">${avatar(x.m, 's')}<b>${esc(fullName(x.m))}</b></div></td><td class="r">${x.n}</td><td class="r b">${money(x.r)}</td><td class="r">${money(x.avg)}</td><td class="r">${x.ld}%</td><td class="r">${Staff.payPct(x.m.id)}%</td><td class="r b">${money(x.cm)}</td></tr>`).join('')}
           <tr><td class="b">Разом</td><td class="r b">${done}</td><td class="r b">${money(rev)}</td><td class="r">${money(avg)}</td><td class="r">${load}%</td><td></td><td class="r b">${money(comm)}</td></tr></tbody></table></div>
           <div class="m-list">${mrows.map((x) => `<div class="m-row click" data-st="${x.m.id}" title="Відкрити картку майстра">${avatar(x.m, 's')}<div class="grow"><div class="b ell">${esc(fullName(x.m))}</div>
@@ -165,7 +165,7 @@ const Admin = (() => {
           <div>🔁 Повторні клієнти: <b>${pct(cls.filter((c) => c.visits >= 2).length, cls.filter((c) => c.visits >= 1).length)}%</b> мають 2+ візити</div>
           <div>🎂 Дні народження цього місяця: <b>${cls.filter((c) => c.birthday && c.birthday.slice(5, 7) === today().slice(5, 7)).length}</b></div>
           <div>⏳ Втрачено через неявки: <b>${money(ap.filter((a) => a.status === 'noshow').reduce((s, a) => s + +a.price, 0))}</b></div></div></div>
-        <div class="card full"><div class="row sp wrap mb"><h3 style="margin:0">Транзакції (${pays.length})</h3><div class="row wrap" style="gap:6px">
+        <div class="card full" id="d-txcard"><div class="row sp wrap mb"><h3 style="margin:0">Транзакції (${pays.length})</h3><div class="row wrap" style="gap:6px">
           <div class="chips" id="d-mf"><button class="chip on" data-mf="" title="Усі способи оплати">Усі</button>${byMethod.map((x) => `<button class="chip" data-mf="${esc(x.m)}" title="Лише ${esc(x.m)}">${esc(x.m)}</button>`).join('')}</div>
           <button class="btn sm" id="d-csv" title="Завантажити транзакції таблицею для Excel">⬇ CSV</button></div></div><div class="tbl-wrap d-only" style="max-height:480px;overflow:auto"><table class="tbl" id="d-tx"></table></div><div class="m-list" id="d-txm"></div></div>
       </div>`;
@@ -193,6 +193,29 @@ const Admin = (() => {
     };
     $$('[data-st]', body).forEach((r) => (r.onclick = () => go('#/staff/team/' + r.dataset.st)));
     $('#d-exp').onclick = () => expenseSheet(() => dash(main));
+
+    // плитки: відкривають список за період або ведуть до потрібного блоку нижче
+    const jump = (id) => { const el = $('#' + id, body); if (!el) return; el.scrollIntoView({ behavior: 'smooth', block: 'start' }); el.classList.remove('flash'); void el.offsetWidth; el.classList.add('flash'); };
+    const perTxt = esc(fmtDay(st.from, { day: 'numeric', month: 'short' }) + ' — ' + fmtDay(st.to, { day: 'numeric', month: 'short', year: 'numeric' }));
+    const dt = (iso) => esc(fmtDay(dayOf(iso), { day: 'numeric', month: 'short' }));
+    const apList = (list) => list.map((a) => `<div class="m-row click" data-cl="${a.client_id}" title="Відкрити картку клієнта"><div class="grow"><div class="b sm ell">${esc(one(a.clients)?.name || '—')} · ${esc(Staff.byId(a.staff_id)?.first_name || '')}</div>
+        <div class="xs mut ell">${dt(a.starts_at)}, ${fmtT(a.starts_at)} · ${esc(Staff.svcById(a.service_id)?.name || '')}</div></div>
+        <div class="r"><span class="pill ${a.status}">${STATUS[a.status]}</span><div class="sm b" style="margin-top:3px">${money(a.price)}</div></div></div>`).join('') || '<div class="empty">Немає записів за цей період</div>';
+    const listSheet = (title, html, foot = '') => { const s = sheet({ title, wide: true, body: `<div class="sm mut mb">${perTxt}</div>${html}`, foot });
+      $$('[data-cl]', s.el).forEach((r) => (r.onclick = () => Staff.clientSheet(r.dataset.cl))); return s; };
+    const K = {
+      rev: () => jump('d-txcard'), avg: () => jump('d-masters'), load: () => jump('d-masters'), comm: () => jump('d-masters'),
+      done: () => listSheet(`Завершені візити: ${done}`, apList(ap.filter((a) => a.status === 'done'))),
+      cancel: () => listSheet(`Скасовано / не прийшли: ${cancel} / ${noshow}`, apList(ap.filter((a) => a.status === 'cancel' || a.status === 'noshow'))),
+      newcl: () => { const nc = cls.filter((c) => { const d = dayOf(c.created_at); return d >= st.from && d <= st.to; }).sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at));
+        listSheet(`Нові клієнти: ${nc.length}`, nc.map((c) => `<div class="m-row click" data-cl="${c.id}" title="Відкрити картку клієнта"><span class="ava s y">${esc(c.name[0] || '?')}</span><div class="grow"><div class="b sm ell">${esc(c.name)}</div>
+          <div class="xs mut ell">${esc(fmtPhone(c.phone))} · додано ${dt(c.created_at)}</div></div><div class="r sm">${c.visits} ${plural(c.visits, 'візит', 'візити', 'візитів')}</div></div>`).join('') || '<div class="empty">Нових клієнтів за цей період немає</div>'); },
+      profit: () => { const s = listSheet('Прибуток салону', `<dl class="kv"><dt>Виручка</dt><dd>${money(rev)}</dd><dt>Виплати майстрам</dt><dd>− ${money(comm)}</dd><dt>Витрати</dt><dd>− ${money(expSum)}</dd><dt>Прибуток</dt><dd class="b">${money(rev - comm - expSum)}</dd></dl>
+          <h3 class="mt">Витрати (${exp.length})</h3>${exp.map((x) => `<div class="m-row"><div class="grow"><div class="b sm ell">${esc(x.category)}</div><div class="xs mut ell">${dt(x.day)}${x.note ? ' · ' + esc(x.note) : ''}</div></div><div class="r b">${money(x.amount)}</div></div>`).join('') || '<div class="mut sm">Витрат не внесено</div>'}`,
+          `<button class="btn pri" id="pf-exp" title="Додати витрату (оренда, матеріали…)">${IC.plus} Витрата</button>`);
+        $('#pf-exp', s.el).onclick = () => { s.close(); expenseSheet(() => dash(main)); }; },
+    };
+    $$('[data-k]', body).forEach((el) => { el.onclick = () => K[el.dataset.k](); el.onkeydown = (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); K[el.dataset.k](); } }; });
   }
   function expenseSheet(done) {
     const s = sheet({ title: 'Нова витрата', body: `<div class="two"><div><label class="lb" for="e-d">Дата</label><input class="inp" type="date" id="e-d" value="${today()}"></div>
