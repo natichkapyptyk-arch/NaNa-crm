@@ -57,18 +57,50 @@ function sinceTxt(d) {
 function normPhone(p) {
   const d = String(p || '').replace(/\D/g, '');
   if (/^0\d{9}$/.test(d)) return '+38' + d; if (/^380\d{9}$/.test(d)) return '+' + d;
-  if (/^3800\d{9}$/.test(d)) return '+380' + d.slice(4); if (/^80\d{9}$/.test(d)) return '+3' + d; if (d.length >= 10 && d.length <= 15) return '+' + d; return null;
+  if (/^3800\d{9}$/.test(d)) return '+380' + d.slice(4); if (/^80\d{9}$/.test(d)) return '+3' + d; if (/^380/.test(d)) return null; if (d.length >= 10 && d.length <= 15) return '+' + d; return null;
 }
-// поля телефону (усі type="tel"): при натисканні вже стоїть +380 — далі лише решта цифр;
-// якщо нічого не дописали — поле знову порожнє; вставлений повний номер не дублює +380
+// поля телефону (усі type="tel"):
+// • при натисканні вже стоїть +380 — далі лише решта цифр; якщо нічого не дописали — поле знову порожнє
+// • під час набору пробіли ставляться самі: +380 97 111 22 33
+// • червона рамка: забагато цифр — одразу, замало — коли виходиш з поля (і зникає, щойно номер правильний)
+const isTel = (el) => !!el?.matches?.('input[type="tel"]');
+function phoneTyping(v) {
+  const d = v.replace(/\D/g, '');
+  if (!/^\+?\s*380/.test(v.trim()) || !/^380/.test(d)) return v;   // інші формати (закордонні, 0XX…) не чіпаємо
+  const r = d.slice(3), g = [r.slice(0, 2), r.slice(2, 5), r.slice(5, 7), r.slice(7, 9), r.slice(9)].filter(Boolean);
+  return '+380' + (g.length ? ' ' + g.join(' ') : '');
+}
+function phoneCheck(el, leaving) {
+  const d = el.value.replace(/\D/g, ''), ua = /^380/.test(d), empty = !d || d === '380';
+  let bad = '';
+  if (ua && d.length > 12) bad = 'Забагато цифр: після +380 має бути 9';
+  else if (!empty && (leaving || el.dataset.pbad)) bad = ua ? (d.length < 12 ? 'Замало цифр: після +380 має бути 9' : '') : (normPhone(el.value) ? '' : 'Перевірте номер');
+  if (bad) { el.classList.add('err'); el.dataset.pbad = '1'; el.title = bad; }
+  else if (el.dataset.pbad || (!empty && normPhone(el.value))) { el.classList.remove('err'); delete el.dataset.pbad; el.removeAttribute('title'); }
+}
+function caretAfterDigits(el, n) { let i = 0, k = 0; const v = el.value; while (i < v.length && k < n) { if (/\d/.test(v[i])) k++; i++; } try { el.setSelectionRange(i, i); } catch (x) { /* деякі браузери */ } }
 document.addEventListener('focusin', (e) => { const el = e.target;
-  if (!el.matches?.('input[type="tel"]') || el.value || el.disabled || el.readOnly) return;
-  el.value = '+380'; requestAnimationFrame(() => { try { el.setSelectionRange(el.value.length, el.value.length); } catch (x) { /* деякі браузери */ } }); });
-document.addEventListener('focusout', (e) => { const el = e.target; if (el.matches?.('input[type="tel"]') && /^\+?380$/.test(el.value.replace(/\s/g, ''))) el.value = ''; });
+  if (!isTel(el) || el.disabled || el.readOnly) return;
+  el.value = el.value ? phoneTyping(el.value) : '+380'; el.dataset.pd = el.value.replace(/\D/g, '');
+  requestAnimationFrame(() => { try { el.setSelectionRange(el.value.length, el.value.length); } catch (x) { /* деякі браузери */ } }); });
+document.addEventListener('input', (e) => { const el = e.target; if (!isTel(el)) return;
+  let v = el.value; const pos = el.selectionStart ?? v.length; let before = v.slice(0, pos).replace(/\D/g, '').length;
+  const d = v.replace(/\D/g, ''), prev = el.dataset.pd ?? d;
+  if ((e.inputType || '').startsWith('delete') && d === prev && d.length) {   // стерли лише пробіл — стираємо й сусідню цифру
+    const k = e.inputType === 'deleteContentForward' ? before : before - 1;
+    if (k >= 0) { let i = -1, n = -1; while (n < k && ++i < v.length) if (/\d/.test(v[i])) n++; if (n === k) { v = v.slice(0, i) + v.slice(i + 1); if (k < before) before--; } }
+  }
+  const f = phoneTyping(v);
+  if (f !== el.value) { el.value = f; caretAfterDigits(el, before); }
+  el.dataset.pd = el.value.replace(/\D/g, '');
+  phoneCheck(el, false); });
+document.addEventListener('focusout', (e) => { const el = e.target; if (!isTel(el)) return;
+  if (/^\+?380$/.test(el.value.replace(/\s/g, ''))) el.value = '';
+  phoneCheck(el, true); });
 document.addEventListener('paste', (e) => { const el = e.target;
-  if (!el.matches?.('input[type="tel"]') || el.value.replace(/\s/g, '') !== '+380') return;
+  if (!isTel(el) || el.value.replace(/\s/g, '') !== '+380') return;
   const n = normPhone(e.clipboardData?.getData('text') || ''); if (!n) return;
-  e.preventDefault(); el.value = fmtPhone(n); el.dispatchEvent(new Event('input', { bubbles: true })); });
+  e.preventDefault(); el.value = phoneTyping(n); el.dispatchEvent(new Event('input', { bubbles: true })); });
 function fmtPhone(p) { const m = String(p || '').match(/^\+380(\d{2})(\d{3})(\d{2})(\d{2})$/); return m ? `+380 ${m[1]} ${m[2]} ${m[3]} ${m[4]}` : p || ''; }
 const IC = {
   tg: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M21.9 4.3 18.6 20c-.2 1.1-.9 1.4-1.8.9l-5-3.7-2.4 2.3c-.3.3-.5.5-1 .5l.4-5.1 9.3-8.4c.4-.4-.1-.6-.6-.2L6 13.5l-4.9-1.5c-1.1-.3-1.1-1.1.2-1.6l19.2-7.4c.9-.3 1.7.2 1.4 1.3z"/></svg>',
