@@ -412,6 +412,7 @@ const Staff = (() => {
   const FS_OFF = '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5"/></svg>';
   function calFull(body, on, user = false) {
     on = !!on; S.calFull = on; document.body.classList.toggle('cal-full', on);
+    calFullPos();
     const wrap = $('.cal-wrap', body), btn = $('#c-fs', body); if (!wrap) return;
     wrap.classList.toggle('full', on);
     if (btn) { btn.innerHTML = on ? FS_OFF : FS_ON; btn.title = on ? 'Вийти з повноекранного режиму (Esc)' : 'Відкрити сітку на весь екран'; }
@@ -424,10 +425,16 @@ const Staff = (() => {
       $$('[data-fd]', body).forEach((b) => (b.onclick = () => go('#/staff/cal/' + (+b.dataset.fd ? addDays(S.day, +b.dataset.fd) : today()))));
       $('#cf-new', body).onclick = () => $('#c-new')?.click();
       $('#cf-x', body).onclick = () => calFull(body, false, true);
-      if (user && document.documentElement.requestFullscreen && !document.fullscreenElement) document.documentElement.requestFullscreen().catch(() => {});
     } else if (user && document.fullscreenElement) document.exitFullscreen().catch(() => {});
     if (!on && S.calFit) setTimeout(S.calFit, 50);
   }
+  // де починається сітка на весь екран: на компʼютері — праворуч від меню й під верхньою смужкою (меню не закриває), на телефоні — весь екран
+  function calFullPos() {
+    const nav = $('#st-nav'), top = $('.st-top'), wide = nav && getComputedStyle(nav).display !== 'none';
+    document.body.style.setProperty('--cf-l', wide ? Math.round(nav.getBoundingClientRect().right) + 'px' : '0px');
+    document.body.style.setProperty('--cf-t', wide && top ? Math.round(top.getBoundingClientRect().bottom) + 'px' : '0px');
+  }
+  addEventListener('resize', () => S.calFull && calFullPos());
   // Esc / вихід з повноекранного режиму браузера — закрити й нашу «повноекранну» сітку
   document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && S.calFull && !sheets.length && $('#c-body')) calFull($('#c-body'), false, true); });
   document.addEventListener('fullscreenchange', () => { if (!document.fullscreenElement && S.calFull && $('#c-body')) calFull($('#c-body'), false); });
