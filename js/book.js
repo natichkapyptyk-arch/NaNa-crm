@@ -120,7 +120,9 @@ const Client = (() => {
     const shown = st.cat && cats.includes(st.cat) ? [st.cat] : cats;
     const rows = shown.map((c) => `<div class="s-cat">${esc(c)}</div>` + list.filter((s) => s.category === c).sort((a, b) => a.sort - b.sort).map((s) => {
       const inCart = st.cart.some((x) => x.sid === s.id && x.mid === m.id);
+      const ph = (s.photos || [])[0];
       return `<div class="s-row ${inCart ? 'inCart' : ''}" data-s="${s.id}" title="Обрати «${esc(s.name)}» і подивитись вільний час">
+        ${ph ? `<button class="s-ph" data-gal="${s.id}" title="Подивитись фото робіт (${s.photos.length})"><img src="${esc(ph)}" alt="" loading="lazy">${s.photos.length > 1 ? `<span>${s.photos.length}</span>` : ''}</button>` : ''}
         <div class="grow"><div class="nm">${esc(s.name)}${inCart ? ' <span class="pill booked">у візиті</span>' : ''}</div>${s.descr ? `<div class="ds">${esc(s.descr)}</div>` : ''}</div>
         <div class="pr">${money(s.price)}<small>${durTxt(s.dur)}</small></div></div>`;
     }).join('')).join('');
@@ -146,7 +148,7 @@ const Client = (() => {
         g.filter((v) => v[1].length).map(([n, v]) => `<div class="slots-h">${n}</div><div class="slots">${v.map((mm) => `<button class="slot" data-t="${mm}" title="Записатися на ${toHM(mm)}–${toHM(mm + x.dur)}">${toHM(mm)}</button>`).join('')}</div>`).join('');
     }
     return `${stepsBar()}<div class="st-title"><button class="btn ghost ico" data-back="services" title="Назад — до послуг">${IC.back}</button><h2>Оберіть день і час</h2></div>
-      <div class="s-row inCart" style="cursor:default"><div class="grow"><div class="nm">${esc(s.name)}</div><div class="ds">Майстер: ${esc(fullName(m))}</div></div><div class="pr">${money(x.price)}<small>${durTxt(x.dur)}</small></div></div>
+      <div class="s-row inCart" style="cursor:default">${(s.photos || [])[0] ? `<button class="s-ph" data-gal="${s.id}" title="Подивитись фото робіт"><img src="${esc(s.photos[0])}" alt=""></button>` : ''}<div class="grow"><div class="nm">${esc(s.name)}</div><div class="ds">Майстер: ${esc(fullName(m))}</div></div><div class="pr">${money(x.price)}<small>${durTxt(x.dur)}</small></div></div>
       <div class="dstrip" id="dstrip">${strip}</div>${body}`;
   }
   function vCart() {
@@ -209,7 +211,8 @@ const Client = (() => {
     $$('[data-cat]', a).forEach((b) => (b.onclick = () => { st.cat = b.dataset.cat; render(); }));
     $$('[data-cat2]', a).forEach((b) => (b.onclick = () => { st.cat = b.dataset.cat2; render(); }));
     $$('.m-card', a).forEach((c) => (c.onclick = (e) => { const d = e.target.closest('[data-day]'); st.mid = c.dataset.m; st.day = d ? d.dataset.day : null; st.edit = -1; goStep('services'); }));
-    $$('.s-row[data-s]', a).forEach((r) => (r.onclick = () => { st.sid = r.dataset.s; goStep('time'); }));
+    $$('.s-row[data-s]', a).forEach((r) => (r.onclick = (e) => { if (e.target.closest('[data-gal]')) return; st.sid = r.dataset.s; goStep('time'); }));
+    $$('[data-gal]', a).forEach((b) => (b.onclick = (e) => { e.stopPropagation(); gallery(C.svc.get(b.dataset.gal), st.step === 'services' ? () => { st.sid = b.dataset.gal; goStep('time'); } : null); }));
     $$('[data-back]', a).forEach((b) => (b.onclick = () => { if (b.dataset.back === 'masters') st.edit = -1; goStep(b.dataset.back); }));
     $$('[data-go]').forEach((b) => (b.onclick = () => { if (b.dataset.go === 'masters') st.edit = -1; goStep(b.dataset.go); }));
     $$('.dpill[data-day]', a).forEach((b) => (b.onclick = () => { st.day = b.dataset.day; const y = scrollY; render(); scrollTo(0, y); }));
@@ -259,6 +262,22 @@ const Client = (() => {
         goStep('done');
       });
     };
+  }
+  function gallery(sv, onPick) {   // фото робіт до послуги
+    const ph = sv.photos || []; let i = 0;
+    const x = st.mid && C.ms.get(st.mid)?.get(sv.id);
+    const g = sheet({ title: esc(sv.name), wide: true, body: `<div class="gal"><img id="g-img" src="${esc(ph[0])}" alt="">
+        ${ph.length > 1 ? `<button class="btn ico g-prev" title="Попереднє фото">${IC.back}</button><button class="btn ico g-next" title="Наступне фото">${IC.fwd}</button>` : ''}</div>
+      ${ph.length > 1 ? `<div class="g-th">${ph.map((u, k) => `<img src="${esc(u)}" data-k="${k}" class="${k ? '' : 'on'}" alt="" title="Фото ${k + 1}">`).join('')}</div>` : ''}
+      ${sv.descr ? `<p class="mut" style="margin:10px 0 0">${esc(sv.descr)}</p>` : ''}`,
+      foot: onPick ? `<button class="btn pri lg" id="g-ok" title="Обрати цю послугу">Обрати · ${money(x ? x.price : sv.price)}</button>` : '' });
+    const show = (k) => { i = (k + ph.length) % ph.length; $('#g-img', g.el).src = ph[i]; $$('.g-th img', g.el).forEach((t) => t.classList.toggle('on', +t.dataset.k === i)); };
+    $$('.g-th img', g.el).forEach((t) => (t.onclick = () => show(+t.dataset.k)));
+    const pv = $('.g-prev', g.el); if (pv) { pv.onclick = () => show(i - 1); $('.g-next', g.el).onclick = () => show(i + 1); }
+    let sx = null; const im = $('#g-img', g.el);
+    im.addEventListener('touchstart', (e) => (sx = e.touches[0].clientX), { passive: true });
+    im.addEventListener('touchend', (e) => { if (sx == null || ph.length < 2) return; const d = e.changedTouches[0].clientX - sx; if (Math.abs(d) > 40) show(i + (d < 0 ? 1 : -1)); sx = null; });
+    const ok = $('#g-ok', g.el); if (ok) ok.onclick = () => { g.close(); onPick(); };
   }
   function downloadIcs(items, s) {
     const z = (ms) => new Date(ms).toISOString().replace(/[-:]/g, '').replace(/\.\d+/, '');

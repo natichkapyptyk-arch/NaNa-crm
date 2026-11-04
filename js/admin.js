@@ -150,9 +150,13 @@ const Admin = (() => {
           ${exp.length || true ? `<div class="sect"><h3>Витрати: ${money(expSum)} <button class="btn sm" id="d-exp" title="Додати витрату (оренда, матеріали…)" style="margin-left:auto">${IC.plus} Витрата</button></h3>
             ${exp.slice(0, 6).map((x) => `<div class="row sp sm" style="padding:4px 0"><span>${esc(fmtDay(x.day, { day: 'numeric', month: 'short' }))} · ${esc(x.category)}${x.note ? ' · <span class="mut">' + esc(x.note) + '</span>' : ''}</span><b>${money(x.amount)}</b></div>`).join('') || '<div class="mut sm">Витрат не внесено</div>'}</div>` : ''}</div>
         <div class="card"><h3>Популярні послуги</h3>${svTop.map(([id, x]) => `<div class="hbar"><div class="t"><span class="ell">${esc(Staff.svcById(id)?.name || '—')}</span><span class="nw">${x.n} × · ${money(x.r)}</span></div><div class="tr"><i class="y" style="width:${(x.r / svMax) * 100}%"></i></div></div>`).join('') || '<div class="empty">Немає даних</div>'}</div>
-        <div class="card full"><h3>Майстри</h3><div class="tbl-wrap"><table class="tbl"><thead><tr><th>Майстер</th><th class="r">Візити</th><th class="r">Виручка</th><th class="r">Сер. чек</th><th class="r">Завантаж.</th><th class="r">%</th><th class="r">До виплати</th></tr></thead>
+        <div class="card full"><h3>Майстри</h3><div class="tbl-wrap d-only"><table class="tbl"><thead><tr><th>Майстер</th><th class="r">Візити</th><th class="r">Виручка</th><th class="r">Сер. чек</th><th class="r">Завантаж.</th><th class="r">%</th><th class="r">До виплати</th></tr></thead>
           <tbody>${mrows.map((x) => `<tr class="click" data-st="${x.m.id}" title="Відкрити картку майстра"><td><div class="row" style="gap:8px">${avatar(x.m, 's')}<b>${esc(fullName(x.m))}</b></div></td><td class="r">${x.n}</td><td class="r b">${money(x.r)}</td><td class="r">${money(x.avg)}</td><td class="r">${x.ld}%</td><td class="r">${Staff.payPct(x.m.id)}%</td><td class="r b">${money(x.cm)}</td></tr>`).join('')}
-          <tr><td class="b">Разом</td><td class="r b">${done}</td><td class="r b">${money(rev)}</td><td class="r">${money(avg)}</td><td class="r">${load}%</td><td></td><td class="r b">${money(comm)}</td></tr></tbody></table></div></div>
+          <tr><td class="b">Разом</td><td class="r b">${done}</td><td class="r b">${money(rev)}</td><td class="r">${money(avg)}</td><td class="r">${load}%</td><td></td><td class="r b">${money(comm)}</td></tr></tbody></table></div>
+          <div class="m-list">${mrows.map((x) => `<div class="m-row click" data-st="${x.m.id}" title="Відкрити картку майстра">${avatar(x.m, 's')}<div class="grow"><div class="b ell">${esc(fullName(x.m))}</div>
+            <div class="xs mut">${x.n} ${plural(x.n, 'візит', 'візити', 'візитів')} · сер. ${money(x.avg)} · завант. ${x.ld}%</div></div>
+            <div class="r"><div class="b">${money(x.r)}</div><div class="xs mut">майстру ${money(x.cm)} (${Staff.payPct(x.m.id)}%)</div></div></div>`).join('')}
+            <div class="m-row"><div class="grow b">Разом · ${done} ${plural(done, 'візит', 'візити', 'візитів')}</div><div class="r"><div class="b">${money(rev)}</div><div class="xs mut">майстрам ${money(comm)}</div></div></div></div></div>
         <div class="card"><h3>Записи за днями тижня</h3>${[1, 2, 3, 4, 5, 6, 7].map((d) => `<div class="hbar"><div class="t"><span>${WDL[d]}</span><span>${wd[d]}</span></div><div class="tr"><i style="width:${(wd[d] / wdMax) * 100}%"></i></div></div>`).join('')}
           ${peak ? `<div class="hint">Найпопулярніша година: <b>${pad(peak[0])}:00</b></div>` : ''}</div>
         <div class="card"><h3>Корисне</h3><div class="col sm">
@@ -163,7 +167,7 @@ const Admin = (() => {
           <div>⏳ Втрачено через неявки: <b>${money(ap.filter((a) => a.status === 'noshow').reduce((s, a) => s + +a.price, 0))}</b></div></div></div>
         <div class="card full"><div class="row sp wrap mb"><h3 style="margin:0">Транзакції (${pays.length})</h3><div class="row wrap" style="gap:6px">
           <div class="chips" id="d-mf"><button class="chip on" data-mf="" title="Усі способи оплати">Усі</button>${byMethod.map((x) => `<button class="chip" data-mf="${esc(x.m)}" title="Лише ${esc(x.m)}">${esc(x.m)}</button>`).join('')}</div>
-          <button class="btn sm" id="d-csv" title="Завантажити транзакції таблицею для Excel">⬇ CSV</button></div></div><div class="tbl-wrap" style="max-height:480px;overflow:auto"><table class="tbl" id="d-tx"></table></div></div>
+          <button class="btn sm" id="d-csv" title="Завантажити транзакції таблицею для Excel">⬇ CSV</button></div></div><div class="tbl-wrap d-only" style="max-height:480px;overflow:auto"><table class="tbl" id="d-tx"></table></div><div class="m-list" id="d-txm"></div></div>
       </div>`;
     let mf = '';
     const drawTx = () => {
@@ -172,6 +176,12 @@ const Admin = (() => {
         return `<tr><td class="nw">${esc(fmtDay(dayOf(p.paid_at), { day: 'numeric', month: 'short' }))}, ${fmtT(p.paid_at)}</td><td>${esc(one(a?.clients)?.name || '')}</td><td>${esc(Staff.svcById(a?.service_id)?.name || '')}</td>
           <td>${esc(Staff.byId(p.staff_id)?.first_name || '')}</td><td><span class="pill g">${esc(p.method)}</span></td><td class="r b">${money(p.amount)}</td><td class="r">${money(p.commission)}</td></tr>`; }).join('') || '<tr><td colspan="7" class="mut">Немає транзакцій</td></tr>'}
         <tr><td colspan="5" class="b">Разом</td><td class="r b">${money(list.reduce((a, p) => a + +p.amount, 0))}</td><td class="r b">${money(list.reduce((a, p) => a + +p.commission, 0))}</td></tr></tbody>`;
+      $('#d-txm').innerHTML = list.slice(0, 200).map((p) => { const a = one(p.appointments);
+        return `<div class="m-row"><div class="grow"><div class="b sm ell">${esc(one(a?.clients)?.name || '')} · ${esc(Staff.byId(p.staff_id)?.first_name || '')}</div>
+          <div class="xs mut ell">${esc(fmtDay(dayOf(p.paid_at), { day: 'numeric', month: 'short' }))}, ${fmtT(p.paid_at)} · ${esc(Staff.svcById(a?.service_id)?.name || '')}</div></div>
+          <div class="r"><div class="b">${money(p.amount)}</div><span class="pill g" style="font-size:11px">${esc(p.method)}</span></div></div>`; }).join('') +
+        (list.length > 200 ? `<div class="hint">Показано 200 з ${list.length} — усі в CSV</div>` : '') +
+        `<div class="m-row"><div class="grow b">Разом</div><div class="r b">${money(list.reduce((a, p) => a + +p.amount, 0))}</div></div>`;
     };
     drawTx();
     $$('[data-mf]', body).forEach((b) => (b.onclick = () => { mf = b.dataset.mf; $$('[data-mf]', body).forEach((x) => x.classList.toggle('on', x === b)); drawTx(); }));
@@ -217,7 +227,9 @@ const Admin = (() => {
       <div class="kpi"><div class="l">Виручка з моїх послуг</div><div class="v">${money(rev)}</div></div>
       <div class="kpi"><div class="l">Візитів</div><div class="v">${pays.length}</div></div>
       <div class="kpi"><div class="l">Ще заплановано</div><div class="v">${fut.length}</div><div class="d mut">≈ ${money(fut.reduce((s, a) => s + +a.price, 0) * pctNow / 100)} для мене</div></div></div>
-      <div class="card mt"><h3>Мої оплачені візити</h3><div class="tbl-wrap"><table class="tbl"><thead><tr><th>Дата</th><th>Клієнт</th><th>Послуга</th><th class="r">Чек</th><th class="r">%</th><th class="r">Мені</th></tr></thead><tbody>
+      <div class="card mt"><h3>Мої оплачені візити</h3>
+      <div class="m-list">${pays.map((p) => { const a = one(p.appointments); return `<div class="m-row"><div class="grow"><div class="b sm ell">${esc(Staff.svcById(a?.service_id)?.name || '')}</div><div class="xs mut">${esc(fmtDay(dayOf(p.paid_at), { day: 'numeric', month: 'short' }))} · ${esc(one(a?.clients)?.name || '')} · чек ${money(p.amount)}</div></div><div class="r b">${money(p.commission)}</div></div>`; }).join('') || '<div class="mut">Ще немає оплат за цей період</div>'}</div>
+      <div class="tbl-wrap d-only"><table class="tbl"><thead><tr><th>Дата</th><th>Клієнт</th><th>Послуга</th><th class="r">Чек</th><th class="r">%</th><th class="r">Мені</th></tr></thead><tbody>
       ${pays.map((p) => { const a = one(p.appointments); return `<tr><td class="nw">${esc(fmtDay(dayOf(p.paid_at), { day: 'numeric', month: 'short' }))}</td><td>${esc(one(a?.clients)?.name || '')}</td><td>${esc(Staff.svcById(a?.service_id)?.name || '')}</td><td class="r">${money(p.amount)}</td><td class="r">${num(p.commission_pct)}%</td><td class="r b">${money(p.commission)}</td></tr>`; }).join('') || '<tr><td colspan="6" class="mut">Ще немає оплат за цей період</td></tr>'}
       </tbody></table></div></div>`;
   }
@@ -233,7 +245,7 @@ const Admin = (() => {
       ${cats.filter((c) => !S().svcCat || c === S().svcCat).map((c) => { const l = list.filter((s) => s.category === c); if (!l.length) return '';
         return `<div class="s-cat">${esc(c)}</div>` + l.map((s) => { const ms = S().ms.filter((x) => x.service_id === s.id && x.is_active); const prices = ms.map((x) => +x.price);
           const pr = prices.length ? (Math.min(...prices) === Math.max(...prices) ? money(prices[0]) : money(Math.min(...prices)) + '–' + money(Math.max(...prices))) : money(s.price);
-          return `<div class="list-row ${s.is_active ? '' : 'off'}" data-s="${s.id}" title="Редагувати послугу: ціни, тривалість, хто виконує"><div class="grow"><div class="nm">${esc(s.name)} ${s.is_active ? '' : '<span class="pill g">вимкнено</span>'}</div>
+          return `<div class="list-row ${s.is_active ? '' : 'off'}" data-s="${s.id}" title="Редагувати послугу: ціни, тривалість, хто виконує, фото">${(s.photos || [])[0] ? `<span class="s-ph" style="width:46px;height:46px;cursor:pointer"><img src="${esc(s.photos[0])}" alt="" loading="lazy"></span>` : '<span class="s-ph" style="width:46px;height:46px;display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--mut)" title="Немає фото — додайте в редагуванні">📷</span>'}<div class="grow"><div class="nm">${esc(s.name)} ${s.is_active ? '' : '<span class="pill g">вимкнено</span>'}</div>
             <div class="sub">${durTxt(s.dur)} · ${ms.length ? ms.map((x) => esc(Staff.byId(x.staff_id)?.first_name || '')).join(', ') : '<span style="color:var(--bad)">немає майстра — клієнти не бачать</span>'}</div></div><div class="b nw">${pr}</div></div>`; }).join(''); }).join('')}`;
     $$('[data-c]', main).forEach((b) => (b.onclick = () => { S().svcCat = b.dataset.c; services(main); }));
     $('#sv-off').onchange = (e) => { S().svcOff = e.target.checked; services(main); };
@@ -252,6 +264,7 @@ const Admin = (() => {
       <div><label class="lb" for="sv-p">Ціна, ₴</label><input class="inp" type="number" id="sv-p" min="0" step="10" value="${+sv.price}"></div>
       <div><label class="lb" for="sv-o">Порядок</label><input class="inp" type="number" id="sv-o" value="${sv.sort}" title="Менше число — вище в списку"></div></div>
       <label class="sw mt" title="Вимкнена послуга не показується клієнтам"><input type="checkbox" id="sv-a" ${sv.is_active ? 'checked' : ''}><i></i><span class="b">Послуга доступна для запису</span></label>
+      <div class="sect"><h3>📷 Фото робіт <span class="mut sm" style="font-weight:600">до 6 — перше показується в списку</span></h3><div class="sv-phs" id="sv-phs"></div></div>
       <div class="sect"><h3>Хто виконує — і за скільки <button class="btn sm" id="sv-all" title="Поставити всім обраним майстрам тривалість і ціну зверху" style="margin-left:auto">Як зверху всім</button></h3>
         <div class="hint" style="margin:-4px 0 8px">Кожен майстер може мати свою ціну й тривалість.</div>
         ${people.map((p) => { const x = S().ms.find((m) => m.staff_id === p.id && m.service_id === id && m.is_active);
@@ -259,14 +272,34 @@ const Admin = (() => {
             <input class="inp" type="number" min="5" step="5" data-pu="${p.id}" value="${x ? x.dur : sv.dur}" title="Тривалість у цього майстра, хв"><input class="inp" type="number" min="0" step="10" data-pp="${p.id}" value="${x ? +x.price : +sv.price}" title="Ціна у цього майстра, ₴"></div>`; }).join('') || '<div class="mut">Немає майстрів</div>'}</div>`,
       foot: `<button class="btn" data-x2 title="Закрити без збереження">Скасувати</button><button class="btn pri" id="sv-ok" title="Зберегти послугу">Зберегти</button>` });
     const el = s.el;
+    const sid = id || crypto.randomUUID();
+    let photos = [...(sv.photos || [])];
+    const drawPh = () => {
+      $('#sv-phs', el).innerHTML = photos.map((u, k) => `<div class="ph"><img src="${esc(u)}" alt="">${k ? `<button class="btn" data-first="${k}" title="Зробити головним (першим)" style="left:4px;right:auto">★</button>` : '<b>головне</b>'}<button class="btn" data-rmph="${k}" title="Прибрати фото">${IC.x.replace('width="20" height="20"', 'width="14" height="14"')}</button></div>`).join('') +
+        (photos.length < 6 ? `<label class="add" title="Додати фото з телефона або компʼютера">${IC.plus}Додати<input type="file" accept="image/*" multiple hidden id="sv-phin"></label>` : '');
+      $$('[data-rmph]', el).forEach((b) => (b.onclick = () => { photos.splice(+b.dataset.rmph, 1); drawPh(); }));
+      $$('[data-first]', el).forEach((b) => (b.onclick = () => { const [u] = photos.splice(+b.dataset.first, 1); photos.unshift(u); drawPh(); }));
+      const inp = $('#sv-phin', el); if (inp) inp.onchange = async () => {
+        const files = [...inp.files].slice(0, 6 - photos.length); if (!files.length) return;
+        const lab = inp.closest('label'); lab.innerHTML = '<span class="xs">Завантаження…</span>';
+        for (const f of files) {
+          try {
+            const blob = await resizeImg(f, 1200); const path = `services/${sid}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}.jpg`;
+            const { error } = await sb.storage.from('photos').upload(path, blob, { contentType: 'image/jpeg' }); if (error) throw error;
+            photos.push(sb.storage.from('photos').getPublicUrl(path).data.publicUrl);
+          } catch (e) { toast(errMsg(e), 'bad'); }
+        }
+        drawPh();
+      };
+    };
+    drawPh();
     $('#sv-all', el).onclick = () => { $$('[data-p]', el).forEach((c) => { if (c.checked) { $(`[data-pu="${c.dataset.p}"]`, el).value = $('#sv-u', el).value; $(`[data-pp="${c.dataset.p}"]`, el).value = $('#sv-p', el).value; } }); };
     $('[data-x2]', el).onclick = s.close;
     $('#sv-ok', el).onclick = (e) => busy(e.currentTarget, async () => {
       const name = $('#sv-n', el).value.trim(), dur = +$('#sv-u', el).value, price = +$('#sv-p', el).value;
       if (!name) { $('#sv-n', el).classList.add('err'); return toast('Вкажіть назву', 'bad'); }
       if (!(dur >= 5) || !(price >= 0)) return toast('Перевірте тривалість і ціну', 'bad');
-      const row = { category: $('#sv-c', el).value.trim() || 'Інше', name, descr: $('#sv-d', el).value.trim() || null, dur, price, sort: +$('#sv-o', el).value || 100, is_active: $('#sv-a', el).checked };
-      const sid = id || crypto.randomUUID();
+      const row = { category: $('#sv-c', el).value.trim() || 'Інше', name, descr: $('#sv-d', el).value.trim() || null, dur, price, sort: +$('#sv-o', el).value || 100, is_active: $('#sv-a', el).checked, photos };
       const r1 = id ? await sb.from('services').update(row).eq('id', id) : await sb.from('services').insert({ id: sid, ...row });
       if (r1.error) return toast(errMsg(r1.error), 'bad');
       const up = [], del = [];
@@ -292,6 +325,13 @@ const Admin = (() => {
         <div class="row wrap" style="gap:5px;margin-top:6px">${p.is_bookable ? `<span class="pill g">${S().ms.filter((m) => m.staff_id === p.id && m.is_active).length} послуг</span>` : ''}${p.is_bookable ? `<span class="pill i">${Staff.payPct(p.id)}%</span>` : ''}
         ${p.tg_chat_id ? '<span class="pill done" title="Сповіщення в Telegram підключено">Telegram ✓</span>' : ''}${!p.is_active ? '<span class="pill cancel">не працює</span>' : ''}${p.demo ? '<span class="pill g">приклад</span>' : ''}</div></div></a>`).join('')}</div>`;
     $('#t-off').onchange = (e) => { S().teamOff = e.target.checked; team(main); };
+  }
+  async function resizeImg(file, max) {   // зменшити фото, зберігаючи пропорції
+    const img = await new Promise((ok, bad) => { const i = new Image(); i.onload = () => ok(i); i.onerror = bad; i.src = URL.createObjectURL(file); });
+    const k = Math.min(1, max / Math.max(img.width, img.height)), c = document.createElement('canvas');
+    c.width = Math.round(img.width * k); c.height = Math.round(img.height * k);
+    c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+    return await new Promise((ok) => c.toBlob(ok, 'image/jpeg', 0.85));
   }
   async function resizePhoto(file) {
     const img = await new Promise((ok, bad) => { const i = new Image(); i.onload = () => ok(i); i.onerror = bad; i.src = URL.createObjectURL(file); });

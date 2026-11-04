@@ -87,8 +87,10 @@ create table if not exists services (
   price numeric(10,2) not null default 0 check (price >= 0),
   is_active boolean not null default true,
   sort int not null default 100,
+  photos text[] not null default '{}',              -- фото робіт (перше — головне)
   created_at timestamptz not null default now()
 );
+alter table services add column if not exists photos text[] not null default '{}';
 
 -- хто що виконує: у кожного майстра своя тривалість і ціна
 create table if not exists master_services (
@@ -317,7 +319,7 @@ create or replace function pub_catalog() returns jsonb language sql stable secur
   select jsonb_build_object(
     'settings', (select to_jsonb(s) - 'pay_link' from settings s where id = 1),
     'services', coalesce((select jsonb_agg(jsonb_build_object('id', id, 'category', category, 'name', name, 'descr', descr,
-                 'dur', dur, 'price', price, 'sort', sort) order by sort, name) from services where is_active), '[]'),
+                 'dur', dur, 'price', price, 'sort', sort, 'photos', photos) order by sort, name) from services where is_active), '[]'),
     'masters', coalesce((select jsonb_agg(jsonb_build_object('id', m.id, 'first_name', m.first_name, 'last_name', m.last_name,
                  'photo_url', m.photo_url, 'bio', m.bio, 'experience', m.experience) order by m.sort, m.first_name)
                  from staff m where m.is_active and m.is_bookable), '[]'),
