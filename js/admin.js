@@ -201,45 +201,77 @@ const Admin = (() => {
 
     // плитки: відкривають список за період або ведуть до потрібного блоку нижче
     const jump = (id) => { const el = $('#' + id, body); if (!el) return; el.scrollIntoView({ behavior: 'smooth', block: 'start' }); el.classList.remove('flash'); void el.offsetWidth; el.classList.add('flash'); };
-    const perTxt = esc(fmtDay(st.from, { day: 'numeric', month: 'short' }) + ' — ' + fmtDay(st.to, { day: 'numeric', month: 'short', year: 'numeric' }));
     const dt = (iso) => esc(fmtDay(dayOf(iso), { day: 'numeric', month: 'short' }));
     const apList = (list) => list.map((a) => `<div class="m-row click" data-cl="${a.client_id}" title="Відкрити картку клієнта"><div class="grow"><div class="b sm ell">${esc(one(a.clients)?.name || '—')} · ${esc(Staff.byId(a.staff_id)?.first_name || '')}</div>
         <div class="xs mut ell">${dt(a.starts_at)}, ${fmtT(a.starts_at)} · ${esc(Staff.svcById(a.service_id)?.name || '')}</div></div>
         <div class="r"><span class="pill ${a.status}">${STATUS[a.status]}</span><div class="sm b" style="margin-top:3px">${money(a.price)}</div></div></div>`).join('') || '<div class="empty">Немає записів за цей період</div>';
-    // список записів з категоріями: рядок-фільтр угорі, а в «Усі» — розділи по категоріях з кількістю й сумою
-    const catSheet = (title, list, start = '') => {
-      const catOf = (a) => Staff.svcById(a.service_id)?.category || 'Інше';
-      const ord = (c) => Math.min(...S().services.filter((x) => x.category === c).map((x) => +x.sort || 0), 9999);
-      const cats = [...new Set(list.map(catOf))].sort((a, b) => ord(a) - ord(b) || a.localeCompare(b, 'uk'));
-      const sum = (l) => l.reduce((t, a) => t + +a.price, 0);
-      let cur = cats.includes(start) ? start : '';
-      const s = listSheet(title, `<div class="chips scroll mb" id="cs-cats"></div><div id="cs-list"></div>`);
-      const draw = () => {
-        $('#cs-cats', s.el).innerHTML = `<button class="chip ${!cur ? 'on' : ''}" data-cc="" title="Усі категорії">Усі <span class="n">${list.length}</span></button>`
-          + cats.map((c) => `<button class="chip ${cur === c ? 'on' : ''}" data-cc="${esc(c)}" title="Лише ${esc(c)}">${esc(c)} <span class="n">${list.filter((a) => catOf(a) === c).length}</span></button>`).join('');
-        const one = (c) => { const l = list.filter((a) => catOf(a) === c);
-          return `<div class="s-cat" style="display:flex;justify-content:space-between"><span>${esc(c)} · ${l.length}</span><span>${money(sum(l))}</span></div>${apList(l)}`; };
-        $('#cs-list', s.el).innerHTML = list.length ? (cur ? one(cur) : cats.map(one).join('')) : apList([]);
-        $$('[data-cc]', s.el).forEach((b) => (b.onclick = () => { cur = b.dataset.cc; draw(); }));
-        $$('[data-cl]', s.el).forEach((r) => (r.onclick = () => Staff.clientSheet(r.dataset.cl)));
-      };
-      draw();
+    // ---- вікна дашборду: свій період — день / тиждень / місяць / від–до ----
+    const perOf = (mode, anc) => {
+      if (mode === 'day') return { mode, from: anc, to: anc };
+      if (mode === 'week') { const f = addDays(anc, 1 - isoDow(anc)); return { mode, from: f, to: addDays(f, 6) }; }
+      const [f, t] = monthRange(anc.slice(0, 7)); return { mode: 'month', from: f, to: t };
     };
-    const listSheet = (title, html, foot = '') => { const s = sheet({ title, wide: true, body: `<div class="sm mut mb">${perTxt}</div>${html}`, foot });
-      $$('[data-cl]', s.el).forEach((r) => (r.onclick = () => Staff.clientSheet(r.dataset.cl))); return s; };
+    const perLabel = (P) => (P.mode === 'day' ? fmtDay(P.from, { weekday: 'short', day: 'numeric', month: 'long', year: 'numeric' })
+      : P.mode === 'month' ? `${MONTHS[+P.from.slice(5, 7) - 1]} ${P.from.slice(0, 4)}`
+      : `${fmtDay(P.from, { day: 'numeric', month: 'short' })} — ${fmtDay(P.to, { day: 'numeric', month: 'short', year: 'numeric' })}`);
+    function perSheet({ load, after = () => {}, foot = '' }) {
+      let P = st.mode === 'month' ? { mode: 'month', from: st.from, to: st.to } : { mode: 'range', from: st.from, to: st.to }, seq = 0;
+      const s = sheet({ title: '…', wide: true, body: `<div id="ps-p"></div><div id="ps-b"></div>`, foot });
+      const inNow = () => P.from <= today() && today() <= P.to;
+      const drawPer = () => {
+        $('#ps-p', s.el).innerHTML = `<div class="chips mb">${[['day', 'День'], ['week', 'Тиждень'], ['month', 'Місяць'], ['range', 'Від–до']].map(([k, n]) => `<button class="chip ${P.mode === k ? 'on' : ''}" data-pm2="${k}" title="Показати за період: ${n.toLowerCase()}">${n}</button>`).join('')}</div>`
+          + (P.mode === 'range' ? `<div class="row wrap mb" style="gap:6px"><input class="inp" type="date" data-pf2 value="${P.from}" style="width:auto;min-height:38px;padding:5px 8px" title="З якої дати"> — <input class="inp" type="date" data-pt2 value="${P.to}" style="width:auto;min-height:38px;padding:5px 8px" title="По яку дату"></div>`
+            : `<div class="row wrap mb" style="gap:8px"><button class="btn ico sm" data-sh="-1" title="Попередній період">${IC.back}</button><b style="min-width:160px;text-align:center;text-transform:capitalize">${esc(perLabel(P))}</b><button class="btn ico sm" data-sh="1" title="Наступний період">${IC.fwd}</button>${inNow() ? '' : '<button class="chip" data-now title="Повернутись до поточного дня / тижня / місяця">Сьогодні</button>'}</div>`);
+        $$('[data-pm2]', s.el).forEach((x) => (x.onclick = () => { const m = x.dataset.pm2; if (m === P.mode) return; P = m === 'range' ? { mode: 'range', from: P.from, to: P.to } : perOf(m, inNow() ? today() : P.from); run(); }));
+        $$('[data-sh]', s.el).forEach((x) => (x.onclick = () => { const n = +x.dataset.sh; P = perOf(P.mode, P.mode === 'day' ? addDays(P.from, n) : P.mode === 'week' ? addDays(P.from, 7 * n) : shiftMonth(P.from.slice(0, 7), n) + '-01'); run(); }));
+        const nb = $('[data-now]', s.el); if (nb) nb.onclick = () => { P = perOf(P.mode, today()); run(); };
+        const pf = $('[data-pf2]', s.el), pt = $('[data-pt2]', s.el);
+        if (pf) pf.onchange = pt.onchange = () => { if (pf.value && pt.value && pf.value <= pt.value) { P = { mode: 'range', from: pf.value, to: pt.value }; run(); } else if (pf.value > pt.value) toast('Дата «з» має бути раніше за «по»', 'bad'); };
+      };
+      const run = async () => { drawPer(); const my = ++seq; $('#ps-b', s.el).innerHTML = '<div class="spin"></div>';
+        try { const r = await load(P.from, P.to); if (my !== seq || !s.ov.isConnected) return;
+          $('.sh-h h2', s.el).textContent = r.title; $('#ps-b', s.el).innerHTML = r.html; after(s, r);
+          $$('[data-cl]', s.el).forEach((x) => (x.onclick = () => Staff.clientSheet(x.dataset.cl)));
+        } catch (e) { if (my === seq) $('#ps-b', s.el).innerHTML = `<div class="empty">${esc(errMsg(e))}</div>`; } };
+      run(); return s;
+    }
+    const apRange = (from, to, statuses) => { const [f, t] = tsRange(from, to);
+      return qAll(() => sb.from('appointments').select('id,visit_id,client_id,staff_id,service_id,starts_at,ends_at,price,status,clients(name)').in('status', statuses).gte('starts_at', f).lt('starts_at', t).order('starts_at')); };
+    // список записів з категоріями: рядок-фільтр угорі, а в «Усі» — розділи по категоріях з кількістю й сумою
+    const catOf = (a) => Staff.svcById(a.service_id)?.category || 'Інше';
+    const ord = (c) => Math.min(...S().services.filter((x) => x.category === c).map((x) => +x.sort || 0), 9999);
+    const sumP = (l) => l.reduce((t, a) => t + +a.price, 0);
+    const catSheet = (titleOf, statuses, start = '') => { let cur = start;
+      perSheet({ load: async (from, to) => { const list = await apRange(from, to, statuses); return { title: titleOf(list), list, html: `<div class="chips scroll mb" id="cs-cats"></div><div id="cs-list"></div>` }; },
+        after: (s, r) => { const list = r.list, cats = [...new Set(list.map(catOf))].sort((a, b) => ord(a) - ord(b) || a.localeCompare(b, 'uk'));
+          if (cur && !cats.includes(cur)) cur = '';
+          const draw = () => {
+            $('#cs-cats', s.el).innerHTML = `<button class="chip ${!cur ? 'on' : ''}" data-cc="" title="Усі категорії">Усі <span class="n">${list.length}</span></button>`
+              + cats.map((c) => `<button class="chip ${cur === c ? 'on' : ''}" data-cc="${esc(c)}" title="Лише ${esc(c)}">${esc(c)} <span class="n">${list.filter((a) => catOf(a) === c).length}</span></button>`).join('');
+            const one = (c) => { const l = list.filter((a) => catOf(a) === c);
+              return `<div class="s-cat" style="display:flex;justify-content:space-between"><span>${esc(c)} · ${l.length}</span><span>${money(sumP(l))}</span></div>${apList(l)}`; };
+            $('#cs-list', s.el).innerHTML = list.length ? (cur ? one(cur) : cats.map(one).join('')) : apList([]);
+            $$('[data-cc]', s.el).forEach((b) => (b.onclick = () => { cur = b.dataset.cc; draw(); }));
+            $$('[data-cl]', s.el).forEach((x) => (x.onclick = () => Staff.clientSheet(x.dataset.cl)));
+          };
+          draw(); } }); };
+    const doneTitle = (l) => `Завершені візити: ${l.length}`;
     const K = {
       rev: () => jump('d-txcard'), avg: () => jump('d-masters'), load: () => jump('d-masters'), comm: () => jump('d-masters'),
-      done: () => catSheet(`Завершені візити: ${done}`, ap.filter((a) => a.status === 'done')),
-      cancel: () => catSheet(`Скасовано / не прийшли: ${cancel} / ${noshow}`, ap.filter((a) => a.status === 'cancel' || a.status === 'noshow')),
-      newcl: () => { const nc = cls.filter((c) => { const d = dayOf(c.created_at); return d >= st.from && d <= st.to; }).sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at));
-        listSheet(`Нові клієнти: ${nc.length}`, nc.map((c) => `<div class="m-row click" data-cl="${c.id}" title="Відкрити картку клієнта"><span class="ava s y">${esc(c.name[0] || '?')}</span><div class="grow"><div class="b sm ell">${esc(c.name)}</div>
-          <div class="xs mut ell">${esc(fmtPhone(c.phone))} · додано ${dt(c.created_at)}</div></div><div class="r sm">${c.visits} ${plural(c.visits, 'візит', 'візити', 'візитів')}</div></div>`).join('') || '<div class="empty">Нових клієнтів за цей період немає</div>'); },
-      profit: () => { const s = listSheet('Прибуток салону', `<dl class="kv"><dt>Виручка</dt><dd>${money(rev)}</dd><dt>Виплати майстрам</dt><dd>− ${money(comm)}</dd><dt>Витрати</dt><dd>− ${money(expSum)}</dd><dt>Прибуток</dt><dd class="b">${money(rev - comm - expSum)}</dd></dl>
-          <h3 class="mt">Витрати (${exp.length})</h3>${exp.map((x) => `<div class="m-row"><div class="grow"><div class="b sm ell">${esc(x.category)}</div><div class="xs mut ell">${dt(x.day)}${x.note ? ' · ' + esc(x.note) : ''}</div></div><div class="r b">${money(x.amount)}</div></div>`).join('') || '<div class="mut sm">Витрат не внесено</div>'}`,
-          `<button class="btn pri" id="pf-exp" title="Додати витрату (оренда, матеріали…)">${IC.plus} Витрата</button>`);
-        $('#pf-exp', s.el).onclick = () => { s.close(); expenseSheet(() => dash(main)); }; },
+      done: () => catSheet(doneTitle, ['done']),
+      cancel: () => catSheet((l) => `Скасовано / не прийшли: ${l.filter((a) => a.status === 'cancel').length} / ${l.filter((a) => a.status === 'noshow').length}`, ['cancel', 'noshow']),
+      newcl: () => perSheet({ load: async (from, to) => { const nc = cls.filter((c) => { const d = dayOf(c.created_at); return d >= from && d <= to; }).sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at));
+        return { title: `Нові клієнти: ${nc.length}`, html: nc.map((c) => `<div class="m-row click" data-cl="${c.id}" title="Відкрити картку клієнта"><span class="ava s y">${esc(c.name[0] || '?')}</span><div class="grow"><div class="b sm ell">${esc(c.name)}</div>
+          <div class="xs mut ell">${esc(fmtPhone(c.phone))} · додано ${dt(c.created_at)}</div></div><div class="r sm">${c.visits} ${plural(c.visits, 'візит', 'візити', 'візитів')}</div></div>`).join('') || '<div class="empty">Нових клієнтів за цей період немає</div>' }; } }),
+      profit: () => perSheet({ foot: `<button class="btn pri" id="pf-exp" title="Додати витрату (оренда, матеріали…)">${IC.plus} Витрата</button>`,
+        load: async (from, to) => { const [f, t] = tsRange(from, to);
+          const [pp, ee] = await Promise.all([qAll(() => sb.from('payments').select('amount,commission').gte('paid_at', f).lt('paid_at', t)), qAll(() => sb.from('expenses').select('*').gte('day', from).lte('day', to).order('day', { ascending: false }))]);
+          const r = pp.reduce((x, p) => x + +p.amount, 0), c = pp.reduce((x, p) => x + +p.commission, 0), e = ee.reduce((x, p) => x + +p.amount, 0);
+          return { title: 'Прибуток салону', html: `<dl class="kv"><dt>Виручка</dt><dd>${money(r)}</dd><dt>Виплати майстрам</dt><dd>− ${money(c)}</dd><dt>Витрати</dt><dd>− ${money(e)}</dd><dt>Прибуток</dt><dd class="b">${money(r - c - e)}</dd></dl>
+            <h3 class="mt">Витрати (${ee.length})</h3>${ee.map((x) => `<div class="m-row"><div class="grow"><div class="b sm ell">${esc(x.category)}</div><div class="xs mut ell">${dt(x.day)}${x.note ? ' · ' + esc(x.note) : ''}</div></div><div class="r b">${money(x.amount)}</div></div>`).join('') || '<div class="mut sm">Витрат не внесено</div>'}` }; },
+        after: (s) => { $('#pf-exp', s.el).onclick = () => { s.close(); expenseSheet(() => dash(main)); }; } }),
     };
-    $$('[data-ctg]', body).forEach((el) => (el.onclick = () => catSheet(`Завершені візити: ${done}`, ap.filter((a) => a.status === 'done'), el.dataset.ctg)));
+    $$('[data-ctg]', body).forEach((el) => (el.onclick = () => catSheet(doneTitle, ['done'], el.dataset.ctg)));
     $$('[data-k]', body).forEach((el) => { el.onclick = () => K[el.dataset.k](); el.onkeydown = (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); K[el.dataset.k](); } }; });
   }
   function expenseSheet(done) {
