@@ -244,15 +244,20 @@ const Admin = (() => {
     const ord = (c) => Math.min(...S().services.filter((x) => x.category === c).map((x) => +x.sort || 0), 9999);
     const sumP = (l) => l.reduce((t, a) => t + +a.price, 0);
     const catSheet = (titleOf, statuses, start = '') => { let cur = start;
-      perSheet({ load: async (from, to) => { const list = await apRange(from, to, statuses); return { title: titleOf(list), list, html: `<div class="chips scroll mb" id="cs-cats"></div><div id="cs-list"></div>` }; },
+      perSheet({ load: async (from, to) => { const list = await apRange(from, to, statuses); return { title: titleOf(list), list, html: `<div class="chips scroll mb" id="cs-cats"></div><div id="cs-pay"></div><div id="cs-list"></div>` }; },
         after: (s, r) => { const list = r.list, cats = [...new Set(list.map(catOf))].sort((a, b) => ord(a) - ord(b) || a.localeCompare(b, 'uk'));
           if (cur && !cats.includes(cur)) cur = '';
           const draw = () => {
             $('#cs-cats', s.el).innerHTML = `<button class="chip ${!cur ? 'on' : ''}" data-cc="" title="Усі категорії">Усі <span class="n">${list.length}</span></button>`
               + cats.map((c) => `<button class="chip ${cur === c ? 'on' : ''}" data-cc="${esc(c)}" title="Лише ${esc(c)}">${esc(c)} <span class="n">${list.filter((a) => catOf(a) === c).length}</span></button>`).join('');
-            const one = (c) => { const l = list.filter((a) => catOf(a) === c);
+            const catBlock = (c) => { const l = list.filter((a) => catOf(a) === c);
               return `<div class="s-cat" style="display:flex;justify-content:space-between"><span>${esc(c)} · ${l.length}</span><span>${money(sumP(l))}</span></div>${apList(l)}`; };
-            $('#cs-list', s.el).innerHTML = list.length ? (cur ? one(cur) : cats.map(one).join('')) : apList([]);
+            $('#cs-list', s.el).innerHTML = list.length ? (cur ? catBlock(cur) : cats.map(catBlock).join('')) : apList([]);
+            // каса: скільки чим заплатили (для звірки наприкінці дня)
+            const paid = (cur ? list.filter((a) => catOf(a) === cur) : list).map((a) => one(a.payments)).filter(Boolean), by = {};
+            paid.forEach((p) => (by[p.method] = (by[p.method] || 0) + +p.amount));
+            const tot = paid.reduce((t, p) => t + +p.amount, 0);
+            $('#cs-pay', s.el).innerHTML = paid.length ? `<div class="pay-sum" title="Скільки отримано кожним способом оплати${cur ? ' — лише ' + esc(cur) : ''}">${Object.entries(by).sort((a, b) => b[1] - a[1]).map(([m, v]) => `<span>${payPill({ method: m }).replace('class="pill g pay-m"', 'class="ps-m"')}<b>${money(v)}</b></span>`).join('')}<span class="ps-tot">Разом <b>${money(tot)}</b></span></div>` : '';
             $$('[data-cc]', s.el).forEach((b) => (b.onclick = () => { cur = b.dataset.cc; draw(); }));
             $$('[data-cl]', s.el).forEach((x) => (x.onclick = () => Staff.clientSheet(x.dataset.cl)));
           };
