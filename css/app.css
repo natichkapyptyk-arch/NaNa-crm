@@ -485,3 +485,5 @@ table.tbl{width:100%;border-collapse:collapse;font-size:13.5px;background:#fff}
 .npanel .it.onl.un{background:var(--yels);box-shadow:inset 3px 0 0 var(--yel2)}
 .npanel .it.self{background:#F7F7F3;color:var(--mut)}
 .npanel .it.self .b{color:var(--ink2);font-weight:700}
+#st-bell{width:auto;min-width:42px;padding:0 9px;gap:5px}
+#st-bell .badge{flex:none;white-space:nowrap} #st-bell .badge.onl{width:auto;min-width:0;padding:0 6px;margin-left:0}
