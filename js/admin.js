@@ -45,6 +45,25 @@ const Admin = (() => {
     return { html, bind };
   }
   const tsRange = (from, to) => [kDate(from, 0).toISOString(), kDate(addDays(to, 1), 0).toISOString()];
+  /* ---------- повторні / повернуті клієнти ---------- */
+  const BACK_DAYS = 90;   // «повернутий» — перерва понад 3 місяці
+  // { client_id: [дні візитів по порядку] } із завершених записів (кілька послуг в один день — один візит)
+  function histDays(rows) {
+    const by = {};
+    rows.forEach((a) => { if (!a.client_id) return; const d = dayOf(a.starts_at), l = by[a.client_id] || (by[a.client_id] = []); if (l[l.length - 1] !== d) l.push(d); });
+    return by;
+  }
+  // перший візит клієнта в періоді, перед яким уже був інший візит: перерва ≤ 90 днів — повторний, більше — повернутий
+  function retOf(by, from, to) {
+    const rep = [], back = [];
+    Object.entries(by).forEach(([id, days]) => {
+      const i = days.findIndex((d, k) => k > 0 && d >= from && d <= to); if (i < 1) return;
+      const x = { id, prev: days[i - 1], cur: days[i], gap: daysBetween(days[i - 1], days[i]) };
+      (x.gap > BACK_DAYS ? back : rep).push(x);
+    });
+    return { rep, back };
+  }
+  const gapTxt = (n) => (n >= 60 ? `${Math.floor(n / 30)} міс.` : n >= 14 ? `${Math.floor(n / 7)} тиж.` : `${n} ${plural(n, 'день', 'дні', 'днів')}`) + ' перерви';
 
   /* ---------- доступні години (для завантаженості) ---------- */
   function availMinutes(mids, from, to, over, blocks) {
@@ -73,7 +92,7 @@ const Admin = (() => {
     if (st.mode === 'month') { pFrom = monthRange(shiftMonth(st.month, -1))[0]; pTo = addDays(pFrom, len - 1); const pe = monthRange(shiftMonth(st.month, -1))[1]; if (pTo > pe) pTo = pe; }
     else { pFrom = addDays(st.from, -len); pTo = addDays(st.from, -1); }
     const [pf, pt] = tsRange(pFrom, pTo);
-    const [ap, pays, prevPays, prevAp, exp, over, blocks, cls] = await Promise.all([
+    const [ap, pays, prevPays, prevAp, exp, over, blocks, cls, hist] = await Promise.all([
       qAll(() => sb.from('appointments').select('id,visit_id,client_id,staff_id,service_id,starts_at,ends_at,price,status,demo,visits(source),clients(name)').gte('starts_at', f).lt('starts_at', t).order('starts_at')),
       qAll(() => sb.from('payments').select('id,appointment_id,staff_id,amount,method,commission,paid_at,appointments(starts_at,service_id,visit_id,clients(name))').gte('paid_at', f).lt('paid_at', t).order('paid_at', { ascending: false })),
       qAll(() => sb.from('payments').select('amount,appointments(visit_id)').gte('paid_at', pf).lt('paid_at', pt)),
@@ -81,7 +100,8 @@ const Admin = (() => {
       qAll(() => sb.from('expenses').select('*').gte('day', st.from).lte('day', st.to).order('day', { ascending: false })),
       qAll(() => sb.from('day_overrides').select('*').gte('day', st.from).lte('day', st.to)),
       qAll(() => sb.from('blocks').select('*').gte('starts_at', f).lt('starts_at', t)),
-      qAll(() => sb.rpc('clients_stats'))]);
+      qAll(() => sb.rpc('clients_stats')),
+      qAll(() => sb.from('appointments').select('client_id,starts_at').eq('status', 'done').lt('starts_at', t).order('starts_at'))]);
     const body = $('#d-body'); if (!body) return;
     const rev = pays.reduce((a, p) => a + +p.amount, 0), prevRev = prevPays.reduce((a, p) => a + +p.amount, 0);
     const comm = pays.reduce((a, p) => a + +p.commission, 0), expSum = exp.reduce((a, x) => a + +x.amount, 0);
@@ -99,6 +119,10 @@ const Admin = (() => {
     const load = av.tot ? Math.round((busyMin() / av.tot) * 100) : 0;
     const delta = (a, b) => { if (!b) return ''; const p = Math.round(((a - b) / b) * 100); return `<div class="d ${p >= 0 ? 'up' : 'dn'}" title="Порівняно з ${esc(fmtDay(pFrom, { day: 'numeric', month: 'short' }))} – ${esc(fmtDay(pTo, { day: 'numeric', month: 'short' }))}">${p >= 0 ? '▲' : '▼'} ${Math.abs(p)}% до ${st.mode === 'month' ? 'тих самих днів минулого місяця' : 'попер. періоду'}</div>`; };
     const pct = (a, b) => (b ? Math.round((a / b) * 100) : 0);
+    // повторні й повернуті клієнти (за завершеними візитами; візит = день, коли клієнт був у салоні)
+    const visDays = histDays(hist);
+    const ret = retOf(visDays, st.from, st.to), prevRet = retOf(visDays, pFrom, pTo);
+    const seenCl = new Set(ap.filter((a) => a.status === 'done').map((a) => a.client_id)).size;
 
     // по днях і способах оплати
     const methods = [...new Set([...(S().settings.pay_methods || []), ...pays.map((p) => p.method)])];
@@ -143,6 +167,8 @@ const Admin = (() => {
         <div class="kpi click" data-k="profit" role="button" tabindex="0" title="Як рахується прибуток і всі витрати за період"><div class="l">Прибуток салону</div><div class="v">${money(rev - comm - expSum)}</div><div class="d mut" title="Виручка − виплати майстрам − витрати">після виплат і витрат</div></div>
         <div class="kpi click" data-k="newcl" role="button" tabindex="0" title="Список нових клієнтів за період"><div class="l">Нових клієнтів</div><div class="v">${newCl}</div><div class="d mut">онлайн-записів: ${pct(online, ap.length)}%</div></div>
         <div class="kpi click" data-k="cancel" role="button" tabindex="0" title="Список скасованих записів і неявок за період"><div class="l">Скасовано / не прийшли</div><div class="v">${cancel} / ${noshow}</div><div class="d mut">${pct(cancel + noshow, ap.length)}% від усіх записів</div></div>
+        <div class="kpi click" data-k="rep" role="button" tabindex="0" title="Клієнти, які вже були раніше й прийшли знову в цьому періоді (перерва до ${BACK_DAYS} днів) — відкрити список"><div class="l">Повторні клієнти</div><div class="v">${ret.rep.length}</div>${delta(ret.rep.length, prevRet.rep.length) || `<div class="d mut">${pct(ret.rep.length, seenCl)}% клієнтів періоду</div>`}</div>
+        <div class="kpi click" data-k="back" role="button" tabindex="0" title="Клієнти, які не були понад 3 місяці (${BACK_DAYS}+ днів) і повернулись у цьому періоді — відкрити список"><div class="l">Повернуті клієнти</div><div class="v" style="color:var(--ok)">${ret.back.length}</div><div class="d mut">не були 3+ міс. і прийшли</div></div>
         <a class="kpi click" href="#/staff/clients/stale" title="Клієнти, які не були понад ${S().settings.stale_days} днів і не мають запису — відкрити список" style="text-decoration:none"><div class="l">Застарілі клієнти</div><div class="v" style="color:var(--warn)">${stale}</div><div class="d mut">не були ${S().settings.stale_days}+ днів →</div></a>
       </div>
       <div class="dgrid">
@@ -263,6 +289,17 @@ const Admin = (() => {
           };
           draw(); } }); };
     const doneTitle = (l) => `Завершені візити: ${l.length}`;
+    // список повторних / повернутих: попередній візит → візит у періоді
+    const clById = Object.fromEntries(cls.map((c) => [c.id, c]));
+    const retSheet = (kind) => perSheet({ load: async (from, to) => {
+        const h = to <= st.to ? visDays : histDays(await qAll(() => sb.from('appointments').select('client_id,starts_at').eq('status', 'done').lt('starts_at', tsRange(to, to)[1]).order('starts_at')));
+        const l = retOf(h, from, to)[kind].sort((a, b) => (a.cur < b.cur ? 1 : -1));
+        return { title: `${kind === 'rep' ? 'Повторні' : 'Повернуті'} клієнти: ${l.length}`,
+          html: `<div class="hint mb">${kind === 'rep' ? `Були в салоні раніше й прийшли знову в цьому періоді (перерва до ${BACK_DAYS} днів).` : `Не були понад 3 місяці (${BACK_DAYS}+ днів) і повернулися в цьому періоді.`}</div>`
+            + (l.map((x) => { const c = clById[x.id] || {};
+              return `<div class="m-row click" data-cl="${x.id}" title="Відкрити картку клієнта"><span class="ava s ${kind === 'back' ? 'y' : ''}">${esc((c.name || '?')[0])}</span><div class="grow"><div class="b sm ell">${esc(c.name || '—')}</div>
+                <div class="xs mut ell">${esc(fmtPhone(c.phone || ''))} · раніше ${dt(x.prev)} → знову ${dt(x.cur)}</div></div>
+                <div class="r sm"><div class="b">${gapTxt(x.gap)}</div><div class="xs mut">${c.visits || 0} ${plural(c.visits || 0, 'візит', 'візити', 'візитів')}</div></div></div>`; }).join('') || `<div class="empty">${kind === 'rep' ? 'Повторних' : 'Повернутих'} клієнтів за цей період немає</div>`) }; } });
     const K = {
       rev: () => jump('d-txcard'), avg: () => jump('d-masters'), load: () => jump('d-masters'), comm: () => jump('d-masters'),
       done: () => catSheet(doneTitle, ['done']),
@@ -270,6 +307,7 @@ const Admin = (() => {
       newcl: () => perSheet({ load: async (from, to) => { const nc = cls.filter((c) => { const d = dayOf(c.created_at); return d >= from && d <= to; }).sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at));
         return { title: `Нові клієнти: ${nc.length}`, html: nc.map((c) => `<div class="m-row click" data-cl="${c.id}" title="Відкрити картку клієнта"><span class="ava s y">${esc(c.name[0] || '?')}</span><div class="grow"><div class="b sm ell">${esc(c.name)}</div>
           <div class="xs mut ell">${esc(fmtPhone(c.phone))} · додано ${dt(c.created_at)}</div></div><div class="r sm">${c.visits} ${plural(c.visits, 'візит', 'візити', 'візитів')}</div></div>`).join('') || '<div class="empty">Нових клієнтів за цей період немає</div>' }; } }),
+      rep: () => retSheet('rep'), back: () => retSheet('back'),
       profit: () => perSheet({ foot: `<button class="btn pri" id="pf-exp" title="Додати витрату (оренда, матеріали…)">${IC.plus} Витрата</button>`,
         load: async (from, to) => { const [f, t] = tsRange(from, to);
           const [pp, ee] = await Promise.all([qAll(() => sb.from('payments').select('amount,commission').gte('paid_at', f).lt('paid_at', t)), qAll(() => sb.from('expenses').select('*').gte('day', from).lte('day', to).order('day', { ascending: false }))]);
