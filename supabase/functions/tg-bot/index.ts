@@ -13,7 +13,8 @@ async function tg(method: string, body: Record<string, unknown> = {}) {
   const r = await fetch(`${API}/${method}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
   return await r.json();
 }
-const send = (chat_id: number, text: string, buttons?: { text: string; url: string }[][]) =>
+type Btn = { text: string; url?: string; callback_data?: string };
+const send = (chat_id: number, text: string, buttons?: Btn[][]) =>
   tg('sendMessage', { chat_id, text, parse_mode: 'HTML', disable_web_page_preview: true, ...(buttons ? { reply_markup: { inline_keyboard: buttons } } : {}) });
 
 async function webhookSecret() {
@@ -34,8 +35,59 @@ async function settings() {
 }
 const site = (st: any) => String(st.site_url || 'https://vapors.app/nana/').replace(/#.*$/, '');
 
+// ---------- вечірня перевірка: чи закрила майстриня записи за день ----------
+const kDay = (d = new Date()) => new Intl.DateTimeFormat('en-CA', { timeZone: TZ, year: 'numeric', month: '2-digit', day: '2-digit' }).format(d);
+function kRange(d: string) {   // доба за Києвом → [початок, кінець) в UTC
+  const noon = new Date(d + 'T12:00:00Z');
+  const off = +new Intl.DateTimeFormat('en-GB', { timeZone: TZ, hour: '2-digit', hourCycle: 'h23' }).format(noon) - 12;
+  const s = Date.parse(d + 'T00:00:00Z') - off * 3600e3;
+  return [new Date(s).toISOString(), new Date(s + 864e5).toISOString()];
+}
+const plural = (n: number, a: string, b: string, c: string) => { const m = Math.abs(n) % 100, d = m % 10; return m > 10 && m < 20 ? c : d === 1 ? a : d >= 2 && d <= 4 ? b : c; };
+async function dayAppts(staffId: string, d: string) {
+  const [from, to] = kRange(d);
+  const { data } = await db.from('appointments').select('starts_at, status, services(name), clients(name)')
+    .eq('staff_id', staffId).eq('demo', false).neq('status', 'cancel').gte('starts_at', from).lt('starts_at', to).order('starts_at');
+  return (data ?? []) as any[];
+}
+const calBtn = (st: any, d: string): Btn[] => [{ text: '📅 Відкрити календар', url: site(st) + '#/staff/cal/' + d }];
+
+async function closeAsk(staffId: string, d: string) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(d)) return { skip: 'bad day' };
+  const { data: s } = await db.from('staff').select('first_name, tg_chat_id, is_active, notify').eq('id', staffId).single();
+  if (!s?.tg_chat_id || !s.is_active || s.notify?.tg === false || s.notify?.close === false) return { skip: 'no telegram' };
+  const all = await dayAppts(staffId, d);
+  if (!all.length) return { skip: 'no appointments' };
+  const st = await settings();
+  const r = await send(s.tg_chat_id,
+    `🌙 ${esc(s.first_name)}, перевір, будь ласка, чи позакривала записи за сьогодні (${all.length}).\nКожен візит має бути «Завершено» (з оплатою) або «Не прийшла».\n\nУсе закрила?`,
+    [[{ text: '✅ Так, усе закрила', callback_data: 'cl:' + d }], calBtn(st, d)]);
+  return { ok: r.ok };
+}
+
+async function onCallback(cq: any) {
+  const chat = (cq.message?.chat?.id ?? cq.from?.id) as number;
+  const d = String(cq.data ?? '').match(/^cl:(\d{4}-\d{2}-\d{2})$/)?.[1];
+  if (!d) return tg('answerCallbackQuery', { callback_query_id: cq.id });
+  const { data: s } = await db.from('staff').select('id, first_name').eq('tg_chat_id', chat).eq('is_active', true).maybeSingle();
+  if (!s) return tg('answerCallbackQuery', { callback_query_id: cq.id, text: 'Не знайшли вас серед персоналу', show_alert: true });
+  const st = await settings();
+  const now = Date.now();
+  const open = (await dayAppts(s.id, d)).filter((a) => a.status === 'booked' && Date.parse(a.starts_at) < now);
+  if (cq.message) await tg('editMessageReplyMarkup', { chat_id: chat, message_id: cq.message.message_id, reply_markup: { inline_keyboard: [] } });
+  if (!open.length) {
+    await tg('answerCallbackQuery', { callback_query_id: cq.id, text: 'Дякую! 💛' });
+    return send(chat, `✅ Чудово, ${esc(s.first_name)}! Усі записи за ${day(d + 'T12:00:00Z')} закриті. Гарного вечора 💛`);
+  }
+  await tg('answerCallbackQuery', { callback_query_id: cq.id, text: 'Ще не все закрито' });
+  const lines = open.map((a) => `• ${hm(a.starts_at)} — ${esc(a.clients?.name)}, ${esc(a.services?.name)}`).join('\n');
+  return send(chat, `😬 Упс, ти не закрила ${open.length} ${plural(open.length, 'запис', 'записи', 'записів')}:\n${lines}\n\nЗакрий ${open.length > 1 ? 'їх' : 'його'} у програмі, повтори спробу й натисни «Готово».`,
+    [[{ text: '✅ Готово', callback_data: 'cl:' + d }], calBtn(st, d)]);
+}
+
 // ---------- повідомлення від людей ----------
 async function onUpdate(up: any) {
+  if (up.callback_query) return onCallback(up.callback_query);
   const m = up.message;
   if (!m?.chat || m.chat.type !== 'private') return;
   const chat = m.chat.id as number;
@@ -144,7 +196,7 @@ async function setup(b: any) {
     }
   }
   if (b.webhook) {
-    out.webhook = await tg('setWebhook', { url: `${SB_URL}/functions/v1/tg-bot`, secret_token: await webhookSecret(), allowed_updates: ['message'] });
+    out.webhook = await tg('setWebhook', { url: `${SB_URL}/functions/v1/tg-bot`, secret_token: await webhookSecret(), allowed_updates: ['message', 'callback_query'] });
     await tg('setMyCommands', { commands: [{ command: 'start', description: 'Почати' }] });
     await tg('setMyShortDescription', { short_description: 'NaNa studio, Львів — онлайн-запис і нагадування про візит' });
     await tg('setMyDescription', { description: 'Бот салону NaNa studio (просп. Свободи, Львів).\nНагадує клієнтам про запис, а майстрам — про нові записи.' });
@@ -202,6 +254,7 @@ Deno.serve(async (req) => {
           shape: /^\d{6,12}:[A-Za-z0-9_-]{30,}$/.test(TOKEN), spaces: /\s/.test(raw) });
       }
       case 'send': return json(await send(Number(body.chat_id), String(body.text ?? '')));
+      case 'close_ask': return json(await closeAsk(String(body.staff_id), String(body.day ?? kDay())));
       default: return json({ error: 'unknown action' }, 400);
     }
   } catch (e) {
