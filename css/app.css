@@ -557,3 +557,8 @@ body.cal-full .st-tabs,body.cal-full .cal-bar #c-new{display:none!important}
 /* режим «Як бачить працівник» */
 .viewas{position:sticky;top:0;z-index:30;display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:0 0 12px;padding:9px 14px;border-radius:12px;background:var(--yel);color:var(--gr2);font-size:14px;font-weight:600;box-shadow:0 4px 14px rgba(30,30,28,.12)}
 .viewas b{font-weight:800} .viewas .btn{margin-left:auto;background:#fff}
+/* історія змін запису */
+.a-log{margin-top:12px;border-top:1px solid var(--line);padding-top:8px}
+.a-log summary{cursor:pointer;font-weight:800;font-size:14px;list-style:none;display:flex;align-items:center;gap:8px}
+.a-log summary::-webkit-details-marker{display:none} .a-log summary::after{content:'▾';color:var(--mut);font-size:12px} .a-log[open] summary::after{content:'▴'}
+.a-log .lg-ln{display:flex;flex-direction:column;gap:1px;padding:6px 0;border-bottom:1px dashed var(--line)} .a-log .lg-ln:last-child{border-bottom:0}

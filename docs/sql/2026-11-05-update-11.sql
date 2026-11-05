@@ -1,3 +1,4 @@
+-- ⚠ Увійшло в оновлення 12 (docs/sql/2026-11-05-update-12.sql) — запускати лише 12.
 -- Оновлення бази 05.11.2026 (11): майстриня, яка створила запис до іншої майстрині, може його перенести або скасувати (виправити помилку).
 -- Запустити один раз у Supabase → SQL Editor (проєкт arkwtpihdaqnwhdcjpqf). Можна запускати повторно.
 create or replace function staff_move(p_appt uuid, p_staff uuid, p_start timestamptz, p_dur int default null, p_force boolean default false)

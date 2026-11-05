@@ -713,7 +713,7 @@ create trigger staff_guard before update on staff for each row execute function 
 
 -- ===== Сповіщення =====
 create or replace function trg_appt_notify() returns trigger language plpgsql security definer set search_path = public as $$
-declare k text; t text; ts text; b text; v_src text; v_old uuid; v_client boolean := false;
+declare k text; t text; ts text; b text; v_src text; v_old uuid; v_client boolean := false; v_actor text;
 begin
   if new.demo then return new; end if;
   if tg_op = 'INSERT' then
@@ -728,13 +728,15 @@ begin
   else
     return new;
   end if;
+  -- хто зробив зміну в панелі (для інших — «Запис перенесено — Поліна»)
+  if not v_client and auth.uid() is not null then select first_name into v_actor from staff where user_id = auth.uid() limit 1; end if;
   select s.name || ' · ' || to_char(new.starts_at at time zone 'Europe/Kyiv', 'DD.MM HH24:MI') || '–'
          || to_char(new.ends_at at time zone 'Europe/Kyiv', 'HH24:MI') || ' · ' || m.first_name || ' · ' || c.name || ' ' || c.phone
     into b from services s, staff m, clients c where s.id = new.service_id and m.id = new.staff_id and c.id = new.client_id;
   -- онлайн-запис і скасування клієнтом — сповіщення всім (навіть якщо робили з пристрою, де відкрита панель);
   -- дія з панелі — автору сірий рядок «Ви записали…» (одразу прочитаний, без Telegram), іншим — звичайне сповіщення
   insert into notifications (staff_id, kind, title, body, appointment_id, day, read_at)
-  select x.id, k, case when me then ts else t end, b, new.id, (new.starts_at at time zone 'Europe/Kyiv')::date, case when me then now() end
+  select x.id, k, case when me then ts when v_actor is not null then t || ' — ' || v_actor else t end, b, new.id, (new.starts_at at time zone 'Europe/Kyiv')::date, case when me then now() end
   from (select x.*, (not v_client and x.user_id is not null and x.user_id = auth.uid()) as me from staff x) x
    where x.is_active and (x.id = new.staff_id or x.id = v_old or x.role in ('owner','admin') or x.me)
      and coalesce((x.notify->>k)::boolean, true);
@@ -742,6 +744,56 @@ begin
 end $$;
 drop trigger if exists appt_notify on appointments;
 create trigger appt_notify after insert or update on appointments for each row execute function trg_appt_notify();
+
+-- ===== Історія змін запису: хто й коли створив, переніс, скасував, змінив послугу чи ціну =====
+create table if not exists appt_log (
+  id bigserial primary key,
+  appointment_id uuid not null references appointments(id) on delete cascade,
+  at timestamptz not null default now(),
+  actor uuid default auth.uid(),
+  who text,                 -- імʼя працівника або «клієнт(ка) онлайн»
+  what text not null
+);
+create index if not exists appt_log_appt on appt_log (appointment_id, at);
+alter table appt_log enable row level security;
+revoke all on appt_log from anon, authenticated;
+grant select on appt_log to authenticated;
+drop policy if exists p_appt_log_read on appt_log;
+create policy p_appt_log_read on appt_log for select to authenticated using ((select is_staff()));
+
+create or replace function trg_appt_log() returns trigger language plpgsql security definer set search_path = public as $$
+declare w text; l text[] := '{}'; tz constant text := 'Europe/Kyiv';
+  om text; nm text; os text; ns text;
+begin
+  if new.demo then return new; end if;
+  if auth.uid() is null then w := 'клієнт(ка) онлайн';
+  else select first_name into w from staff where user_id = auth.uid() limit 1; end if;
+  select first_name into nm from staff where id = new.staff_id;
+  if tg_op = 'INSERT' then
+    l := array['Створено: ' || to_char(new.starts_at at time zone tz, 'DD.MM HH24:MI') || ', ' || coalesce(nm, '')];
+  else
+    if new.starts_at <> old.starts_at or new.staff_id <> old.staff_id then
+      select first_name into om from staff where id = old.staff_id;
+      l := l || ('Перенесено: ' || to_char(old.starts_at at time zone tz, 'DD.MM HH24:MI') || case when new.staff_id <> old.staff_id then ', ' || coalesce(om, '') else '' end
+        || ' → ' || to_char(new.starts_at at time zone tz, 'DD.MM HH24:MI') || case when new.staff_id <> old.staff_id then ', ' || coalesce(nm, '') else '' end);
+    elsif (new.ends_at - new.starts_at) <> (old.ends_at - old.starts_at) then
+      l := l || ('Тривалість: ' || (extract(epoch from old.ends_at - old.starts_at) / 60)::int || ' → ' || (extract(epoch from new.ends_at - new.starts_at) / 60)::int || ' хв');
+    end if;
+    if new.service_id <> old.service_id then
+      select name into os from services where id = old.service_id; select name into ns from services where id = new.service_id;
+      l := l || ('Послуга: ' || coalesce(os, '') || ' → ' || coalesce(ns, ''));
+    end if;
+    if new.price <> old.price then l := l || ('Ціна: ' || trim_scale(old.price)::text || ' → ' || trim_scale(new.price)::text || ' ₴'); end if;
+    if new.status <> old.status then
+      l := l || (case new.status when 'done' then 'Завершено й оплачено' when 'noshow' then 'Позначено «не прийшов(ла)»'
+        when 'cancel' then 'Скасовано' || coalesce(': ' || nullif(new.cancel_reason, ''), '') when 'booked' then 'Відновлено (знову «Записано»)' else new.status end);
+    end if;
+  end if;
+  if coalesce(array_length(l, 1), 0) > 0 then insert into appt_log (appointment_id, who, what) select new.id, w, x from unnest(l) x; end if;
+  return new;
+end $$;
+drop trigger if exists appt_log on appointments;
+create trigger appt_log after insert or update on appointments for each row execute function trg_appt_log();
 
 -- нове сповіщення → у Telegram (якщо співробітник підключив бота)
 create or replace function trg_notif_tg() returns trigger language plpgsql security definer set search_path = public as $$

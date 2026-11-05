@@ -526,7 +526,7 @@ const Staff = (() => {
         ${who ? `<dt>Записав(ла)</dt><dd>${esc(who)}${a.created_at ? ` · ${esc(relDay(dayOf(a.created_at)))}, ${fmtT(a.created_at)}` : ''}</dd>` : ''}
         ${pay ? `<dt>Оплачено</dt><dd>${money(pay.amount)} · ${esc(pay.method)}</dd>` : ''}
         ${a.cancel_reason ? `<dt>Причина</dt><dd>${esc(a.cancel_reason)}</dd>` : ''}${a.cancelled_by ? `<dt>Скасував(ла)</dt><dd>${a.cancelled_by === 'client' ? 'клієнт онлайн' : 'салон'}</dd>` : ''}
-        ${a.visits?.comment ? `<dt>Коментар</dt><dd>${esc(a.visits.comment)}</dd>` : ''}</dl><div id="a-visit"></div>
+        ${a.visits?.comment ? `<dt>Коментар</dt><dd>${esc(a.visits.comment)}</dd>` : ''}</dl><div id="a-visit"></div><div id="a-log"></div>
       ${mine && ['booked', 'done'].includes(a.status) ? `<div class="row wrap mt" style="gap:8px">
         ${a.status === 'booked' || isBoss() ? `<button class="btn sm" id="a-svc" title="Якщо фактично зробили іншу послугу — змінити її, ціну й тривалість">✎ Змінити послугу</button>` : ''}
         <button class="btn sm" id="a-add" title="Додати до цього візиту ще одну послугу (одразу після цієї)">${IC.plus} Додати послугу</button></div>` : ''}
@@ -545,6 +545,11 @@ const Staff = (() => {
         <div class="grow"><div class="b ell">${esc(svcById(x.service_id)?.name || '')}</div><div class="xs mut">${fmtT(x.starts_at)}–${fmtT(x.ends_at)} · ${esc(byId(x.staff_id)?.first_name || '')}</div></div><b class="nw">${money(x.price)}</b></div>`).join('')}
         <div class="row sp sm b" style="padding:6px 2px 0"><span>Разом</span><span>${money(vis.reduce((t, x) => t + +x.price, 0))}</span></div></div>`;
       $$('[data-vis]', s.el).forEach((r) => (r.onclick = () => { const o = (S.dayAppts || []).find((x) => x.id === r.dataset.vis); if (o) { s.close(); openAppt(o); } })); });
+    // історія змін: хто й коли створив, переніс, скасував, змінив послугу чи ціну
+    sb.from('appt_log').select('at,who,what').eq('appointment_id', a.id).order('at').then(({ data: log, error }) => {
+      if (error || !log || !log.length || !s.ov.isConnected) return;
+      $('#a-log', s.el).innerHTML = `<details class="a-log"${log.length <= 3 ? ' open' : ''}><summary>Історія змін <span class="pill g">${log.length}</span></summary>${log.map((x) =>
+        `<div class="lg-ln"><span class="xs mut nw">${esc(relDay(dayOf(x.at)))}, ${fmtT(x.at)}</span><span class="sm"><b>${esc(x.who || 'система')}</b> — ${esc(x.what)}</span></div>`).join('')}</details>`; });
     const ab = $('#a-add', s.el); if (ab) ab.onclick = async () => {
       const { data: vis } = await vq; const end = (vis || []).reduce((t, x) => Math.max(t, Date.parse(x.ends_at)), Date.parse(a.ends_at));
       s.close(); newAppt({ client: { id: c.id, name: c.name, phone: c.phone }, mid: a.staff_id, day: dayOf(new Date(end).toISOString()), min: kParts(new Date(end).toISOString()).min, visit: a.visit_id }); };
