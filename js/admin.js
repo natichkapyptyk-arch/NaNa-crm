@@ -565,7 +565,7 @@ const Admin = (() => {
     // «назад» — туди, звідки відкрили картку (календар, дашборд, персонал); інакше власниці/адміну — список персоналу
     const back = prevHash.startsWith('#/staff') && !prevHash.startsWith('#/staff/team/') ? prevHash : boss ? '#/staff/team' : '';
     const backTip = /^#\/staff\/?(cal|$)/.test(back) ? 'Назад до календаря' : back.startsWith('#/staff/team') ? 'Назад до списку персоналу' : 'Назад';
-    main.innerHTML = `<div class="pg-h">${back ? `<a class="btn ico" href="${back}" title="${backTip}">${IC.back}</a>` : ''}<h1>${isNew ? 'Новий співробітник' : esc(fullName(p))}</h1></div>
+    main.innerHTML = `<div class="pg-h">${back ? `<a class="btn ico" href="${back}" title="${backTip}">${IC.back}</a>` : ''}<h1>${isNew ? 'Новий співробітник' : esc(fullName(p))}</h1>${!isNew && boss && p.id !== S().me.id && p.is_active && !S().viewAs ? `<a class="btn sm" href="${location.pathname}?as=${p.id}#/staff/cal" target="_blank" rel="noopener" title="Відкрити в новій вкладці панель так, як її бачить ${esc(p.first_name)} (зміни в цьому режимі вимкнено)">👁 Як бачить ${esc(p.first_name)}</a>` : ''}</div>
       <div class="card"><div class="row wrap" style="gap:16px">
         <div style="text-align:center"><div id="ph-box">${avatar(p, 'xl')}</div>${can ? `<label class="btn sm mt" title="Завантажити фото (буде обрізано квадратом)">📷 Фото<input type="file" accept="image/*" id="ph-in" hidden></label>` : ''}</div>
         <div class="grow" style="min-width:220px"><div class="three"><div><label class="lb" for="f-ln">Прізвище</label><input class="inp" id="f-ln" value="${esc(p.last_name)}" ${can ? '' : 'disabled'}></div>

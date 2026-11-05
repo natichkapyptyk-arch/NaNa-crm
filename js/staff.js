@@ -25,8 +25,30 @@ const Staff = (() => {
     [S.staff, S.services, S.ms, S.hours, S.settings, S.pay] = r.map((x) => x.data);
     const { data: { user } } = await sb.auth.getUser();
     S.me = S.staff.find((s) => s.user_id === user?.id && s.is_active) || null;
+    S.realMe = S.me; S.viewAs = null;
+    // власниця/адмін: «Переглянути як Поліна» — панель так, як її бачить працівник (?as=<імʼя|логін|id>); зміни в цьому режимі вимкнено
+    let as = null; try { as = new URLSearchParams(location.search).get('as') || sessionStorage.getItem('nana_as'); } catch (e) { /* */ }
+    if (as && S.me && ['owner', 'admin'].includes(S.me.role)) {
+      const k = as.trim().toLowerCase();
+      const t = S.staff.find((x) => x.is_active && x.id !== S.me.id && (x.id === as || (x.login || '').toLowerCase() === k || (x.first_name || '').toLowerCase() === k));
+      if (t) { S.viewAs = t; S.me = t; try { sessionStorage.setItem('nana_as', t.id); } catch (e) { /* */ } guardWrites(); }
+    }
     S.loaded = true;
   }
+  // режим перегляду: читати можна, а будь-які зміни (запис, оплата, налаштування…) не відправляються в базу
+  function guardWrites() {
+    if (sb.__guard) return; sb.__guard = true;
+    const rpc = sb.rpc.bind(sb), from = sb.from.bind(sb), READ = ['clients_stats', 'pub_busy', 'pub_catalog', 'client_visit'];
+    const blocked = () => {
+      toast(`Режим перегляду «як ${S.viewAs?.first_name || ''}» — зміни не зберігаються`, 'bad', 3500);
+      const res = { data: null, error: { message: 'Режим перегляду — зміни вимкнено' } };
+      const p = new Proxy(function () {}, { get: (_, k) => (k === 'then' ? (ok, er) => Promise.resolve(res).then(ok, er) : () => p), apply: () => p });
+      return p;
+    };
+    sb.rpc = (n, a, o) => (S.viewAs && !READ.includes(n) ? blocked() : rpc(n, a, o));
+    sb.from = (t) => { const q = from(t); if (S.viewAs) for (const m of ['insert', 'update', 'upsert', 'delete']) q[m] = blocked; return q; };
+  }
+  const exitViewAs = () => { try { sessionStorage.removeItem('nana_as'); } catch (e) { /* */ } location.href = location.pathname + '#/staff/team'; };
   const reload = async () => { await loadAll(); };
 
   /* ================= вхід ================= */
@@ -105,7 +127,8 @@ const Staff = (() => {
         <div class="ttl" id="st-ttl"></div>
         <button class="btn ico" id="st-bell" title="Сповіщення про записи">${IC.bell}<span class="badge hide" id="st-bc">0</span><span class="badge onl hide" id="st-bo" title="Нові онлайн-записи">0</span></button>
         <div class="me" id="st-me" title="Мій профіль і вихід">${avatar(S.me, 's')}<span class="sm b nm">${esc(S.me.first_name)}</span></div></div>
-        <div class="st-shell"><nav class="st-nav" id="st-nav"></nav><main class="st-main"><div class="pg" id="st-main"></div></main></div><nav class="st-tabs" id="st-tabs"></nav>`;
+        <div class="st-shell"><nav class="st-nav" id="st-nav"></nav><main class="st-main">${S.viewAs ? `<div class="viewas">👁 Ви бачите панель як <b>${esc(S.viewAs.first_name)}</b> (${S.viewAs.role === 'master' ? 'майстер' : S.viewAs.role === 'admin' ? 'адмін' : 'власниця'}) — зміни вимкнено<button class="btn sm" id="va-x" title="Повернутись до своєї панелі">Вийти з перегляду</button></div>` : ''}<div class="pg" id="st-main"></div></main></div><nav class="st-tabs" id="st-tabs"></nav>`;
+      const vx = $('#va-x'); if (vx) vx.onclick = exitViewAs;
       $('#st-bell').onclick = (e) => { e.stopPropagation(); notifPanel(); };
       $('#st-me').onclick = meMenu;
       pollNotif(); clearInterval(S.poll); S.poll = setInterval(pollNotif, 30000);

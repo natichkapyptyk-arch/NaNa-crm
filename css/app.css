@@ -554,3 +554,6 @@ body.cal-full .st-tabs,body.cal-full .cal-bar #c-new{display:none!important}
 /* плитка «Записи» — джерела (Instagram, Google Maps…) */
 .src-ic{font-size:20px;width:30px;flex:none;text-align:center}
 .kpi .src-d span{cursor:pointer;white-space:nowrap} .kpi .src-d span:hover{text-decoration:underline}
+/* режим «Як бачить працівник» */
+.viewas{position:sticky;top:0;z-index:30;display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:0 0 12px;padding:9px 14px;border-radius:12px;background:var(--yel);color:var(--gr2);font-size:14px;font-weight:600;box-shadow:0 4px 14px rgba(30,30,28,.12)}
+.viewas b{font-weight:800} .viewas .btn{margin-left:auto;background:#fff}
