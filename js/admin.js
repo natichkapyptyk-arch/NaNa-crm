@@ -603,7 +603,7 @@ const Admin = (() => {
               + '<div class="empty" id="ms-none" hidden>Послуг не знайдено</div>'; })()}
           <div class="hint">Колонки: тривалість (хв) і ціна (₴) саме в цього майстра.</div></div>
         <div class="card"><h3>Сповіщення</h3>
-          <div class="col">${[['new', 'Нові записи'], ['cancel', 'Скасування'], ['move', 'Перенесення'], ['daily', 'Розклад на день зранку (у Telegram)'], ['close', 'Ввечері: «чи закрила записи?» (у Telegram)']].map(([k, n]) => `<label class="sw" title="Отримувати сповіщення: ${n.toLowerCase()}"><input type="checkbox" data-nt="${k}" ${nt[k] !== false ? 'checked' : ''} ${can ? '' : 'disabled'}><i></i><span>${n}</span></label>`).join('')}
+          <div class="col">${[['new', 'Нові записи'], ['cancel', 'Скасування'], ['move', 'Перенесення'], ['daily', 'Розклад на день зранку (у Telegram)'], ['close', 'Ввечері: «чи закрила записи?» (у Telegram)'], ['open', 'З 22-го: «відкрий графік на наступний місяць» (у Telegram)']].map(([k, n]) => `<label class="sw" title="Отримувати сповіщення: ${n.toLowerCase()}"><input type="checkbox" data-nt="${k}" ${nt[k] !== false ? 'checked' : ''} ${can ? '' : 'disabled'}><i></i><span>${n}</span></label>`).join('')}
           <label class="sw" title="Дублювати сповіщення в Telegram"><input type="checkbox" data-nt="tg" ${nt.tg !== false ? 'checked' : ''} ${can ? '' : 'disabled'}><i></i><span>Надсилати в Telegram</span></label></div>
           <div class="hint">${p.role === 'master' ? 'Майстер отримує сповіщення лише про свої записи, а зранку — розклад лише своїх записів.' : 'Власниця й адмін отримують сповіщення про всі записи, а зранку — розклад усього салону.'}</div>
           ${!isNew && bot ? `<div class="sect"><h3>${IC.tg.replace('<svg', '<svg width="18" height="18"')} Telegram ${p.tg_chat_id ? '<span class="pill done">підключено</span>' : '<span class="pill g">не підключено</span>'}</h3>
@@ -730,7 +730,11 @@ const Admin = (() => {
         ${'close_hour' in s ? `<div class="two"><div><label class="lb" for="s-clh">Вечірня перевірка записів о</label><select class="inp" id="s-clh" title="Кожна майстриня, у якої сьогодні були записи, отримує в Telegram питання з кнопкою «Так, усе закрила». Бот перевіряє, чи не лишилось незавершених записів">
           <option value="" ${s.close_hour == null ? 'selected' : ''}>не питати</option>${[17, 18, 19, 20, 21, 22, 23].map((h) => `<option value="${h}" ${+s.close_hour === h && s.close_hour != null ? 'selected' : ''}>${h}:00</option>`).join('')}</select></div>
           <div><label class="lb">&nbsp;</label><button class="btn" id="s-cln" title="Надіслати перевірку за сьогодні зараз — тим, у кого сьогодні були записи">${IC.tg.replace('<svg', '<svg width="16" height="16"')} Надіслати зараз</button></div></div>
-          <div class="hint">Після кнопки «Так, усе закрила» бот перевіряє, чи всі записи за день «Завершено» або «Не прийшла». Якщо ні — пише, які саме, і просить натиснути «Готово» ще раз.</div>` : ''}</div>
+          <div class="hint">Після кнопки «Так, усе закрила» бот перевіряє, чи всі записи за день «Завершено» або «Не прийшла». Якщо ні — пише, які саме, і просить натиснути «Готово» ще раз.</div>` : ''}
+        ${'open_day' in s ? `<div class="two"><div><label class="lb" for="s-od">Нагадувати відкрити графік з</label><select class="inp" id="s-od" title="З цього числа щодня о 12:00 бот нагадує майстриням відкрити графік на наступний місяць, доки не відкриють. Тобі — з +3 днів, хто ще не відкрив">
+          <option value="" ${s.open_day == null ? 'selected' : ''}>не нагадувати</option>${[15, 18, 20, 22, 25].map((d) => `<option value="${d}" ${+s.open_day === d && s.open_day != null ? 'selected' : ''}>${d} числа</option>`).join('')}</select></div>
+          <div><label class="lb">&nbsp;</label><button class="btn" id="s-odn" title="Надіслати нагадування про графік на наступний місяць зараз — тим, хто ще не відкрив">${IC.tg.replace('<svg', '<svg width="16" height="16"')} Надіслати зараз</button></div></div>
+          <div class="hint">Онлайн-запис на місяць відкривається, коли майстриня натисне «Відкрити графік на …» у «Графіку». Кнопка «Готово» в боті перевіряє, чи це зроблено.</div>` : ''}</div>
       <div class="card"><h3>Оплата</h3><label class="lb">Способи оплати</label><div class="chips" id="s-pm"></div>
         <div class="row mt"><input class="inp" id="s-pmn" placeholder="Новий спосіб, напр. Термінал"><button class="btn" id="s-pma" title="Додати спосіб оплати">${IC.plus}</button></div>
         <label class="lb" for="s-pl">Посилання для оплати за QR</label><input class="inp" id="s-pl" value="${esc(s.pay_link || '')}" placeholder="напр. посилання на банку Monobank">
@@ -765,6 +769,11 @@ const Admin = (() => {
       const { data, error } = await sb.rpc('daily_send_now'); if (error) return toast(errMsg(error), 'bad', 5000);
       toast(data ? `Надіслано: ${data} ${plural(data, 'повідомлення', 'повідомлення', 'повідомлень')}` : 'Сьогодні ні в кого немає записів (або ніхто не підключив бота)', data ? 'ok' : '', 5000);
     });
+    const odn = $('#s-odn', main); if (odn) odn.onclick = (e) => busy(e.currentTarget, async () => {
+      if (!(await confirmBox('Надіслати нагадування про графік зараз?', { ok: 'Надіслати', sub: 'Майстрині, які ще не відкрили графік на наступний місяць, отримають нагадування з кнопкою «Готово», а ти — список, хто ще не відкрив. Автоматично сьогодні вже не надсилатиметься.' }))) return;
+      const { data, error } = await sb.rpc('open_send_now'); if (error) return toast(errMsg(error), 'bad', 5000);
+      toast(data ? `Надіслано: ${data} ${plural(data, 'повідомлення', 'повідомлення', 'повідомлень')}` : 'Усі вже відкрили графік (або ніхто не підключив бота)', data ? 'ok' : '', 5000);
+    });
     const cn = $('#s-cln', main); if (cn) cn.onclick = (e) => busy(e.currentTarget, async () => {
       if (!(await confirmBox('Надіслати вечірню перевірку зараз?', { ok: 'Надіслати', sub: 'Кожна майстриня з підключеним ботом, у якої сьогодні були записи, отримає питання «Чи позакривала записи?». Автоматично сьогодні вже не надсилатиметься.' }))) return;
       const { data, error } = await sb.rpc('close_send_now'); if (error) return toast(errMsg(error), 'bad', 5000);
@@ -779,6 +788,7 @@ const Admin = (() => {
         cancel_hours: Math.max(0, +$('#s-ch', main).value || 0), stale_days: Math.max(7, +$('#s-sd', main).value || 60), remind_hours: rh.length ? rh : [24, 2],
         pay_methods: methods, pay_link: $('#s-pl', main).value.trim() || null, updated_at: new Date().toISOString() };
       if ($('#s-dh', main)) row.daily_hour = $('#s-dh', main).value === '' ? null : +$('#s-dh', main).value;
+      if ($('#s-od', main)) row.open_day = $('#s-od', main).value === '' ? null : +$('#s-od', main).value;
       if ($('#s-clh', main)) row.close_hour = $('#s-clh', main).value === '' ? null : +$('#s-clh', main).value;
       if (toMin(row.close_time) <= toMin(row.open_time)) return toast('Час закриття має бути пізніше за відкриття', 'bad');
       const { error } = await sb.from('settings').update(row).eq('id', 1); if (error) return toast(errMsg(error), 'bad');

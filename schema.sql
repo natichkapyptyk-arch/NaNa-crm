@@ -130,6 +130,15 @@ create table if not exists day_overrides (            -- окремий день
   primary key (staff_id, day)
 );
 
+-- місяці, на які майстриня відкрила онлайн-запис (кнопка «Відкрити графік на …» у «Графіку»)
+create table if not exists month_open (
+  staff_id uuid not null references staff(id) on delete cascade,
+  month date not null check (extract(day from month) = 1),   -- перше число місяця
+  opened_at timestamptz not null default now(),
+  opened_by uuid default auth.uid(),
+  primary key (staff_id, month)
+);
+
 create table if not exists blocks (                   -- закритий час усередині дня
   id uuid primary key default gen_random_uuid(),
   staff_id uuid not null references staff(id) on delete cascade,
@@ -297,6 +306,9 @@ begin
     if p_start > now() + make_interval(days => st.max_days) then
       return format('Запис відкрито на %s днів уперед', st.max_days);
     end if;
+    if not exists (select 1 from month_open mo where mo.staff_id = p_staff and mo.month = date_trunc('month', d)::date) then
+      return 'Майстер ще не відкрив графік на цей місяць';
+    end if;
   end if;
   select * into o from day_overrides x where x.staff_id = p_staff and x.day = d;
   if found then
@@ -339,6 +351,8 @@ create or replace function pub_catalog() returns jsonb language sql stable secur
                  where ms.is_active and s.is_active and m.is_active and m.is_bookable), '[]'),
     'hours', coalesce((select jsonb_agg(jsonb_build_object('m', staff_id, 'w', weekday, 's', to_char(start_time, 'HH24:MI'),
                  'e', to_char(end_time, 'HH24:MI'))) from work_hours), '[]'),
+    'open', coalesce((select jsonb_agg(jsonb_build_object('m', staff_id, 'mo', to_char(month, 'YYYY-MM')))
+                 from month_open where month >= date_trunc('month', now() at time zone 'Europe/Kyiv')::date), '[]'),
     'now', now())
 $$;
 
@@ -941,6 +955,97 @@ grant execute on function close_send_now() to authenticated;
 
 select cron.schedule('nana-close', '*/15 * * * *', 'select nana_priv.close_tick()')
  where not exists (select 1 from cron.job where jobname = 'nana-close');
+
+-- графік на наступний місяць (05.11.2026, update-14): онлайн-запис на місяць відкривається кнопкою в «Графіку»;
+-- з settings.open_day (22) щодня о 12:00 бот нагадує майстриням, які ще не відкрили наступний місяць (кнопка «Готово» → перевірка),
+-- власниці/адміну з open_day+3 — хто ще не відкрив
+alter table month_open enable row level security;
+drop policy if exists p_mo_read on month_open;
+create policy p_mo_read on month_open for select to authenticated using ((select is_staff()));
+revoke insert, update, delete on month_open from anon, authenticated;
+grant select on month_open to authenticated;
+
+alter table settings add column if not exists open_day int default 22 check (open_day between 1 and 28);   -- з якого числа нагадувати; null — не нагадувати
+alter table settings add column if not exists open_sent date;
+
+-- відкрити / закрити місяць: майстриня — свій, власниця/адмін — будь-кого
+create or replace function month_open_set(p_staff uuid, p_month date, p_open boolean default true) returns boolean
+language plpgsql security definer set search_path = public as $$
+declare m date := date_trunc('month', p_month)::date;
+begin
+  if not (coalesce(is_boss(), false) or exists (select 1 from staff s where s.id = p_staff and s.user_id = auth.uid() and s.is_active)) then
+    raise exception 'Можна відкривати лише свій графік';
+  end if;
+  if p_open then
+    insert into month_open (staff_id, month) values (p_staff, m) on conflict do nothing;
+  else
+    delete from month_open where staff_id = p_staff and month = m;
+  end if;
+  return p_open;
+end $$;
+revoke execute on function month_open_set(uuid, date, boolean) from public, anon;
+grant execute on function month_open_set(uuid, date, boolean) to authenticated;
+
+create or replace function nana_priv.open_tick(p_force boolean default false) returns int
+language plpgsql security definer set search_path = public as $$
+declare st settings; k uuid; d date := (now() at time zone 'Europe/Kyiv')::date; hh int := extract(hour from now() at time zone 'Europe/Kyiv');
+  cm date := date_trunc('month', d)::date; nm date := (date_trunc('month', d) + interval '1 month')::date;
+  dd int := extract(day from d); x record; mo date; n int := 0; late text; site text;
+  mn text[] := array['січень','лютий','березень','квітень','травень','червень','липень','серпень','вересень','жовтень','листопад','грудень'];
+begin
+  select * into st from settings where id = 1;
+  if st.open_day is null and not p_force then return 0; end if;
+  if not p_force and (hh < 12 or st.open_sent is not distinct from d) then return 0; end if;
+  update settings set open_sent = d where id = 1;
+  select hook_key into k from app_secrets where id = 1;
+  site := regexp_replace(coalesce(nullif(st.site_url, ''), 'https://nana-studio.pages.dev/'), '#.*$', '');
+  -- майстриням: поточний місяць (якщо раптом закритий) і наступний — з open_day
+  for x in select s.* from staff s where s.is_active and s.is_bookable and s.tg_chat_id is not null
+             and coalesce((s.notify->>'tg')::boolean, true) and coalesce((s.notify->>'open')::boolean, true) order by s.sort loop
+    foreach mo in array array[cm, nm] loop
+      if mo = nm and dd < coalesce(st.open_day, 22) and not p_force then continue; end if;
+      if exists (select 1 from month_open o where o.staff_id = x.id and o.month = mo) then continue; end if;
+      perform net.http_post(
+        url := 'https://arkwtpihdaqnwhdcjpqf.supabase.co/functions/v1/tg-bot',
+        body := jsonb_build_object('action', 'month_ask', 'staff_id', x.id, 'month', to_char(mo, 'YYYY-MM'), 'first', mo = nm and dd = coalesce(st.open_day, 22)),
+        headers := jsonb_build_object('Content-Type', 'application/json', 'x-hook-key', k::text));
+      n := n + 1;
+    end loop;
+  end loop;
+  -- власниці / адміну: хто ще не відкрив наступний місяць (з open_day + 3)
+  if dd >= coalesce(st.open_day, 22) + 3 or p_force then
+    select string_agg('• ' || nana_priv.h(s.first_name || coalesce(' ' || nullif(trim(s.last_name), ''), '')) || case when s.tg_chat_id is null then ' (бот не підключено)' else '' end, chr(10) order by s.sort)
+      into late from staff s where s.is_active and s.is_bookable
+       and not exists (select 1 from month_open o where o.staff_id = s.id and o.month = nm);
+    if late is not null then
+      for x in select s.* from staff s where s.is_active and s.role in ('owner', 'admin') and s.tg_chat_id is not null
+                 and coalesce((s.notify->>'tg')::boolean, true) and coalesce((s.notify->>'open')::boolean, true) loop
+        perform net.http_post(
+          url := 'https://arkwtpihdaqnwhdcjpqf.supabase.co/functions/v1/tg-bot',
+          body := jsonb_build_object('action', 'send', 'chat_id', x.tg_chat_id, 'text',
+            '📅 Ще не відкрили графік на ' || mn[extract(month from nm)::int] || ':' || chr(10) || late || chr(10) || chr(10)
+            || 'Поки графік закритий, клієнтки не можуть записатись до них онлайн на ' || mn[extract(month from nm)::int] || '.' || chr(10)
+            || '<a href="' || site || '#/staff/sched">Відкрити «Графік»</a>'),
+          headers := jsonb_build_object('Content-Type', 'application/json', 'x-hook-key', k::text));
+        n := n + 1;
+      end loop;
+    end if;
+  end if;
+  return n;
+end $$;
+revoke execute on function nana_priv.open_tick(boolean) from public, anon, authenticated;
+
+-- «Надіслати нагадування зараз» з Налаштувань (лише власниця/адмін)
+create or replace function open_send_now() returns int language plpgsql security definer set search_path = public as $$
+begin
+  if not coalesce(is_boss(), false) then raise exception 'Лише для власниці або адміністратора'; end if;
+  return nana_priv.open_tick(true);
+end $$;
+revoke execute on function open_send_now() from public, anon;
+grant execute on function open_send_now() to authenticated;
+
+select cron.schedule('nana-open', '*/15 * * * *', 'select nana_priv.open_tick()')
+ where not exists (select 1 from cron.job where jobname = 'nana-open');
 
 -- ===== RLS і доступ =====
 do $$ declare t text; begin

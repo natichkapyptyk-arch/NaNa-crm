@@ -866,11 +866,20 @@ const Staff = (() => {
     const m = byId(mid);
     S.schedMonth = S.schedMonth || today().slice(0, 7) + '-01';
     const mon = S.schedMonth, mEnd = addDays(mon.slice(0, 8) + '01', 40).slice(0, 8) + '01', last = addDays(mEnd, -1);
-    const [{ data: ov }, { data: bl }] = await Promise.all([
+    const [{ data: ov }, { data: bl }, { data: mo, error: moErr }] = await Promise.all([
       sb.from('day_overrides').select('*').eq('staff_id', mid).gte('day', mon).lte('day', last),
-      sb.from('blocks').select('*').eq('staff_id', mid).gte('starts_at', kDate(mon, 0).toISOString()).lt('starts_at', kDate(mEnd, 0).toISOString()).order('starts_at')]);
-    const wh = S.hours.filter((h) => h.staff_id === mid);
+      sb.from('blocks').select('*').eq('staff_id', mid).gte('starts_at', kDate(mon, 0).toISOString()).lt('starts_at', kDate(mEnd, 0).toISOString()).order('starts_at'),
+      sb.from('month_open').select('staff_id,month,opened_at,opened_by').eq('month', mon)]);
     const canEdit = isBoss() || mid === S.me.id;
+    // онлайн-запис на місяць відкривається кнопкою (update-14); до оновлення бази — блоку немає
+    const moOk = !moErr, isPast = mon < today().slice(0, 7) + '-01', openOf = (id) => (mo || []).find((x) => x.staff_id === id), op = openOf(mid);
+    const mName = MONTHS[+mon.slice(5, 7) - 1];
+    const moBar = !moOk || isPast || !m.is_bookable ? '' : op
+      ? `<div class="mo-st ok">✅ Онлайн-запис на ${mName} відкрито${op.opened_at ? ' · ' + esc(fmtDay(dayOf(op.opened_at), { day: 'numeric', month: 'short' })) : ''}${op.opened_by ? ', ' + esc(staffByUser(op.opened_by)?.first_name || '') : ''}
+          ${canEdit ? `<button class="btn sm ghost" id="mo-close" title="Закрити онлайн-запис на ${mName} (записи, що вже є, залишаться)">Закрити</button>` : ''}</div>`
+      : `<div class="mo-st lock">🔒 Онлайн-запис на ${mName} ще закритий — клієнтки не бачать вільного часу.${canEdit ? ' Перевірте вихідні й особливі дні нижче, потім натисніть кнопку.' : ''}</div>
+         ${canEdit ? `<button class="btn pri wide mb" id="mo-open" title="Відкрити онлайн-запис на ${mName} за цим графіком">Відкрити графік на ${mName}</button>` : ''}`;
+    const wh = S.hours.filter((h) => h.staff_id === mid);
     const rows = [1, 2, 3, 4, 5, 6, 7].map((d) => { const h = wh.find((x) => x.weekday === d);
       return `<div class="wh-row"><label class="sw" title="${WDL[d]}: робочий чи вихідний"><input type="checkbox" data-wd="${d}" ${h ? 'checked' : ''} ${canEdit ? '' : 'disabled'}><i></i><b>${WD[d]}</b></label>
         <input class="inp" type="time" step="600" data-a="${d}" value="${h ? h.start_time.slice(0, 5) : toHM(toMin(S.settings.open_time))}" ${h && canEdit ? '' : 'disabled'} title="Початок роботи">
@@ -886,11 +895,11 @@ const Staff = (() => {
     }
     const [yy, mm] = mon.split('-');
     main.innerHTML = `<div class="pg-h"><h1>Графік</h1>${canEdit ? `<button class="btn" id="s-blk" title="Закрити частину дня або весь день">${IC.lock} Закрити час</button>` : ''}</div>
-      ${list.length > 1 ? `<div class="chips scroll mb">${list.map((x) => `<a class="chip ${x.id === mid ? 'on' : ''}" href="#/staff/sched/${x.id}" title="Графік: ${esc(fullName(x))}">${esc(x.first_name)}</a>`).join('')}</div>` : ''}
-      <div class="dgrid" style="margin-top:0"><div class="card"><h3>Звичайний тиждень ${avatar(m, 's')}</h3><div class="hint mb" style="margin-top:-6px">У ці години клієнти автоматично можуть записатись онлайн.</div>${rows}
+      ${list.length > 1 ? `<div class="chips scroll mb">${list.map((x) => `<a class="chip ${x.id === mid ? 'on' : ''}" href="#/staff/sched/${x.id}" title="Графік: ${esc(fullName(x))}${moOk && !isPast && x.is_bookable && !openOf(x.id) ? ' — графік на ' + mName + ' ще не відкрито' : ''}">${esc(x.first_name)}${moOk && !isPast && x.is_bookable && !openOf(x.id) ? ' 🔒' : ''}</a>`).join('')}</div>` : ''}
+      <div class="dgrid" style="margin-top:0"><div class="card"><h3>Звичайний тиждень ${avatar(m, 's')}</h3><div class="hint mb" style="margin-top:-6px">У ці години клієнти можуть записатись онлайн — у місяцях, на які відкрито графік.</div>${rows}
         ${canEdit ? '<button class="btn pri wide mt" id="s-save" title="Зберегти години роботи">Зберегти тиждень</button>' : ''}</div>
       <div class="card"><div class="row sp mb"><button class="btn ico sm" id="s-pm" title="Попередній місяць">${IC.back}</button><h3 style="margin:0;text-transform:capitalize">${MONTHS[+mm - 1]} ${yy}</h3><button class="btn ico sm" id="s-nm" title="Наступний місяць">${IC.fwd}</button></div>
-        <div class="mcal">${cells}</div><div class="legend"><span><i style="background:var(--card);border:1.5px solid var(--line2)"></i>за графіком</span><span><i style="background:var(--yels);border:1.5px solid var(--yelb)"></i>особливі години</span><span><i style="background:var(--st4)"></i>вихідний</span></div></div></div>
+        ${moBar}<div class="mcal">${cells}</div><div class="legend"><span><i style="background:var(--card);border:1.5px solid var(--line2)"></i>за графіком</span><span><i style="background:var(--yels);border:1.5px solid var(--yelb)"></i>особливі години</span><span><i style="background:var(--st4)"></i>вихідний</span></div></div></div>
       ${bl.length ? `<div class="card mt"><h3>Закритий час у цьому місяці</h3>${bl.map((b) => `<div class="list-row" style="cursor:default"><div class="grow"><div class="nm">${esc(relDay(dayOf(b.starts_at)))}, ${fmtT(b.starts_at)}–${fmtT(b.ends_at)}</div><div class="sub">${esc(b.reason)}</div></div>${canEdit ? `<button class="btn sm red" data-unb="${b.id}" title="Відкрити цей час для запису">Відкрити</button>` : ''}</div>`).join('')}</div>` : ''}`;
     $$('[data-wd]', main).forEach((c) => (c.onchange = () => { const d = c.dataset.wd; $(`[data-a="${d}"]`, main).disabled = !c.checked; $(`[data-b="${d}"]`, main).disabled = !c.checked; }));
     const sv = $('#s-save', main); if (sv) sv.onclick = () => busy(sv, async () => {
@@ -903,6 +912,13 @@ const Staff = (() => {
     });
     const mv = (n) => { const [y, m2] = S.schedMonth.split('-').map(Number); const d = new Date(Date.UTC(y, m2 - 1 + n, 1)); S.schedMonth = d.toISOString().slice(0, 10); pSched(main, mid); };
     $('#s-pm', main).onclick = () => mv(-1); $('#s-nm', main).onclick = () => mv(1);
+    const mop = $('#mo-open', main); if (mop) mop.onclick = () => busy(mop, async () => {
+      const { error } = await sb.rpc('month_open_set', { p_staff: mid, p_month: mon, p_open: true }); if (error) return toast(errMsg(error), 'bad', 5000);
+      toast(`Графік на ${mName} відкрито — клієнтки вже можуть записуватись`, 'ok', 4500); pSched(main, mid); });
+    const mcl = $('#mo-close', main); if (mcl) mcl.onclick = () => busy(mcl, async () => {
+      if (!(await confirmBox(`Закрити онлайн-запис на ${mName}?`, { ok: 'Закрити', danger: true, sub: 'Клієнтки не зможуть записатись онлайн на цей місяць. Записи, що вже є, залишаться.' }))) return;
+      const { error } = await sb.rpc('month_open_set', { p_staff: mid, p_month: mon, p_open: false }); if (error) return toast(errMsg(error), 'bad', 5000);
+      toast(`Онлайн-запис на ${mName} закрито`); pSched(main, mid); });
     const sb2 = $('#s-blk', main); if (sb2) sb2.onclick = () => blockSheet({ mid, day: today() });
     $$('[data-unb]', main).forEach((b) => (b.onclick = () => busy(b, async () => { const { error } = await sb.from('blocks').delete().eq('id', b.dataset.unb); if (error) return toast(errMsg(error), 'bad'); toast('Час відкрито'); pSched(main, mid); })));
     if (canEdit) $$('.mcal .c[data-day]', main).forEach((c) => (c.onclick = () => daySheet(mid, c.dataset.day, ov.find((x) => x.day === c.dataset.day), wh.find((x) => x.weekday === isoDow(c.dataset.day)), () => pSched(main, mid))));

@@ -32,6 +32,8 @@ const Client = (() => {
   }
   const dayBase = (day) => { let b = B.base.get(day); if (b == null) { b = kDate(day, 720).getTime() - 720 * 6e4; B.base.set(day, b); } return b; };
   function hoursOf(mid, day) {
+    if (C.open && !C.openSet) C.openSet = new Set(C.open.map((x) => x.m + '|' + x.mo));
+    if (C.openSet && !C.openSet.has(mid + '|' + day.slice(0, 7))) return null;   // майстриня ще не відкрила графік на цей місяць
     const o = B.over.get(mid + '|' + day); if (o) return o.off ? null : [toMin(o.s), toMin(o.e)];
     const h = C.hours.find((x) => x.m === mid && x.w === isoDow(day)); return h ? [toMin(h.s), toMin(h.e)] : null;
   }

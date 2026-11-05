@@ -65,8 +65,44 @@ async function closeAsk(staffId: string, d: string) {
   return { ok: r.ok };
 }
 
+// ---------- графік на наступний місяць: нагадування з 22 числа, кнопка «Готово» перевіряє month_open ----------
+const MONTHS = ['січень', 'лютий', 'березень', 'квітень', 'травень', 'червень', 'липень', 'серпень', 'вересень', 'жовтень', 'листопад', 'грудень'];
+const monName = (mo: string) => MONTHS[+mo.slice(5, 7) - 1] ?? mo;
+const schedBtn = (st: any): Btn[] => [{ text: '🗓 Відкрити «Графік»', url: site(st) + '#/staff/sched' }];
+async function isOpen(staffId: string, mo: string) {
+  const { data } = await db.from('month_open').select('staff_id').eq('staff_id', staffId).eq('month', mo + '-01').maybeSingle();
+  return !!data;
+}
+async function monthAsk(staffId: string, mo: string, first: boolean) {
+  if (!/^\d{4}-\d{2}$/.test(mo)) return { skip: 'bad month' };
+  const { data: s } = await db.from('staff').select('first_name, tg_chat_id, is_active, notify').eq('id', staffId).single();
+  if (!s?.tg_chat_id || !s.is_active || s.notify?.tg === false || s.notify?.open === false) return { skip: 'no telegram' };
+  if (await isOpen(staffId, mo)) return { skip: 'already open' };
+  const st = await settings(), m = monName(mo);
+  const t = first
+    ? `📅 ${esc(s.first_name)}, відкрий, будь ласка, графік на <b>${m}</b> 🙏\nЗайди на сайт → «Графік», перевір вихідні й особливі дні та натисни «Відкрити графік на ${m}».\nПотім натисни «Готово» тут.`
+    : `⏰ ${esc(s.first_name)}, нагадую: графік на <b>${m}</b> ще не відкрито — клієнтки не можуть записатись до тебе онлайн на ${m}.\nЗайди в «Графік», натисни «Відкрити графік на ${m}», а потім «Готово» тут.`;
+  const r = await send(s.tg_chat_id, t, [[{ text: '✅ Готово', callback_data: 'mo:' + mo }], schedBtn(st)]);
+  return { ok: r.ok };
+}
+async function onMonthDone(cq: any, chat: number, mo: string) {
+  const { data: s } = await db.from('staff').select('id, first_name').eq('tg_chat_id', chat).eq('is_active', true).maybeSingle();
+  if (!s) return tg('answerCallbackQuery', { callback_query_id: cq.id, text: 'Не знайшли вас серед персоналу', show_alert: true });
+  const st = await settings(), m = monName(mo);
+  if (cq.message) await tg('editMessageReplyMarkup', { chat_id: chat, message_id: cq.message.message_id, reply_markup: { inline_keyboard: [] } });
+  if (await isOpen(s.id, mo)) {
+    await tg('answerCallbackQuery', { callback_query_id: cq.id, text: 'Дякую! 💛' });
+    return send(chat, `✅ Дякую, ${esc(s.first_name)}! Графік на ${m} відкрито — клієнтки вже можуть записуватись 💛`);
+  }
+  await tg('answerCallbackQuery', { callback_query_id: cq.id, text: 'Графік ще не відкрито' });
+  return send(chat, `😬 Упс, графік на <b>${m}</b> ще не відкрито.\nЗайди в «Графік», перевір вихідні й натисни «Відкрити графік на ${m}», потім повтори спробу й натисни «Готово».`,
+    [[{ text: '✅ Готово', callback_data: 'mo:' + mo }], schedBtn(st)]);
+}
+
 async function onCallback(cq: any) {
   const chat = (cq.message?.chat?.id ?? cq.from?.id) as number;
+  const mo = String(cq.data ?? '').match(/^mo:(\d{4}-\d{2})$/)?.[1];
+  if (mo) return onMonthDone(cq, chat, mo);
   const d = String(cq.data ?? '').match(/^cl:(\d{4}-\d{2}-\d{2})$/)?.[1];
   if (!d) return tg('answerCallbackQuery', { callback_query_id: cq.id });
   const { data: s } = await db.from('staff').select('id, first_name').eq('tg_chat_id', chat).eq('is_active', true).maybeSingle();
@@ -253,6 +289,7 @@ Deno.serve(async (req) => {
           shape: /^\d{6,12}:[A-Za-z0-9_-]{30,}$/.test(TOKEN), spaces: /\s/.test(raw) });
       }
       case 'send': return json(await send(Number(body.chat_id), String(body.text ?? '')));
+      case 'month_ask': return json(await monthAsk(String(body.staff_id), String(body.month ?? ''), !!body.first));
       case 'close_ask': return json(await closeAsk(String(body.staff_id), String(body.day ?? kDay())));
       default: return json({ error: 'unknown action' }, 400);
     }
