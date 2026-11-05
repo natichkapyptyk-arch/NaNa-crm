@@ -67,6 +67,24 @@ const Client = (() => {
     return out;
   }
   const visitDay = () => (st.cart.length ? dayOf(new Date(Math.min(...st.cart.map((x) => x.s))).toISOString()) : null);   // день візиту (перша послуга)
+  // звідки прийшла клієнтка: позначене посилання (?from=insta, ?from=gmaps) або сайт/застосунок, з якого перейшла; памʼятаємо 30 днів
+  const REF = (() => {
+    const KEY = 'nana_ref', AL = { instagram: 'insta', ig: 'insta', inst: 'insta', maps: 'gmaps', googlemaps: 'gmaps', google_maps: 'gmaps', gbp: 'gmaps', fb: 'facebook', tt: 'tiktok' };
+    const q = new URLSearchParams(location.search), ua = navigator.userAgent || '', rf = document.referrer || '';
+    let r = (q.get('from') || q.get('utm_source') || '').toLowerCase().replace(/[^a-z0-9._-]/g, '');
+    if (!r) {
+      if (/Instagram/i.test(ua) || /instagram\./i.test(rf)) r = 'insta';
+      else if (/FBAN|FBAV/i.test(ua) || /facebook\.|fb\.com/i.test(rf)) r = 'facebook';
+      else if (/maps\.google\.|google\.[a-z.]+\/maps|maps\.app\.goo\.gl|goo\.gl\/maps/i.test(rf)) r = 'gmaps';
+      else if (/(^|\.)google\./i.test(rf.split('/')[2] || '')) r = 'google';
+      else if (/tiktok/i.test(rf) || /musical_ly|TikTok/i.test(ua)) r = 'tiktok';
+      else if (rf && !rf.startsWith(location.origin)) try { r = new URL(rf).hostname.replace(/^www\./, ''); } catch (e) { /* */ }
+    }
+    r = AL[r] || r;
+    try { if (r) localStorage.setItem(KEY, JSON.stringify({ r, t: Date.now() }));
+      else { const o = JSON.parse(localStorage.getItem(KEY) || 'null'); if (o && Date.now() - o.t < 30 * 864e5) r = o.r; } } catch (e) { /* приватний режим */ }
+    return (r || 'direct').slice(0, 40);
+  })();
   const cartTotal = () => st.cart.reduce((a, x) => a + +x.price, 0);
   // ціна «від» (кінцева залежить від роботи): у майстрині, а якщо база ще стара — у послуги
   const isFrom = (sid, mid) => { const x = mid && C.ms.get(mid)?.get(sid); return x && 'price_from' in x ? !!x.price_from : !!C.svc.get(sid)?.price_from; };
@@ -319,8 +337,10 @@ const Client = (() => {
       if (bad.length) { err.textContent = 'Будь ласка, ' + bad.join(', ') + '.'; err.classList.remove('hide'); return; }
       err.classList.add('hide');
       await busy($('#f-go', f), async () => {
-        const { data, error } = await sb.rpc('book_visit', { p_items: st.cart.map((x) => ({ staff: x.mid, service: x.sid, start: new Date(x.s).toISOString() })),
-          p_name: name, p_phone: phone, p_contact: cm, p_instagram: cm === 'instagram' ? ig : null, p_comment: cmt || null });
+        const args = { p_items: st.cart.map((x) => ({ staff: x.mid, service: x.sid, start: new Date(x.s).toISOString() })),
+          p_name: name, p_phone: phone, p_contact: cm, p_instagram: cm === 'instagram' ? ig : null, p_comment: cmt || null };
+        let { data, error } = await sb.rpc('book_visit', { ...args, p_ref: REF });
+        if (error && (error.code === 'PGRST202' || /p_ref|function .*book_visit/i.test(error.message || ''))) ({ data, error } = await sb.rpc('book_visit', args));   // база ще без джерела запису
         if (error) {
           err.textContent = errMsg(error); err.classList.remove('hide'); toast(errMsg(error), 'bad', 5000);
           try { await loadBusy(); } catch (e2) {}

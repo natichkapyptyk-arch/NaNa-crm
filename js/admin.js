@@ -85,6 +85,38 @@ const Admin = (() => {
     const pb = periodBar('dash', st, () => dash(main));
     main.innerHTML = `<div class="pg-h"><h1>Дашборд</h1></div>${pb.html}<div id="d-body"><div class="spin"></div></div>`;
     pb.bind(main);
+    /* ---- джерела записів: Instagram, Google Maps… (visits.ref, ставить сторінка онлайн-запису) ---- */
+    const SRC = { insta: ['📸', 'Instagram'], gmaps: ['📍', 'Google Maps'], google: ['🔎', 'Google пошук'], facebook: ['👍', 'Facebook'], tiktok: ['🎵', 'TikTok'],
+      direct: ['🔗', 'Пряме посилання'], unknown: ['❔', 'Без позначки'], staff: ['🏠', 'Записали в салоні'] };
+    const SRC_ORD = Object.keys(SRC);
+    const srcOf = (v) => (v.source === 'staff' ? 'staff' : v.ref || 'unknown');
+    const srcIc = (k) => (SRC[k] || ['🌐'])[0], srcNm = (k) => (SRC[k] || [null, k])[1];
+    const srcSort = (a, b) => ((SRC_ORD.indexOf(a) + 1 || 50) - (SRC_ORD.indexOf(b) + 1 || 50)) || a.localeCompare(b);
+    const visitsRange = async (from, to) => { const [f, t] = tsRange(from, to);
+      const q = (cols) => qAll(() => sb.from('visits').select(cols).eq('demo', false).gte('created_at', f).lt('created_at', t).order('created_at', { ascending: false }));
+      const base = 'id,created_at,source,client_id,clients(name,phone),appointments(starts_at,status,service_id,staff_id,price)';
+      try { return await q(base + ',ref'); } catch (e) { return q(base); } };   // база ще без колонки ref — усі онлайн «без позначки»
+    const recSheet = (start = '') => { let cur = start;
+      perSheet({ load: async (from, to) => { const list = await visitsRange(from, to); return { title: `Записи: ${list.length}`, list,
+          html: `<div class="hint mb">Записи, <b>створені</b> за період, і звідки прийшла клієнтка. Посилання для Instagram і Google Maps з позначкою — у «Налаштуваннях» → «Посилання на запис».</div><div class="chips scroll mb" id="rs-c"></div><div id="rs-l"></div>` }; },
+        after: (s, r) => { const list = r.list, by = {}; list.forEach((v) => (by[srcOf(v)] = by[srcOf(v)] || []).push(v));
+          const keys = Object.keys(by).sort(srcSort); if (cur && !by[cur]) cur = '';
+          const draw = () => {
+            $('#rs-c', s.el).innerHTML = `<button class="chip ${cur ? '' : 'on'}" data-rs="" title="Усі записи за період">Усі · ${list.length}</button>` +
+              keys.map((k) => `<button class="chip ${cur === k ? 'on' : ''}" data-rs="${esc(k)}" title="Лише ${esc(srcNm(k))}">${srcIc(k)} ${esc(srcNm(k))} · ${by[k].length}</button>`).join('');
+            const l = cur ? by[cur] : list;
+            $('#rs-l', s.el).innerHTML = l.map((v) => { const ap = (v.appointments || []).slice().sort((a, b) => (a.starts_at < b.starts_at ? -1 : 1)), a0 = ap[0], c = one(v.clients) || {};
+              const stt = ap.every((a) => a.status === 'cancel') ? 'cancel' : ap.some((a) => a.status === 'booked') ? 'booked' : a0?.status || 'booked';
+              return `<div class="m-row click" data-cl="${v.client_id}" title="Відкрити картку клієнта"><span class="src-ic" title="${esc(srcNm(srcOf(v)))}">${srcIc(srcOf(v))}</span>
+                <div class="grow"><div class="b sm ell">${esc(c.name || '—')} <span class="xs mut" style="font-weight:600">${esc(fmtPhone(c.phone || ''))}</span></div>
+                <div class="xs mut ell">${esc(ap.map((a) => Staff.svcById(a.service_id)?.name || '').join(', '))}${a0 ? ` · на ${esc(relDay(dayOf(a0.starts_at)))}, ${fmtT(a0.starts_at)}` : ''}</div>
+                <div class="xs mut">створено ${dt(v.created_at)}, ${fmtT(v.created_at)} · ${esc(srcNm(srcOf(v)))}</div></div>
+                <div class="r"><span class="pill ${stt}">${STATUS[stt]}</span><div class="sm b" style="margin-top:4px">${money(ap.reduce((t, a) => t + +a.price, 0))}</div></div></div>`; }).join('') || '<div class="empty">За цей період записів немає</div>';
+            $$('[data-rs]', s.el).forEach((b) => (b.onclick = () => { cur = b.dataset.rs; draw(); }));
+            $$('[data-cl]', s.el).forEach((x) => (x.onclick = () => Staff.clientSheet(x.dataset.cl)));
+          };
+          draw(); } });
+    };
     const [f, t] = tsRange(st.from, st.to);
     // попередній період: стільки ж днів (для місяця — ті самі дні попереднього місяця)
     const upto = st.to > today() ? today() : st.to, len = Math.max(1, daysBetween(st.from, upto) + 1);
@@ -92,7 +124,7 @@ const Admin = (() => {
     if (st.mode === 'month') { pFrom = monthRange(shiftMonth(st.month, -1))[0]; pTo = addDays(pFrom, len - 1); const pe = monthRange(shiftMonth(st.month, -1))[1]; if (pTo > pe) pTo = pe; }
     else { pFrom = addDays(st.from, -len); pTo = addDays(st.from, -1); }
     const [pf, pt] = tsRange(pFrom, pTo);
-    const [ap, pays, prevPays, prevAp, exp, over, blocks, cls, hist] = await Promise.all([
+    const [ap, pays, prevPays, prevAp, exp, over, blocks, cls, hist, vis] = await Promise.all([
       qAll(() => sb.from('appointments').select('id,visit_id,client_id,staff_id,service_id,starts_at,ends_at,price,status,demo,visits(source),clients(name)').gte('starts_at', f).lt('starts_at', t).order('starts_at')),
       qAll(() => sb.from('payments').select('id,appointment_id,staff_id,amount,method,commission,paid_at,appointments(starts_at,service_id,visit_id,clients(name))').gte('paid_at', f).lt('paid_at', t).order('paid_at', { ascending: false })),
       qAll(() => sb.from('payments').select('amount,appointments(visit_id)').gte('paid_at', pf).lt('paid_at', pt)),
@@ -101,7 +133,8 @@ const Admin = (() => {
       qAll(() => sb.from('day_overrides').select('*').gte('day', st.from).lte('day', st.to)),
       qAll(() => sb.from('blocks').select('*').gte('starts_at', f).lt('starts_at', t)),
       qAll(() => sb.rpc('clients_stats')),
-      qAll(() => sb.from('appointments').select('client_id,starts_at').eq('status', 'done').lt('starts_at', t).order('starts_at'))]);
+      qAll(() => sb.from('appointments').select('client_id,starts_at').eq('status', 'done').lt('starts_at', t).order('starts_at')),
+      visitsRange(st.from, st.to).catch(() => [])]);
     const body = $('#d-body'); if (!body) return;
     const rev = pays.reduce((a, p) => a + +p.amount, 0), prevRev = prevPays.reduce((a, p) => a + +p.amount, 0);
     const comm = pays.reduce((a, p) => a + +p.commission, 0), expSum = exp.reduce((a, x) => a + +x.amount, 0);
@@ -165,6 +198,10 @@ const Admin = (() => {
         <div class="kpi click" data-k="load" role="button" tabindex="0" title="Завантаженість кожного майстра — у таблиці «Майстри»"><div class="l">Завантаженість майстрів</div><div class="v">${load}%</div><div class="d mut" title="Зайнятий час / робочий час за графіком">${durTxt(busyMin())} з ${durTxt(av.tot)}</div></div>
         <div class="kpi click" data-k="comm" role="button" tabindex="0" title="Скільки кожному майстру — у таблиці «Майстри»"><div class="l">До виплати майстрам</div><div class="v">${money(comm)}</div><div class="d mut">за відсотками з карток</div></div>
         <div class="kpi click" data-k="profit" role="button" tabindex="0" title="Як рахується прибуток і всі витрати за період"><div class="l">Прибуток салону</div><div class="v">${money(rev - comm - expSum)}</div><div class="d mut" title="Виручка − виплати майстрам − витрати">після виплат і витрат</div></div>
+        <div class="kpi click" data-k="recs" role="button" tabindex="0" title="Записи, створені за період, і звідки прийшли клієнтки (Instagram, Google Maps…) — відкрити список"><div class="l">Записи</div><div class="v">${vis.length}</div>${(() => {
+          const by = {}; vis.forEach((v) => (by[srcOf(v)] = (by[srcOf(v)] || 0) + 1));
+          const top = Object.keys(by).sort(srcSort).filter((k) => k !== 'unknown' || Object.keys(by).length === 1).slice(0, 3);
+          return `<div class="d mut src-d">${top.map((k) => `<span data-src="${esc(k)}" title="${esc(srcNm(k))}: ${by[k]}">${srcIc(k)} ${by[k]}</span>`).join(' · ') || 'за період'}</div>`; })()}</div>
         <div class="kpi click" data-k="newcl" role="button" tabindex="0" title="Список нових клієнтів за період"><div class="l">Нових клієнтів</div><div class="v">${newCl}</div><div class="d mut">онлайн-записів: ${pct(online, ap.length)}%</div></div>
         <div class="kpi click" data-k="cancel" role="button" tabindex="0" title="Список скасованих записів і неявок за період"><div class="l">Скасовано / не прийшли</div><div class="v">${cancel} / ${noshow}</div><div class="d mut">${pct(cancel + noshow, ap.length)}% від усіх записів</div></div>
         <div class="kpi click" data-k="rep" role="button" tabindex="0" title="Клієнти, які вже були раніше й прийшли знову в цьому періоді (перерва до ${BACK_DAYS} днів) — відкрити список"><div class="l">Повторні клієнти</div><div class="v">${ret.rep.length}</div>${delta(ret.rep.length, prevRet.rep.length) || `<div class="d mut">${pct(ret.rep.length, seenCl)}% клієнтів періоду</div>`}</div>
@@ -307,7 +344,7 @@ const Admin = (() => {
       newcl: () => perSheet({ load: async (from, to) => { const nc = cls.filter((c) => { const d = dayOf(c.created_at); return d >= from && d <= to; }).sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at));
         return { title: `Нові клієнти: ${nc.length}`, html: nc.map((c) => `<div class="m-row click" data-cl="${c.id}" title="Відкрити картку клієнта"><span class="ava s y">${esc(c.name[0] || '?')}</span><div class="grow"><div class="b sm ell">${esc(c.name)}</div>
           <div class="xs mut ell">${esc(fmtPhone(c.phone))} · додано ${dt(c.created_at)}</div></div><div class="r sm">${c.visits} ${plural(c.visits, 'візит', 'візити', 'візитів')}</div></div>`).join('') || '<div class="empty">Нових клієнтів за цей період немає</div>' }; } }),
-      rep: () => retSheet('rep'), back: () => retSheet('back'),
+      rep: () => retSheet('rep'), back: () => retSheet('back'), recs: () => recSheet(),
       profit: () => perSheet({ foot: `<button class="btn pri" id="pf-exp" title="Додати витрату (оренда, матеріали…)">${IC.plus} Витрата</button>`,
         load: async (from, to) => { const [f, t] = tsRange(from, to);
           const [pp, ee] = await Promise.all([qAll(() => sb.from('payments').select('amount,commission').gte('paid_at', f).lt('paid_at', t)), qAll(() => sb.from('expenses').select('*').gte('day', from).lte('day', to).order('day', { ascending: false }))]);
@@ -317,7 +354,7 @@ const Admin = (() => {
         after: (s) => { $('#pf-exp', s.el).onclick = () => { s.close(); expenseSheet(() => dash(main)); }; } }),
     };
     $$('[data-ctg]', body).forEach((el) => (el.onclick = () => catSheet(doneTitle, ['done'], el.dataset.ctg)));
-    $$('[data-k]', body).forEach((el) => { el.onclick = () => K[el.dataset.k](); el.onkeydown = (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); K[el.dataset.k](); } }; });
+    $$('[data-k]', body).forEach((el) => { el.onclick = (e) => { const sp = e.target.closest('[data-src]'); if (sp && el.dataset.k === 'recs') return recSheet(sp.dataset.src); K[el.dataset.k](); }; el.onkeydown = (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); K[el.dataset.k](); } }; });
   }
   function expenseSheet(done) {
     const s = sheet({ title: 'Нова витрата', body: `<div class="two"><div><label class="lb" for="e-d">Дата</label><input class="inp" type="date" id="e-d" value="${today()}"></div>
@@ -673,6 +710,9 @@ const Admin = (() => {
         <label class="lb" for="s-a">Адреса</label><input class="inp" id="s-a" value="${esc(s.address || '')}">
         <div class="two"><div><label class="lb" for="s-p">Телефон</label><input class="inp" id="s-p" type="tel" value="${esc(s.phone || '')}"></div><div><label class="lb" for="s-i">Instagram</label><input class="inp" id="s-i" value="${esc(s.instagram || '')}"></div></div>
         <label class="lb" for="s-u">Адреса сайту (для посилань у Telegram)</label><input class="inp" id="s-u" value="${esc(s.site_url || '')}" placeholder="https://…"></div>
+      <div class="card"><h3>Посилання на запис</h3><div class="hint mb">Вставте ці посилання в Instagram (у шапку профілю й кнопку «Записатися») і в профіль Google Maps (поле «Сайт» / «Запис»). Тоді на дашборді в плитці «Записи» буде видно, скільки записів прийшло звідки.</div>
+        ${[['insta', '📸 Instagram'], ['gmaps', '📍 Google Maps'], ['tiktok', '🎵 TikTok'], ['facebook', '👍 Facebook']].map(([k, n]) => { const u = location.origin + location.pathname.replace(/index\.html$/, '') + '?from=' + k;
+          return `<div class="row ref-ln" style="gap:8px;margin-top:8px"><b class="sm" style="width:118px;flex:none">${n}</b><input class="inp" readonly value="${esc(u)}" onclick="this.select()" style="flex:1;min-width:0"><button class="btn sm" data-cp="${esc(u)}" title="Скопіювати посилання">📋</button></div>`; }).join('')}</div>
       <div class="card"><h3>Правила онлайн-запису</h3>
         <div class="two"><div><label class="lb" for="s-o">Салон працює з</label><input class="inp" type="time" step="600" id="s-o" value="${s.open_time.slice(0, 5)}"></div><div><label class="lb" for="s-c">до</label><input class="inp" type="time" step="600" id="s-c" value="${s.close_time.slice(0, 5)}"></div></div>
         <div class="two"><div><label class="lb" for="s-l">Останній запис о</label><input class="inp" type="time" step="600" id="s-l" value="${s.last_start.slice(0, 5)}" title="Пізніше цього часу клієнти онлайн не запишуться"></div>

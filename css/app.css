@@ -551,3 +551,6 @@ body.cal-full .st-tabs,body.cal-full .cal-bar #c-new{display:none!important}
 .bbar .bb-when{cursor:pointer} .bbar .bb-when:hover{text-decoration:underline} .bbar .bb-arr{color:var(--mut);font-weight:800}
 /* перша година (напр. 10:00) не ховається під шапкою з іменами — підпис під лінією, а не посередині */
 .cal-times div:first-child{transform:translateY(2px)}
+/* плитка «Записи» — джерела (Instagram, Google Maps…) */
+.src-ic{font-size:20px;width:30px;flex:none;text-align:center}
+.kpi .src-d span{cursor:pointer;white-space:nowrap} .kpi .src-d span:hover{text-decoration:underline}

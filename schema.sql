@@ -166,6 +166,8 @@ create table if not exists visits (
   created_at timestamptz not null default now()
 );
 
+alter table visits add column if not exists ref text;   -- звідки прийшла клієнтка онлайн: insta, gmaps, google, tiktok, facebook, direct…
+
 create table if not exists appointments (
   id uuid primary key default gen_random_uuid(),
   visit_id uuid not null references visits(id),
@@ -355,8 +357,9 @@ create or replace function pub_busy(p_from date, p_to date) returns jsonb langua
 $$;
 
 -- онлайн-запис: кілька послуг за один візит
+drop function if exists book_visit(jsonb, text, text, text, text, text);   -- стара версія без p_ref
 create or replace function book_visit(p_items jsonb, p_name text, p_phone text, p_contact text,
-  p_instagram text default null, p_comment text default null)
+  p_instagram text default null, p_comment text default null, p_ref text default null)
 returns jsonb language plpgsql volatile security definer set search_path = public as $$
 declare v_phone text; v_client uuid; v_visit uuid; v_token uuid; it jsonb; v_staff uuid; v_service uuid;
   v_start timestamptz; v_end timestamptz; v_dur int; v_price numeric; v_err text; v_ranges tstzrange[] := '{}'; n int;
@@ -399,7 +402,8 @@ begin
   insert into clients (name, phone, contact, instagram) values (trim(p_name), v_phone, p_contact, nullif(trim(coalesce(p_instagram, '')), ''))
     on conflict (phone) do update set contact = excluded.contact, instagram = coalesce(excluded.instagram, clients.instagram)
     returning id into v_client;
-  insert into visits (client_id, source, comment, created_by) values (v_client, 'online', nullif(trim(coalesce(p_comment, '')), ''), null)
+  insert into visits (client_id, source, comment, created_by, ref)
+    values (v_client, 'online', nullif(trim(coalesce(p_comment, '')), ''), null, nullif(left(lower(regexp_replace(coalesce(p_ref, ''), '[^a-zA-Z0-9._-]', '', 'g')), 40), ''))
     returning id, token into v_visit, v_token;
   for it in select * from jsonb_array_elements(p_items) loop
     v_staff := (it->>'staff')::uuid; v_service := (it->>'service')::uuid; v_start := (it->>'start')::timestamptz;
@@ -885,7 +889,7 @@ do $$ declare f text; begin
     execute 'revoke execute on function ' || f || ' from public, anon';
     execute 'grant execute on function ' || f || ' to authenticated';
   end loop;
-  foreach f in array array['pub_catalog()','pub_busy(date,date)','book_visit(jsonb,text,text,text,text,text)',
+  foreach f in array array['pub_catalog()','pub_busy(date,date)','book_visit(jsonb,text,text,text,text,text,text)',
     'client_visit(uuid)','client_cancel(uuid,uuid)','client_move(uuid,uuid,timestamptz)','is_staff()','norm_phone(text)'] loop
     execute 'grant execute on function ' || f || ' to anon, authenticated';
   end loop;

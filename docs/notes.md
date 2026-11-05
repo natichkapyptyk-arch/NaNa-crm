@@ -74,3 +74,4 @@
 - 2026-11-05: Сайт перенесено на Cloudflare Pages: https://nana-studio.pages.dev (проєкт nana-studio, автооновлення з main). Netlify зупинив оновлення через ліміт безкоштовного тарифу; база та дані — без змін (Supabase).
 - 2026-11-05: Сітка календаря — перша година (10:00) більше не ховається під шапкою з іменами (відступ зверху).
 - 2026-11-05: Увімкнено Cloudflare Web Analytics для nana-studio (статистика відвідувань без cookies): Cloudflare → Workers & Pages → nana-studio → Metrics → View Web Analytics.
+- 2026-11-05: Звідки записи — сторінка запису запамʼятовує джерело (?from=insta / ?from=gmaps або сайт-перехід: Instagram, Google Maps, Google, Facebook, TikTok; 30 днів) і передає в book_visit(p_ref) → visits.ref; на дашборді плитка «Записи» (створені за період) з розбивкою за джерелами, у «Налаштуваннях» — «Посилання на запис» з позначками. Міграція docs/sql/2026-11-05-update-8.sql (містить і 7).
