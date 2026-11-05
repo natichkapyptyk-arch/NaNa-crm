@@ -774,6 +774,79 @@ end $$;
 select cron.schedule('nana-remind', '*/10 * * * *', 'select nana_priv.remind_tick()')
  where not exists (select 1 from cron.job where jobname = 'nana-remind');
 
+-- ===== Розклад на день у Telegram (зранку кожному: майстрині — її записи, власниці й адміну — усі) =====
+alter table settings add column if not exists daily_hour int default 8 check (daily_hour between 0 and 23);   -- о котрій (за Києвом); null — не надсилати
+alter table settings add column if not exists daily_sent date;                                                  -- коли вже надіслали (щоб не двічі)
+
+create or replace function nana_priv.h(t text) returns text language sql immutable as $$
+  select replace(replace(replace(coalesce(t, ''), '&', '&amp;'), '<', '&lt;'), '>', '&gt;')
+$$;
+
+-- текст розкладу на день: p_all — усі майстри (для власниці/адміна), інакше лише записи p_staff; null — якщо записів немає
+create or replace function nana_priv.daily_text(p_staff uuid, p_all boolean, p_day date) returns text
+language sql stable security definer set search_path = public as $$
+  with a as (
+    select a.starts_at, a.ends_at, a.staff_id, s.name sname, m.first_name mname, m.sort msort, c.name cname, c.phone cphone, v.comment vcomment
+      from appointments a join services s on s.id = a.service_id join staff m on m.id = a.staff_id
+      join clients c on c.id = a.client_id join visits v on v.id = a.visit_id
+     where not a.demo and a.status in ('booked', 'done') and (a.starts_at at time zone 'Europe/Kyiv')::date = p_day
+       and (p_all or a.staff_id = p_staff)),
+  l as (
+    select msort, mname, starts_at,
+      case when p_all and lag(staff_id) over (order by msort, mname, starts_at) is distinct from staff_id
+           then chr(10) || '👩 <b>' || nana_priv.h(mname) || '</b>' || chr(10) else '' end
+      || '• <b>' || to_char(starts_at at time zone 'Europe/Kyiv', 'HH24:MI') || '–' || to_char(ends_at at time zone 'Europe/Kyiv', 'HH24:MI') || '</b> '
+      || nana_priv.h(cname) || ' — ' || nana_priv.h(sname)
+      || case when not p_all then ' · ' || nana_priv.h(cphone) else '' end
+      || case when not p_all and nullif(trim(vcomment), '') is not null then chr(10) || '   💬 ' || nana_priv.h(vcomment) else '' end as line
+    from a)
+  select case when count(*) = 0 then null else
+    (case when p_all then 'Записи в салоні на сьогодні' else 'Твої записи на сьогодні' end) || ', '
+    || (array['понеділок','вівторок','середа','четвер','пʼятниця','субота','неділя'])[extract(isodow from p_day)::int] || ', '
+    || extract(day from p_day)::int || ' ' || (array['січня','лютого','березня','квітня','травня','червня','липня','серпня','вересня','жовтня','листопада','грудня'])[extract(month from p_day)::int]
+    || ' — ' || count(*) || ':' || chr(10) || string_agg(line, chr(10) order by msort, mname, starts_at) end
+  from l
+$$;
+
+-- раз на день о settings.daily_hour (за Києвом): кожному з підключеним Telegram — його розклад
+create or replace function nana_priv.daily_tick(p_force boolean default false) returns int
+language plpgsql security definer set search_path = public as $$
+declare st settings; k uuid; d date := (now() at time zone 'Europe/Kyiv')::date; hh int := extract(hour from now() at time zone 'Europe/Kyiv');
+  x record; t text; n int := 0; site text;
+begin
+  select * into st from settings where id = 1;
+  if not p_force and (st.daily_hour is null or hh < st.daily_hour or hh > st.daily_hour + 2 or st.daily_sent is not distinct from d) then return 0; end if;
+  update settings set daily_sent = d where id = 1;
+  select hook_key into k from app_secrets where id = 1;
+  site := regexp_replace(coalesce(nullif(st.site_url, ''), 'https://nana-studio.pages.dev/'), '#.*$', '');
+  for x in select s.* from staff s where s.is_active and s.tg_chat_id is not null
+             and coalesce((s.notify->>'tg')::boolean, true) and coalesce((s.notify->>'daily')::boolean, true) order by s.sort loop
+    t := nana_priv.daily_text(x.id, x.role in ('owner', 'admin'), d);
+    if t is null then continue; end if;
+    t := '🌅 Доброго ранку, ' || nana_priv.h(x.first_name) || '!' || chr(10) || t || chr(10) || chr(10) || '<a href="' || site || '#/staff/cal/' || d || '">Відкрити календар</a>';
+    perform net.http_post(
+      url := 'https://arkwtpihdaqnwhdcjpqf.supabase.co/functions/v1/tg-bot',
+      body := jsonb_build_object('action', 'send', 'chat_id', x.tg_chat_id, 'text', t),
+      headers := jsonb_build_object('Content-Type', 'application/json', 'x-hook-key', k::text));
+    n := n + 1;
+  end loop;
+  return n;
+end $$;
+revoke execute on function nana_priv.daily_tick(boolean) from public, anon, authenticated;
+revoke execute on function nana_priv.daily_text(uuid, boolean, date) from public, anon, authenticated;
+
+-- «Надіслати розклад зараз» з Налаштувань (лише власниця/адмін)
+create or replace function daily_send_now() returns int language plpgsql security definer set search_path = public as $$
+begin
+  if not coalesce(is_boss(), false) then raise exception 'Лише для власниці або адміністратора'; end if;
+  return nana_priv.daily_tick(true);
+end $$;
+revoke execute on function daily_send_now() from public, anon;
+grant execute on function daily_send_now() to authenticated;
+
+select cron.schedule('nana-daily', '*/15 * * * *', 'select nana_priv.daily_tick()')
+ where not exists (select 1 from cron.job where jobname = 'nana-daily');
+
 -- ===== RLS і доступ =====
 do $$ declare t text; begin
   foreach t in array array['settings','app_secrets','staff','staff_pay','services','master_services','work_hours','day_overrides',
@@ -885,7 +958,7 @@ revoke execute on all functions in schema nana_priv from public, anon, authentic
 do $$ declare f text; begin
   foreach f in array array['slot_check(uuid,timestamptz,timestamptz,uuid,boolean,uuid)','staff_book(uuid,text,text,text,uuid,uuid,timestamptz,int,numeric,text,boolean,uuid)',
     'staff_move(uuid,uuid,timestamptz,int,boolean)','appt_service(uuid,uuid,int,numeric,boolean)','appt_status(uuid,text,numeric,text,text)','clients_stats()','client_merge(uuid,uuid)','staff_set_login(uuid,text,text)',
-    'team_link(boolean,boolean)','demo_clear()','me()','my_role()','is_boss()','is_owner()','my_master()'] loop
+    'team_link(boolean,boolean)','demo_clear()','daily_send_now()','me()','my_role()','is_boss()','is_owner()','my_master()'] loop
     execute 'revoke execute on function ' || f || ' from public, anon';
     execute 'grant execute on function ' || f || ' to authenticated';
   end loop;

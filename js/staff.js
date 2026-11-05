@@ -236,7 +236,7 @@ const Staff = (() => {
   async function pCal(main, arg) {
     S.day = /^\d{4}-\d{2}-\d{2}$/.test(arg || '') ? arg : S.day || today();
     const ms = masters();
-    if (!S.calSel) S.calSel = isBoss() || !S.me.is_bookable ? 'all' : S.me.id;
+    if (!S.calSel) S.calSel = 'all';   // кожен (і майстриня) одразу бачить записи всіх майстрів; свій стовпчик — фільтром угорі
     const shown = S.calSel === 'all' ? ms : ms.filter((m) => m.id === S.calSel);
     const dd = await dayData(S.day, shown.map((m) => m.id));
     const appts = dd.appts.filter((a) => shown.some((m) => m.id === a.staff_id) && (S.showCancel || a.status !== 'cancel'));
