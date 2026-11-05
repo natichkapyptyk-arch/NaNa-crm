@@ -531,7 +531,7 @@ const Staff = (() => {
         ${a.status === 'booked' || isBoss() ? `<button class="btn sm" id="a-svc" title="Якщо фактично зробили іншу послугу — змінити її, ціну й тривалість">✎ Змінити послугу</button>` : ''}
         <button class="btn sm" id="a-add" title="Додати до цього візиту ще одну послугу (одразу після цієї)">${IC.plus} Додати послугу</button></div>` : ''}
       <div class="sect"><h3>${esc(c.name || '')} <a class="btn sm ghost" href="javascript:void 0" id="a-cl" title="Відкрити картку клієнта з історією візитів">картка ${IC.fwd.replace('width="20" height="20"', 'width="14" height="14"')}</a></h3>
-        <div class="sm">${esc(fmtPhone(c.phone))} · зручно: <b>${esc(CONTACTS[c.contact]?.[0] || 'дзвінок')}</b>${c.instagram ? ' · @' + esc(c.instagram) : ''}</div>${c.note ? `<div class="hint">📝 ${esc(c.note)}</div>` : ''}${contactLinks(c)}${a.status === 'booked' && Date.parse(a.starts_at) > nowMs() ? `<button class="btn sm mt" id="a-rem" title="Готовий текст нагадування для Viber, Telegram або SMS">${IC.bell} Нагадати про візит</button>` : ''}</div>
+        <div class="sm">${esc(fmtPhone(c.phone))} · зручно: <b>${esc(CONTACTS[c.contact]?.[0] || 'дзвінок')}</b>${c.instagram ? ' · ' + igLink(c.instagram, true) : ''}</div>${c.note ? `<div class="hint">📝 ${esc(c.note)}</div>` : ''}${contactLinks(c)}${a.status === 'booked' && Date.parse(a.starts_at) > nowMs() ? `<button class="btn sm mt" id="a-rem" title="Готовий текст нагадування для Viber, Telegram або SMS">${IC.bell} Нагадати про візит</button>` : ''}</div>
       <label class="lb mt" for="a-note">Нотатка до запису</label><textarea class="inp" id="a-note" rows="2" placeholder="Видно лише персоналу" ${mine ? '' : 'disabled'}>${esc(a.note || '')}</textarea>`,
       foot: actions });
     const note = $('#a-note', s.el);
@@ -762,13 +762,14 @@ const Staff = (() => {
       const q = $('#na-q', c), sg = $('#na-sg', c);
       let tmr;
       q.oninput = () => { clearTimeout(tmr); tmr = setTimeout(async () => {
-        const v = q.value.trim().replace(/[,()*%\\]/g, ' ').trim();
+        const v = q.value.trim().replace(/[,()*%\\"]/g, ' ').trim();
         if (v.length < 2) { sg.innerHTML = ''; $('#na-newc', c).classList.add('hide'); return; }
         const digits = v.replace(/\D/g, '');
         let rq = sb.from('clients').select('id,name,phone,contact,instagram').limit(8);
-        rq = digits.length >= 3 ? rq.ilike('phone', '%' + digits + '%') : rq.ilike('name', '%' + v + '%');
+        const vi = igNick(v) || v.replace(/^@/, '');
+        rq = digits.length >= 3 && !/[a-z]/i.test(v) ? rq.ilike('phone', '%' + digits + '%') : rq.or(`name.ilike.*${v}*,instagram.ilike.*${vi}*`);
         const { data } = await rq;
-        sg.innerHTML = `<div class="sugg">${(data || []).map((x) => `<div data-cid="${x.id}" title="Обрати цього клієнта"><b>${esc(x.name)}</b> <span class="mut sm">${esc(fmtPhone(x.phone))}</span></div>`).join('')}
+        sg.innerHTML = `<div class="sugg">${(data || []).map((x) => `<div data-cid="${x.id}" title="Обрати цього клієнта"><b>${esc(x.name)}</b> <span class="mut sm">${esc(fmtPhone(x.phone))}${x.instagram ? ' · @' + esc(x.instagram) : ''}</span></div>`).join('')}
           <div data-newc title="Створити нового клієнта">${IC.plus} <b>Новий клієнт</b>${digits.length >= 9 ? ' ' + esc(v) : ''}</div></div>`;
         $$('[data-cid]', sg).forEach((d) => (d.onclick = () => { st.client = data.find((x) => x.id === d.dataset.cid); drawClient(); }));
         $('[data-newc]', sg).onclick = () => { sg.innerHTML = ''; $('#na-newc', c).classList.remove('hide'); if (digits.length >= 9) $('#na-cp', c).value = v; else $('#na-cn', c).value = v; ($('#na-cn', c).value ? $('#na-cp', c) : $('#na-cn', c)).focus(); };
@@ -943,7 +944,7 @@ const Staff = (() => {
       fresh: ['Нові за 30 днів', (c) => daysBetween(dayOf(c.created_at), t) <= 30], noshow: ['Не приходили', (c) => c.noshows > 0], never: ['Без візитів', (c) => !c.visits && !c.next_visit] };
     S.cf = arg && F[arg] ? arg : S.cf || 'all'; S.cq = S.cq || ''; S.csort = S.csort || 'last';
     main.innerHTML = `<div class="pg-h"><h1>Клієнти</h1>${isBoss() ? `<button class="btn" id="cl-imp" title="Додати клієнтів з таблиці Excel (наприклад, експорт з EasyWeek)">⬆ Імпорт</button><button class="btn" id="cl-copy" title="Скопіювати телефони клієнтів зі списку нижче — для розсилки">Скопіювати номери</button>` : ''}<button class="btn pri" id="cl-new" title="Записати клієнта">${IC.plus} Запис</button></div>
-      <div class="search mb">${IC.search}<input class="inp" id="cl-q" placeholder="Пошук за імʼям або телефоном" value="${esc(S.cq)}"></div>
+      <div class="search mb">${IC.search}<input class="inp" id="cl-q" placeholder="Пошук за імʼям, телефоном або Instagram" value="${esc(S.cq)}"></div>
       <div class="chips scroll mb">${Object.entries(F).map(([k, [n, f]]) => `<button class="chip ${S.cf === k ? 'on' : ''}" data-f="${k}" title="Фільтр: ${esc(n)}">${esc(n)} <span class="n">${rows.filter(f).length}</span></button>`).join('')}</div>
       <div class="row sp mb"><div class="sm mut" id="cl-cnt"></div><select class="inp" id="cl-sort" style="max-width:230px;min-height:36px;padding:6px 10px" title="Сортування списку">
         <option value="last">Давно не були — вгорі</option><option value="recent">Нещодавні візити</option><option value="spent">Більше витратили</option><option value="visits">Більше візитів</option><option value="name">За імʼям</option></select></div>
@@ -951,7 +952,8 @@ const Staff = (() => {
     $('#cl-sort').value = S.csort;
     const draw = () => {
       const q = S.cq.toLowerCase(), qd = q.replace(/\D/g, '');
-      let list = rows.filter(F[S.cf][1]).filter((c) => !q || c.name.toLowerCase().includes(q) || (qd.length >= 3 && c.phone.replace(/\D/g, '').includes(qd)));
+      const qi = igNick(q) || q.replace(/^@/, '');
+      let list = rows.filter(F[S.cf][1]).filter((c) => !q || c.name.toLowerCase().includes(q) || (qd.length >= 3 && c.phone.replace(/\D/g, '').includes(qd)) || (qi.length >= 2 && (c.instagram || '').toLowerCase().includes(qi.toLowerCase())));
       const lv = (c) => (c.last_visit ? Date.parse(c.last_visit) : 0);
       list.sort({ last: (a, b) => lv(a) - lv(b) || a.name.localeCompare(b.name), recent: (a, b) => lv(b) - lv(a), spent: (a, b) => b.spent - a.spent, visits: (a, b) => b.visits - a.visits, name: (a, b) => a.name.localeCompare(b.name, 'uk') }[S.csort]);
       if (S.csort === 'last') list.sort((a, b) => (a.last_visit ? 0 : 1) - (b.last_visit ? 0 : 1) || lv(a) - lv(b));
@@ -959,7 +961,7 @@ const Staff = (() => {
       S.cshown = list;
       $('#cl-list').innerHTML = list.slice(0, 300).map((c) => { const ld = lastDays(c);
         return `<div class="list-row" data-c="${c.id}" title="Відкрити картку клієнта"><span class="ava s ${isStale(c) ? '' : 'y'}">${esc(c.name[0] || '?')}</span><div class="grow">
-          <div class="nm ell">${esc(c.name)} ${isStale(c) ? `<span class="pill w" title="Не було понад ${stale} днів і немає запису — варто нагадати про себе">не було ${ld} ${plural(ld, 'день', 'дні', 'днів')}</span>` : ''}${c.next_visit ? `<span class="pill booked" title="Найближчий запис">${esc(relDay(dayOf(c.next_visit)))}</span>` : ''}${c.demo ? ' <span class="pill g">демо</span>' : ''}</div>
+          <div class="nm ell">${esc(c.name)} ${igLink(c.instagram)}${isStale(c) ? `<span class="pill w" title="Не було понад ${stale} днів і немає запису — варто нагадати про себе">не було ${ld} ${plural(ld, 'день', 'дні', 'днів')}</span>` : ''}${c.next_visit ? `<span class="pill booked" title="Найближчий запис">${esc(relDay(dayOf(c.next_visit)))}</span>` : ''}${c.demo ? ' <span class="pill g">демо</span>' : ''}</div>
           <div class="sub ell">${esc(fmtPhone(c.phone))} · ${c.last_visit ? 'був(ла) ' + esc(relDay(dayOf(c.last_visit))) : 'ще не був(ла)'} · ${c.visits} ${plural(c.visits, 'візит', 'візити', 'візитів')}${isBoss() ? ' · ' + money(c.spent) : ''}</div></div>
           ${isStale(c) ? `<button class="btn sm inv-b" data-inv="${c.id}" title="Готовий текст запрошення — відкрити Viber / Telegram клієнта">${IC.bell}<span>Нагадати</span></button>` : ''}
           <span class="mut" style="width:20px" title="Зручний спосіб звʼязку: ${esc(CONTACTS[c.contact]?.[0] || '')}">${CONTACTS[c.contact]?.[1] || ''}</span></div>`; }).join('') +

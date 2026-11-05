@@ -156,6 +156,8 @@ function igNick(v) {
   s = s.replace(/^@/, '').replace(/[/?#].*$/, ''); return /^[A-Za-z0-9._]{1,30}$/.test(s) && !/^(p|reel|reels|stories|explore)$/i.test(s) ? s : '';
 }
 const igUrl = (v) => { const n = igNick(v); return n ? 'https://instagram.com/' + n : ''; };
+// маленьке посилання-іконка на профіль (у списках, картках)
+const igLink = (v, txt = false) => { const u = igUrl(v); return u ? `<a class="ig-l" href="${esc(u)}" target="_blank" rel="noopener" title="Відкрити Instagram @${esc(igNick(v))}" onclick="event.stopPropagation()">${IC.ig}${txt ? `<span>@${esc(igNick(v))}</span>` : ''}</a>` : ''; };
 function fmtPhone(p) { const m = String(p || '').match(/^\+380(\d{2})(\d{3})(\d{2})(\d{2})$/); return m ? `+380 ${m[1]} ${m[2]} ${m[3]} ${m[4]}` : p || ''; }
 const IC = {
   tg: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M21.9 4.3 18.6 20c-.2 1.1-.9 1.4-1.8.9l-5-3.7-2.4 2.3c-.3.3-.5.5-1 .5l.4-5.1 9.3-8.4c.4-.4-.1-.6-.6-.2L6 13.5l-4.9-1.5c-1.1-.3-1.1-1.1.2-1.6l19.2-7.4c.9-.3 1.7.2 1.4 1.3z"/></svg>',

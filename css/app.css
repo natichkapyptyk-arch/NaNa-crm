@@ -562,3 +562,9 @@ body.cal-full .st-tabs,body.cal-full .cal-bar #c-new{display:none!important}
 .a-log summary{cursor:pointer;font-weight:800;font-size:14px;list-style:none;display:flex;align-items:center;gap:8px}
 .a-log summary::-webkit-details-marker{display:none} .a-log summary::after{content:'▾';color:var(--mut);font-size:12px} .a-log[open] summary::after{content:'▴'}
 .a-log .lg-ln{display:flex;flex-direction:column;gap:1px;padding:6px 0;border-bottom:1px dashed var(--line)} .a-log .lg-ln:last-child{border-bottom:0}
+
+/* посилання-іконка Instagram (списки, картки) */
+.ig-l{display:inline-flex;align-items:center;gap:4px;color:var(--ink2);text-decoration:none;vertical-align:middle;border-radius:6px;padding:1px 3px;margin:0 2px}
+.ig-l svg{width:15px;height:15px;flex:none}
+.ig-l span{font-weight:600}
+.ig-l:hover{color:var(--ink);background:var(--line2)}
