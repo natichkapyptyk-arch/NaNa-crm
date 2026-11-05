@@ -192,12 +192,12 @@ const Admin = (() => {
     const peak = Object.entries(hrs).sort((a, b) => b[1] - a[1])[0];
 
     body.innerHTML = `<div class="kpis">
-        <div class="kpi main click" data-k="rev" role="button" tabindex="0" title="Показати всі оплати за період"><div class="l">Виручка</div><div class="v">${money(rev)}</div>${delta(rev, prevRev).replace('class="d', 'style="color:#E9EBA0" class="d')}</div>
+        <div class="kpi main click" data-k="rev" role="button" tabindex="0" title="Показати всі оплати за період"><div class="l">Виторг</div><div class="v">${money(rev)}</div>${delta(rev, prevRev).replace('class="d', 'style="color:#E9EBA0" class="d')}</div>
         <div class="kpi click" data-k="done" role="button" tabindex="0" title="Список завершених візитів за період"><div class="l">Завершених візитів</div><div class="v">${done}</div>${delta(done, prevDone)}</div>
         <div class="kpi click" data-k="avg" role="button" tabindex="0" title="Середній чек кожного майстра — у таблиці «Майстри»"><div class="l">Середній чек</div><div class="v">${money(avg)}</div>${delta(avg, prevAvg)}</div>
         <div class="kpi click" data-k="load" role="button" tabindex="0" title="Завантаженість кожного майстра — у таблиці «Майстри»"><div class="l">Завантаженість майстрів</div><div class="v">${load}%</div><div class="d mut" title="Зайнятий час / робочий час за графіком">${durTxt(busyMin())} з ${durTxt(av.tot)}</div></div>
         <div class="kpi click" data-k="comm" role="button" tabindex="0" title="Скільки кожному майстру — у таблиці «Майстри»"><div class="l">До виплати майстрам</div><div class="v">${money(comm)}</div><div class="d mut">за відсотками з карток</div></div>
-        <div class="kpi click" data-k="profit" role="button" tabindex="0" title="Як рахується прибуток і всі витрати за період"><div class="l">Прибуток салону</div><div class="v">${money(rev - comm - expSum)}</div><div class="d mut" title="Виручка − виплати майстрам − витрати">після виплат і витрат</div></div>
+        <div class="kpi click" data-k="profit" role="button" tabindex="0" title="Як рахується прибуток і всі витрати за період"><div class="l">Прибуток салону</div><div class="v">${money(rev - comm - expSum)}</div><div class="d mut" title="Виторг − виплати майстрам − витрати">після виплат і витрат</div></div>
         <div class="kpi click" data-k="recs" role="button" tabindex="0" title="Записи, створені за період, і звідки прийшли клієнтки (Instagram, Google Maps…) — відкрити список"><div class="l">Записи</div><div class="v">${vis.length}</div>${(() => {
           const by = {}; vis.forEach((v) => (by[srcOf(v)] = (by[srcOf(v)] || 0) + 1));
           const top = Object.keys(by).sort(srcSort).filter((k) => k !== 'unknown' || Object.keys(by).length === 1).slice(0, 3);
@@ -209,16 +209,16 @@ const Admin = (() => {
         <a class="kpi click" href="#/staff/clients/stale" title="Клієнти, які не були понад ${S().settings.stale_days} днів і не мають запису — відкрити список" style="text-decoration:none"><div class="l">Застарілі клієнти</div><div class="v" style="color:var(--warn)">${stale}</div><div class="d mut">не були ${S().settings.stale_days}+ днів →</div></a>
       </div>
       <div class="dgrid">
-        <div class="card full"><div class="row sp"><h3 style="margin:0">Виручка по ${byMonth ? 'місяцях' : 'днях'}</h3><span class="sm mut">наведіть на стовпчик</span></div>
+        <div class="card full"><div class="row sp"><h3 style="margin:0">Виторг по ${byMonth ? 'місяцях' : 'днях'}</h3><span class="sm mut">наведіть на стовпчик</span></div>
           <div class="bars">${bars}</div><div class="bars-x">${xl}</div>
           <div class="legend">${byMethod.map((x) => `<span><i style="background:${x.c}"></i>${esc(x.m)}</span>`).join('')}</div></div>
         <div class="card"><h3>Гроші за способами оплати</h3>${byMethod.map((x) => `<div class="hbar"><div class="t"><span>${esc(x.m)} <span class="mut">· ${x.n} ${plural(x.n, 'оплата', 'оплати', 'оплат')}</span></span><span>${money(x.sum)} · ${pct(x.sum, rev)}%</span></div>
           <div class="tr"><i style="width:${pct(x.sum, rev)}%;background:${x.c}"></i></div></div>`).join('') || '<div class="empty">Оплат за період немає</div>'}
           ${exp.length || true ? `<div class="sect"><h3>Витрати: ${money(expSum)} <button class="btn sm" id="d-exp" title="Додати витрату (оренда, матеріали…)" style="margin-left:auto">${IC.plus} Витрата</button></h3>
             ${exp.slice(0, 6).map((x) => `<div class="row sp sm" style="padding:4px 0"><span>${esc(fmtDay(x.day, { day: 'numeric', month: 'short' }))} · ${esc(x.category)}${x.note ? ' · <span class="mut">' + esc(x.note) + '</span>' : ''}</span><b>${money(x.amount)}</b></div>`).join('') || '<div class="mut sm">Витрат не внесено</div>'}</div>` : ''}</div>
-        <div class="card"><h3>Виручка за категоріями</h3>${ctList.map(([c, x], i) => `<div class="hbar click" data-ctg="${esc(c)}" title="Показати завершені візити: ${esc(c)}"><div class="t"><span class="ell">${esc(c)} <span class="mut">· ${x.n} ${plural(x.n, 'оплата', 'оплати', 'оплат')}</span></span><span class="nw">${money(x.r)} · ${pct(x.r, rev)}%</span></div><div class="tr"><i style="width:${(x.r / ctMax) * 100}%;background:${ctColors[i % ctColors.length]}"></i></div></div>`).join('') || '<div class="empty">Оплат за період немає</div>'}</div>
+        <div class="card"><h3>Виторг за категоріями</h3>${ctList.map(([c, x], i) => `<div class="hbar click" data-ctg="${esc(c)}" title="Показати завершені візити: ${esc(c)}"><div class="t"><span class="ell">${esc(c)} <span class="mut">· ${x.n} ${plural(x.n, 'оплата', 'оплати', 'оплат')}</span></span><span class="nw">${money(x.r)} · ${pct(x.r, rev)}%</span></div><div class="tr"><i style="width:${(x.r / ctMax) * 100}%;background:${ctColors[i % ctColors.length]}"></i></div></div>`).join('') || '<div class="empty">Оплат за період немає</div>'}</div>
         <div class="card"><h3>Популярні послуги</h3>${svTop.map(([id, x]) => `<div class="hbar"><div class="t"><span class="ell">${esc(Staff.svcById(id)?.name || '—')}</span><span class="nw">${x.n} × · ${money(x.r)}</span></div><div class="tr"><i class="y" style="width:${(x.r / svMax) * 100}%"></i></div></div>`).join('') || '<div class="empty">Немає даних</div>'}</div>
-        <div class="card full" id="d-masters"><h3>Майстри</h3><div class="tbl-wrap d-only"><table class="tbl"><thead><tr><th>Майстер</th><th class="r">Візити</th><th class="r">Виручка</th><th class="r">Сер. чек</th><th class="r">Завантаж.</th><th class="r">%</th><th class="r">До виплати</th></tr></thead>
+        <div class="card full" id="d-masters"><h3>Майстри</h3><div class="tbl-wrap d-only"><table class="tbl"><thead><tr><th>Майстер</th><th class="r">Візити</th><th class="r">Виторг</th><th class="r">Сер. чек</th><th class="r">Завантаж.</th><th class="r">%</th><th class="r">До виплати</th></tr></thead>
           <tbody>${mrows.map((x) => `<tr class="click" data-st="${x.m.id}" title="Відкрити картку майстра"><td><div class="row" style="gap:8px">${avatar(x.m, 's')}<b>${esc(fullName(x.m))}</b></div></td><td class="r">${x.n}</td><td class="r b">${money(x.r)}</td><td class="r">${money(x.avg)}</td><td class="r">${x.ld}%</td><td class="r">${Staff.payPct(x.m.id)}%</td><td class="r b">${money(x.cm)}</td></tr>`).join('')}
           <tr><td class="b">Разом</td><td class="r b">${done}</td><td class="r b">${money(rev)}</td><td class="r">${money(avg)}</td><td class="r">${load}%</td><td></td><td class="r b">${money(comm)}</td></tr></tbody></table></div>
           <div class="m-list">${mrows.map((x) => `<div class="m-row click" data-st="${x.m.id}" title="Відкрити картку майстра">${avatar(x.m, 's')}<div class="grow"><div class="b ell">${esc(fullName(x.m))}</div>
@@ -349,7 +349,7 @@ const Admin = (() => {
         load: async (from, to) => { const [f, t] = tsRange(from, to);
           const [pp, ee] = await Promise.all([qAll(() => sb.from('payments').select('amount,commission').gte('paid_at', f).lt('paid_at', t)), qAll(() => sb.from('expenses').select('*').gte('day', from).lte('day', to).order('day', { ascending: false }))]);
           const r = pp.reduce((x, p) => x + +p.amount, 0), c = pp.reduce((x, p) => x + +p.commission, 0), e = ee.reduce((x, p) => x + +p.amount, 0);
-          return { title: 'Прибуток салону', html: `<dl class="kv"><dt>Виручка</dt><dd>${money(r)}</dd><dt>Виплати майстрам</dt><dd>− ${money(c)}</dd><dt>Витрати</dt><dd>− ${money(e)}</dd><dt>Прибуток</dt><dd class="b">${money(r - c - e)}</dd></dl>
+          return { title: 'Прибуток салону', html: `<dl class="kv"><dt>Виторг</dt><dd>${money(r)}</dd><dt>Виплати майстрам</dt><dd>− ${money(c)}</dd><dt>Витрати</dt><dd>− ${money(e)}</dd><dt>Прибуток</dt><dd class="b">${money(r - c - e)}</dd></dl>
             <h3 class="mt">Витрати (${ee.length})</h3>${ee.map((x) => `<div class="m-row"><div class="grow"><div class="b sm ell">${esc(x.category)}</div><div class="xs mut ell">${dt(x.day)}${x.note ? ' · ' + esc(x.note) : ''}</div></div><div class="r b">${money(x.amount)}</div></div>`).join('') || '<div class="mut sm">Витрат не внесено</div>'}` }; },
         after: (s) => { $('#pf-exp', s.el).onclick = () => { s.close(); expenseSheet(() => dash(main)); }; } }),
     };
@@ -386,7 +386,7 @@ const Admin = (() => {
     $('#e-body').innerHTML = `<div class="kpis">
       <div class="kpi main"><div class="l">Мій заробіток</div><div class="v">${money(my)}</div></div>
       <div class="kpi"><div class="l">Мій відсоток</div><div class="v">${num(pctNow)}%</div><div class="d mut">від чеку · встановлює власниця</div></div>
-      <div class="kpi"><div class="l">Виручка з моїх послуг</div><div class="v">${money(rev)}</div></div>
+      <div class="kpi"><div class="l">Виторг з моїх послуг</div><div class="v">${money(rev)}</div></div>
       <div class="kpi"><div class="l">Візитів</div><div class="v">${pays.length}</div></div>
       <div class="kpi"><div class="l">Ще заплановано</div><div class="v">${fut.length}</div><div class="d mut">≈ ${money(fut.reduce((s, a) => s + +a.price, 0) * pctNow / 100)} для мене</div></div></div>
       ${(() => { const ct = {}; pays.forEach((p) => { const c = Staff.svcById(one(p.appointments)?.service_id)?.category || 'Інше'; ct[c] = ct[c] || { n: 0, r: 0, m: 0 }; ct[c].n++; ct[c].r += +p.amount; ct[c].m += +p.commission; });
@@ -558,7 +558,7 @@ const Admin = (() => {
       const [f, t] = tsRange(...monthRange(curMonth()));
       const { data } = await sb.from('payments').select('amount,commission').eq('staff_id', p.id).gte('paid_at', f).lt('paid_at', t);
       if (data) monthStat = `<div class="kpis mt" style="grid-template-columns:repeat(auto-fill,minmax(140px,1fr))"><div class="kpi"><div class="l">Візитів цього місяця</div><div class="v">${data.length}</div></div>
-        <div class="kpi"><div class="l">Виручка</div><div class="v">${money(data.reduce((a, x) => a + +x.amount, 0))}</div></div><div class="kpi"><div class="l">Заробіток</div><div class="v">${money(data.reduce((a, x) => a + +x.commission, 0))}</div></div></div>`;
+        <div class="kpi"><div class="l">Виторг</div><div class="v">${money(data.reduce((a, x) => a + +x.amount, 0))}</div></div><div class="kpi"><div class="l">Заробіток</div><div class="v">${money(data.reduce((a, x) => a + +x.commission, 0))}</div></div></div>`;
     }
     const roleOpts = ['master', 'admin', 'owner'].filter((r) => r !== 'owner' || Staff.isOwner() || p.role === 'owner');
     const bot = S().settings.tg_bot;
