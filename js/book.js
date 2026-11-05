@@ -96,7 +96,7 @@ const Client = (() => {
   function hero(small) {
     const s = C.settings; const ph = String(s.phone || '').replace(/[^\d+]/g, '');
     return `<header class="cl-hero"${small ? ' style="padding-bottom:16px"' : ''}>
-      <a href="#" title="На головну — онлайн-запис"><img class="logo" src="img/logo.png" alt="${esc(s.salon_name)}"${small ? ' style="height:64px"' : ''}></a>
+      <a href="#" title="На головну — онлайн-запис"><img class="logo" src="img/logo-t.png" alt="${esc(s.salon_name)}"${small ? ' style="height:64px"' : ''}></a>
       <div class="meta">
         ${s.address ? `<a href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(s.salon_name + ' ' + s.address)}" target="_blank" rel="noopener" title="Відкрити адресу на мапі">${IC.pin}${esc(s.address)}</a>` : ''}
         ${ph ? `<a href="tel:${esc(ph)}" title="Зателефонувати в салон">${IC.call.replace('<svg', '<svg width="15" height="15"')}${esc(fmtPhone(ph))}</a>` : ''}

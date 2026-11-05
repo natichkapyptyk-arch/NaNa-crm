@@ -20,7 +20,7 @@
   --sh:0 1px 2px rgba(0,0,0,.4),0 6px 24px rgba(0,0,0,.35); --sh2:0 10px 40px rgba(0,0,0,.6);
   --sep:#2A2A27; --soft:#252523; --sect:#1A1A18; --ro:#262623; --yelb:#5B5E1D; --okb:#2A5A3D; --badb:#6B3029; --badb2:#6B3029; --warnb:#6A5220;
   --st1:#1B1B19; --st2:#232321; --st3:#2A2A27; --st4:#33332F; --nos:#262623; --mut2:#707068; --onyel:#EDEDE6; --pilly:#D8DD55;
-  --glass:rgba(31,31,29,.96); --pane:rgba(31,31,29,.92); --hsh:rgba(0,0,0,.35); --avat:#D2D2C9; --sel:#E6E6DE; --onsel:#1A1A18;
+  --glass:rgba(31,31,29,.96); --pane:rgba(31,31,29,.92); --hsh:rgba(0,0,0,.35); --avat:#D2D2C9; --brand:#262624; --sel:#E6E6DE; --onsel:#1A1A18;
   color-scheme:dark;
 }
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
@@ -31,7 +31,7 @@
   --sh:0 1px 2px rgba(0,0,0,.4),0 6px 24px rgba(0,0,0,.35); --sh2:0 10px 40px rgba(0,0,0,.6);
   --sep:#2A2A27; --soft:#252523; --sect:#1A1A18; --ro:#262623; --yelb:#5B5E1D; --okb:#2A5A3D; --badb:#6B3029; --badb2:#6B3029; --warnb:#6A5220;
   --st1:#1B1B19; --st2:#232321; --st3:#2A2A27; --st4:#33332F; --nos:#262623; --mut2:#707068; --onyel:#EDEDE6; --pilly:#D8DD55;
-  --glass:rgba(31,31,29,.96); --pane:rgba(31,31,29,.92); --hsh:rgba(0,0,0,.35); --avat:#D2D2C9; --sel:#E6E6DE; --onsel:#1A1A18;
+  --glass:rgba(31,31,29,.96); --pane:rgba(31,31,29,.92); --hsh:rgba(0,0,0,.35); --avat:#D2D2C9; --brand:#262624; --sel:#E6E6DE; --onsel:#1A1A18;
   color-scheme:dark;
 }}
 *{box-sizing:border-box}

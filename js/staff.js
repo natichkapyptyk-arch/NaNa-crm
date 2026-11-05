@@ -54,7 +54,7 @@ const Staff = (() => {
   /* ================= вхід ================= */
   function loginPage(msg) {
     document.title = 'Вхід для персоналу — NaNa studio';
-    app().innerHTML = `<div class="login-box"><div class="login-logo"><img src="img/logo.png" alt="NaNa studio"></div>
+    app().innerHTML = `<div class="login-box"><div class="login-logo"><img src="img/logo-t.png" alt="NaNa studio"></div>
       <form class="card" id="lf"><h2 style="margin:0 0 4px">Вхід для персоналу</h2><p class="mut sm" style="margin:0 0 14px">Логін або пошта і пароль</p>
       ${msg ? `<div class="errtxt mb">${esc(msg)}</div>` : ''}
       <label class="lb" for="l-u">Логін або пошта</label><input class="inp" id="l-u" autocomplete="username" autocapitalize="off" spellcheck="false" placeholder="наприклад, admin" autofocus>
@@ -76,7 +76,7 @@ const Staff = (() => {
   }
   async function quick(token) {
     document.title = 'Швидкий вхід — NaNa studio';
-    app().innerHTML = `<div class="login-box"><div class="login-logo"><img src="img/logo.png" alt="NaNa studio"></div><div class="card" id="qb"><div class="spin"></div></div></div>`;
+    app().innerHTML = `<div class="login-box"><div class="login-logo"><img src="img/logo-t.png" alt="NaNa studio"></div><div class="card" id="qb"><div class="spin"></div></div></div>`;
     const call = async (body) => { const r = await fetch(SB_URL + '/functions/v1/team-login', { method: 'POST', headers: { 'Content-Type': 'application/json', apikey: SB_KEY, Authorization: 'Bearer ' + SB_KEY }, body: JSON.stringify(body) }); const j = await r.json(); if (!r.ok || j.error) throw new Error(j.error || 'Помилка'); return j; };
     try {
       const { staff } = await call({ token });
@@ -97,7 +97,7 @@ const Staff = (() => {
 
   async function pwLink(token) {   // одноразове посилання з Telegram → вхід → поле нового пароля
     document.title = 'Встановити пароль — NaNa studio';
-    app().innerHTML = `<div class="login-box"><div class="login-logo"><img src="img/logo.png" alt="NaNa studio"></div><div class="card" id="qb"><div class="spin"></div></div></div>`;
+    app().innerHTML = `<div class="login-box"><div class="login-logo"><img src="img/logo-t.png" alt="NaNa studio"></div><div class="card" id="qb"><div class="spin"></div></div></div>`;
     try {
       const r = await fetch(SB_URL + '/functions/v1/team-login', { method: 'POST', headers: { 'Content-Type': 'application/json', apikey: SB_KEY, Authorization: 'Bearer ' + SB_KEY }, body: JSON.stringify({ pw_token: token }) });
       const j = await r.json(); if (!r.ok || j.error) throw new Error(j.error || 'Помилка');
