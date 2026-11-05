@@ -967,7 +967,7 @@ const Staff = (() => {
         <div class="two"><div><label class="lb" for="c-n">Імʼя</label><input class="inp" id="c-n" value="${esc(c.name)}"></div><div><label class="lb" for="c-p">Телефон</label><input class="inp" id="c-p" type="tel" value="${esc(c.phone)}"></div></div><div id="c-dup"></div>
         <label class="lb">Зручний звʼязок</label><div class="chips" id="c-c">${Object.entries(CONTACTS).map(([k, [n]]) => `<button class="chip ${c.contact === k ? 'on' : ''}" data-cc="${k}" title="Клієнту зручно: ${n}">${n}</button>`).join('')}</div>
         <div class="two"><div><label class="lb" for="c-ig">Instagram</label><input class="inp" id="c-ig" value="${esc(c.instagram || '')}" placeholder="nickname"></div><div><label class="lb" for="c-b">День народження</label><input class="inp" id="c-b" type="date" value="${c.birthday || ''}"></div></div>
-        <label class="lb" for="c-no">Нотатки</label><textarea class="inp" id="c-no" rows="2" placeholder="Алергії, вподобання, колір…">${esc(c.note || '')}</textarea>
+        <label class="lb" for="c-no">Нотатки</label><textarea class="inp" id="c-no" rows="2" placeholder="Вподобання">${esc(c.note || '')}</textarea>
         <button class="btn mt" id="c-save" title="Зберегти дані клієнта">Зберегти</button></div>
       <div class="sect"><h3>Історія (${hist.length})</h3>${hist.map((x) => `<div class="list-row" style="cursor:default"><div class="grow"><div class="nm sm">${esc(svcById(x.service_id)?.name || '')} <span class="pill ${x.status}">${STATUS[x.status]}</span></div>
         <div class="sub">${esc(fmtDay(dayOf(x.starts_at), { day: 'numeric', month: 'short', year: 'numeric' }))}, ${fmtT(x.starts_at)} · ${esc(byId(x.staff_id)?.first_name || '')}${x.note ? ' · ' + esc(x.note) : ''}</div></div>
