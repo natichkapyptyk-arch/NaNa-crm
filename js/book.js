@@ -329,7 +329,7 @@ const Client = (() => {
     f.addEventListener('keydown', (e) => { if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); $('#f-go', f).click(); } });
     f.onsubmit = async (e) => {
       e.preventDefault();
-      const name = $('#f-n', f).value.trim(), phone = normPhone(ph.value), ig = $('#f-ig', f).value.trim().replace(/^@/, ''), cmt = $('#f-cm', f).value.trim();
+      const name = $('#f-n', f).value.trim(), phone = normPhone(ph.value), ig = igNick($('#f-ig', f).value) || $('#f-ig', f).value.trim().replace(/^@/, '').slice(0, 40), cmt = $('#f-cm', f).value.trim();
       const err = $('#f-err', f); const bad = [];
       $('#f-n', f).classList.toggle('err', name.length < 2); if (name.length < 2) bad.push('вкажіть імʼя');
       ph.classList.toggle('err', !phone); if (!phone) bad.push('вкажіть правильний номер телефону');

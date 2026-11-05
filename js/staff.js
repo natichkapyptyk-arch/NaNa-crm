@@ -1058,7 +1058,10 @@ const Staff = (() => {
       <div class="sect"><h3>Дані клієнта</h3>
         <div class="two"><div><label class="lb" for="c-n">Імʼя</label><input class="inp" id="c-n" value="${esc(c.name)}"></div><div><label class="lb" for="c-p">Телефон</label><input class="inp" id="c-p" type="tel" value="${esc(c.phone)}"></div></div><div id="c-dup"></div>
         <label class="lb">Зручний звʼязок</label><div class="chips" id="c-c">${Object.entries(CONTACTS).map(([k, [n]]) => `<button class="chip ${c.contact === k ? 'on' : ''}" data-cc="${k}" title="Клієнту зручно: ${n}">${n}</button>`).join('')}</div>
-        <div class="two"><div><label class="lb" for="c-ig">Instagram</label><input class="inp" id="c-ig" value="${esc(c.instagram || '')}" placeholder="nickname"></div><div><label class="lb" for="c-b">День народження</label><input class="inp" id="c-b" type="date" value="${c.birthday || ''}"></div></div>
+        <div class="two"><div id="c-igw" class="${c.contact === 'instagram' || c.instagram ? '' : 'hide'}"><label class="lb" for="c-ig">Посилання на Instagram</label><div class="row" style="gap:8px;flex-wrap:nowrap">
+          <input class="inp" id="c-ig" value="${esc(igUrl(c.instagram).slice(8))}" placeholder="Вставте посилання або @нікнейм" autocomplete="off">
+          <a class="btn nw" id="c-igo" target="_blank" rel="noopener" href="${esc(igUrl(c.instagram) || '#')}" title="Відкрити профіль клієнта в Instagram" style="${igUrl(c.instagram) ? '' : 'opacity:.4;pointer-events:none'}">${IC.ig}<span>Відкрити</span></a></div>
+          <div class="hint" id="c-igh"></div></div><div><label class="lb" for="c-b">День народження</label><input class="inp" id="c-b" type="date" value="${c.birthday || ''}"></div></div>
         <label class="lb" for="c-no">Нотатки</label><textarea class="inp" id="c-no" rows="2" placeholder="Вподобання">${esc(c.note || '')}</textarea>
         <button class="btn mt" id="c-save" title="Зберегти дані клієнта">Зберегти</button></div>
       <div class="sect"><h3>Історія (${hist.length})</h3>${hist.map((x) => `<div class="list-row" style="cursor:default"><div class="grow"><div class="nm sm">${esc(svcById(x.service_id)?.name || '')} <span class="pill ${x.status}">${STATUS[x.status]}</span></div>
@@ -1068,11 +1071,18 @@ const Staff = (() => {
     s.el.insertAdjacentHTML('beforeend', `<div class="sh-f"><button class="btn pri" id="c-book" title="Створити новий запис для цього клієнта">${IC.plus} Записати</button></div>`);
     phoneDupWatch($('#c-p', s.el), $('#c-dup', s.el), { exceptId: c.id, label: 'Відкрити картку', onPick: (x) => clientSheet(x.id) });
     let contact = c.contact;
-    $$('[data-cc]', s.el).forEach((b) => (b.onclick = () => { contact = b.dataset.cc; $$('[data-cc]', s.el).forEach((x) => x.classList.toggle('on', x === b)); }));
+    $$('[data-cc]', s.el).forEach((b) => (b.onclick = () => { contact = b.dataset.cc; $$('[data-cc]', s.el).forEach((x) => x.classList.toggle('on', x === b));
+      const show = contact === 'instagram' || !!$('#c-ig', s.el).value.trim(); $('#c-igw', s.el).classList.toggle('hide', !show);
+      if (contact === 'instagram' && !$('#c-ig', s.el).value.trim()) $('#c-ig', s.el).focus(); }));
+    const igIn = $('#c-ig', s.el), igGo = $('#c-igo', s.el), igH = $('#c-igh', s.el);
+    const igSync = () => { const v = igIn.value.trim(), u = igUrl(v); igGo.href = u || '#'; igGo.style.opacity = u ? '' : '.4'; igGo.style.pointerEvents = u ? '' : 'none';
+      igH.textContent = v && !u ? 'Не схоже на посилання Instagram' : u && u.slice(8) !== v.replace(/^https?:\/\/(www\.)?/i, '') ? '→ ' + u.slice(8) : ''; };
+    igIn.oninput = igSync; igIn.onblur = () => { const u = igUrl(igIn.value); if (u) igIn.value = u.slice(8); igSync(); };
     $('#c-save', s.el).onclick = (e) => busy(e.currentTarget, async () => {
       const phone = normPhone($('#c-p', s.el).value), name = $('#c-n', s.el).value.trim();
       if (!phone || name.length < 2) return toast('Перевірте імʼя і телефон', 'bad');
-      const { error } = await sb.from('clients').update({ name, phone, contact, instagram: $('#c-ig', s.el).value.trim().replace(/^@/, '') || null, birthday: $('#c-b', s.el).value || null, note: $('#c-no', s.el).value.trim() || null }).eq('id', id);
+      if ($('#c-ig', s.el).value.trim() && !igNick($('#c-ig', s.el).value)) return toast('Перевірте посилання на Instagram', 'bad');
+      const { error } = await sb.from('clients').update({ name, phone, contact, instagram: igNick($('#c-ig', s.el).value) || null, birthday: $('#c-b', s.el).value || null, note: $('#c-no', s.el).value.trim() || null }).eq('id', id);
       if (error) return toast(/duplicate|unique/i.test(error.message) ? 'Клієнт з таким телефоном уже є' : errMsg(error), 'bad');
       toast('Збережено'); S.clientsCache = null; $('.sh-h h2', s.el).textContent = name;
     });
@@ -1119,7 +1129,7 @@ const Staff = (() => {
       onSent(k);
       if (k === 'sms') { location.href = `sms:${p}?&body=${encodeURIComponent(text)}`; return; }
       if (k === 'copy') return toast(ok ? 'Текст скопійовано' : 'Не вдалося скопіювати — виділіть текст вручну', ok ? '' : 'bad');
-      const url = { viber: `viber://chat?number=${encodeURIComponent(p)}`, telegram: `https://t.me/${p}`, instagram: `https://instagram.com/${encodeURIComponent(String(c.instagram || '').replace(/^@/, ''))}` }[k];
+      const url = { viber: `viber://chat?number=${encodeURIComponent(p)}`, telegram: `https://t.me/${p}`, instagram: igUrl(c.instagram) }[k];
       toast(ok ? 'Текст скопійовано — вставте його в чат' : 'Скопіюйте текст вручну', ok ? '' : 'bad', 4000);
       if (k === 'viber') location.href = url; else window.open(url, '_blank', 'noopener');
     }));

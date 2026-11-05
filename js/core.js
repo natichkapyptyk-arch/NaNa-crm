@@ -150,6 +150,12 @@ function niceSelect(sel) {
   sel.addEventListener('change', sync); sync();
   return (sel._nice = { sync, close });
 }
+// Instagram: з посилання (instagram.com/nick/?igsh=…), «@nick» або «nick» → nick; '' — якщо не схоже на нікнейм
+function igNick(v) {
+  let s = String(v || '').trim(); const m = s.match(/instagram\.com\/(?:_u\/)?([A-Za-z0-9._]+)/i); if (m) s = m[1];
+  s = s.replace(/^@/, '').replace(/[/?#].*$/, ''); return /^[A-Za-z0-9._]{1,30}$/.test(s) && !/^(p|reel|reels|stories|explore)$/i.test(s) ? s : '';
+}
+const igUrl = (v) => { const n = igNick(v); return n ? 'https://instagram.com/' + n : ''; };
 function fmtPhone(p) { const m = String(p || '').match(/^\+380(\d{2})(\d{3})(\d{2})(\d{2})$/); return m ? `+380 ${m[1]} ${m[2]} ${m[3]} ${m[4]}` : p || ''; }
 const IC = {
   tg: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M21.9 4.3 18.6 20c-.2 1.1-.9 1.4-1.8.9l-5-3.7-2.4 2.3c-.3.3-.5.5-1 .5l.4-5.1 9.3-8.4c.4-.4-.1-.6-.6-.2L6 13.5l-4.9-1.5c-1.1-.3-1.1-1.1.2-1.6l19.2-7.4c.9-.3 1.7.2 1.4 1.3z"/></svg>',
@@ -185,7 +191,7 @@ function contactLinks(c) {   // кнопки «зателефонувати / н
   let h = `<a class="${cls('call')}" href="tel:${esc(p)}" title="${tip('call', 'Зателефонувати клієнту')}">${IC.call}<span>Дзвінок</span></a>`;
   h += `<a class="${cls('viber')}" href="viber://chat?number=${encodeURIComponent(p)}" title="${tip('viber', 'Відкрити чат у Viber')}">${IC.vb}<span>Viber</span></a>`;
   h += `<a class="${cls('telegram')}" href="https://t.me/${esc(p)}" target="_blank" rel="noopener" title="${tip('telegram', 'Відкрити чат у Telegram за номером')}">${IC.tg}<span>Telegram</span></a>`;
-  if (c.instagram) h += `<a class="${cls('instagram')}" href="https://instagram.com/${encodeURIComponent(String(c.instagram).replace(/^@/, ''))}" target="_blank" rel="noopener" title="${tip('instagram', 'Профіль в Instagram')}">${IC.ig}<span>Instagram</span></a>`;
+  if (c.instagram) h += `<a class="${cls('instagram')}" href="${esc(igUrl(c.instagram))}" target="_blank" rel="noopener" title="${tip('instagram', 'Профіль в Instagram')}">${IC.ig}<span>Instagram</span></a>`;
   return `<div class="contact-btns">${h}</div>`;
 }
 function avatar(p, cls = '') {
