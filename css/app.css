@@ -614,3 +614,5 @@ body.cal-full .st-tabs,body.cal-full .cal-bar #c-new{display:none!important}
 .mo-st{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:9px 12px;border-radius:var(--r3);font-size:13.5px;font-weight:600;margin-bottom:10px}
 .mo-st.ok{background:var(--oks);border:1.5px solid var(--okb);color:var(--ok)} .mo-st.ok .btn{margin-left:auto;color:var(--mut)}
 .mo-st.lock{background:var(--warns);border:1.5px solid var(--warnb);color:var(--ink)}
+
+.vis-ln .vis-rm{flex:none;width:32px;min-height:32px;padding:0;margin-left:2px;opacity:.7} .vis-ln .vis-rm:hover{opacity:1;color:var(--bad);border-color:var(--badb)}

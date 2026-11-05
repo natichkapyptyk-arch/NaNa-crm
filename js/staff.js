@@ -543,12 +543,23 @@ const Staff = (() => {
     $('#a-cl', s.el).onclick = () => { s.close(); clientSheet(c.id); };
     const sb1 = $('#a-svc', s.el); if (sb1) sb1.onclick = () => changeSvcSheet(a, () => { s.close(); refresh(); });
     // усі послуги цього візиту (як в EasyWeek): список + нова послуга стає одразу після останньої
-    const vq = sb.from('appointments').select('id,starts_at,ends_at,service_id,staff_id,price,status').eq('visit_id', a.visit_id).neq('status', 'cancel').order('starts_at');
+    // прибрати послугу з візиту: власниця/адмін — будь-яку (і оплачену), майстриня — свою або записану нею, поки не оплачена
+    const canRm = (x) => isBoss() || (x.status === 'booked' && (x.staff_id === S.me.id || (!!x.created_by && x.created_by === S.me.user_id)));
+    const vq = sb.from('appointments').select('id,starts_at,ends_at,service_id,staff_id,price,status,created_by').eq('visit_id', a.visit_id).neq('status', 'cancel').order('starts_at');
     vq.then(({ data: vis }) => { if (!vis || vis.length < 2 || !s.ov.isConnected) return;
       $('#a-visit', s.el).innerHTML = `<div class="sect" style="margin-top:12px"><h3 style="margin-bottom:6px">Послуги у візиті <span class="pill g">${vis.length}</span></h3>${vis.map((x) => `<div class="vis-ln ${x.id === a.id ? 'on' : ''}" ${x.id === a.id ? '' : `data-vis="${x.id}" title="Відкрити цю послугу"`}>
-        <div class="grow"><div class="b ell">${esc(svcById(x.service_id)?.name || '')}</div><div class="xs mut">${fmtT(x.starts_at)}–${fmtT(x.ends_at)} · ${esc(byId(x.staff_id)?.first_name || '')}</div></div><b class="nw">${money(x.price)}</b></div>`).join('')}
+        <div class="grow"><div class="b ell">${esc(svcById(x.service_id)?.name || '')}</div><div class="xs mut">${fmtT(x.starts_at)}–${fmtT(x.ends_at)} · ${esc(byId(x.staff_id)?.first_name || '')}${x.status === 'done' ? ' · <span style="color:var(--ok)">оплачено</span>' : ''}</div></div><b class="nw">${money(x.price)}</b>
+        ${canRm(x) ? `<button class="btn ghost ico sm vis-rm" data-vrm="${x.id}" title="Прибрати цю послугу з візиту">🗑</button>` : ''}</div>`).join('')}
         <div class="row sp sm b" style="padding:6px 2px 0"><span>Разом</span><span>${money(vis.reduce((t, x) => t + +x.price, 0))}</span></div></div>`;
-      $$('[data-vis]', s.el).forEach((r) => (r.onclick = () => { const o = (S.dayAppts || []).find((x) => x.id === r.dataset.vis); if (o) { s.close(); openAppt(o); } })); });
+      $$('[data-vis]', s.el).forEach((r) => (r.onclick = () => { const o = (S.dayAppts || []).find((x) => x.id === r.dataset.vis); if (o) { s.close(); openAppt(o); } }));
+      $$('[data-vrm]', s.el).forEach((b) => (b.onclick = async (e) => { e.stopPropagation();
+        const x = vis.find((y) => y.id === b.dataset.vrm), nm = svcById(x.service_id)?.name || 'послугу';
+        const sub = (x.status === 'done' ? `Оплата ${money(x.price)} за неї теж прибереться з виторгу й заробітку. ` : '') + 'Решта послуг у візиті залишиться.';
+        if (!(await confirmBox(`Прибрати «${nm}» з візиту?`, { ok: 'Прибрати', danger: true, sub }))) return;
+        await busy(b, async () => {
+          const { error } = await sb.rpc('appt_status', { p_appt: x.id, p_status: 'cancel', p_reason: 'Прибрано з візиту' });
+          if (error) return toast(errMsg(error), 'bad', 5000);
+          toast(`«${nm}» прибрано з візиту`); s.close(); refresh(); }); })); });
     // історія змін: хто й коли створив, переніс, скасував, змінив послугу чи ціну
     sb.from('appt_log').select('at,who,what').eq('appointment_id', a.id).order('at').then(({ data: log, error }) => {
       if (error || !log || !log.length || !s.ov.isConnected) return;
