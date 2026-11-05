@@ -123,7 +123,7 @@ const Staff = (() => {
     earn: 'Мій відсоток і заробіток за період', services: 'Послуги, ціни, тривалість', team: 'Картки співробітників', settings: 'Налаштування салону і запису' };
   function shell(page) {
     if (!$('#st-main')) {
-      app().innerHTML = `<div class="st-top"><a class="brand" href="#/staff/cal" title="Календар — головна сторінка"><img src="img/banana.png" alt=""><b>NaNa</b></a>
+      app().innerHTML = `<div class="st-top"><a class="brand" href="#/staff/cal" title="Календар — головна сторінка"><img src="img/banana-t.png" alt=""><b>NaNa</b></a>
         <div class="ttl" id="st-ttl"></div>
         <button class="btn ico" id="st-bell" title="Сповіщення про записи">${IC.bell}<span class="badge hide" id="st-bc">0</span><span class="badge onl hide" id="st-bo" title="Нові онлайн-записи">0</span></button>
         <div class="me" id="st-me" title="Мій профіль і вихід">${avatar(S.me, 's')}<span class="sm b nm">${esc(S.me.first_name)}</span></div></div>
