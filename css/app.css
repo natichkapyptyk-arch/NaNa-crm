@@ -549,6 +549,5 @@ body.cal-full .st-tabs,body.cal-full .cal-bar #c-new{display:none!important}
 .slots .slot.quick{grid-column:span 2;background:var(--yels);border-color:var(--yel2);display:flex;align-items:center;justify-content:center;gap:6px}
 .slots .slot.quick small{font-weight:700;color:var(--ink2);font-size:12px}
 .bbar .bb-when{cursor:pointer} .bbar .bb-when:hover{text-decoration:underline} .bbar .bb-arr{color:var(--mut);font-weight:800}
-/* перша година (напр. 10:00) не ховається під шапкою з іменами */
-.cal-bd{padding-top:12px}
-.cal-bd .cal-times{margin-top:-12px;padding-top:12px;box-sizing:content-box}
+/* перша година (напр. 10:00) не ховається під шапкою з іменами — підпис під лінією, а не посередині */
+.cal-times div:first-child{transform:translateY(2px)}
