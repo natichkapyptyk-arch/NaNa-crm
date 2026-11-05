@@ -568,3 +568,7 @@ body.cal-full .st-tabs,body.cal-full .cal-bar #c-new{display:none!important}
 .ig-l svg{width:15px;height:15px;flex:none}
 .ig-l span{font-weight:600}
 .ig-l:hover{color:var(--ink);background:var(--line2)}
+
+/* короткі підписи кнопок на телефоні */
+.ph-t{display:none}
+@media (max-width:759px){.lg-t{display:none}.ph-t{display:inline}}

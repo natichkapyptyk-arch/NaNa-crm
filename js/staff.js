@@ -941,9 +941,9 @@ const Staff = (() => {
     const lastDays = (c) => (c.last_visit ? daysBetween(dayOf(c.last_visit), t) : null);
     const isStale = (c) => c.last_visit && !c.next_visit && lastDays(c) >= stale;
     const F = { all: ['Усі', () => true], stale: [`Застарілі (${stale}+ днів)`, isStale], next: ['Мають запис', (c) => !!c.next_visit],
-      fresh: ['Нові за 30 днів', (c) => daysBetween(dayOf(c.created_at), t) <= 30], noshow: ['Не приходили', (c) => c.noshows > 0], never: ['Без візитів', (c) => !c.visits && !c.next_visit] };
+      fresh: ['Нові за 30 днів', (c) => daysBetween(dayOf(c.created_at), t) <= 30], ig: ['Є Instagram', (c) => !!c.instagram], noshow: ['Не приходили', (c) => c.noshows > 0], never: ['Без візитів', (c) => !c.visits && !c.next_visit] };
     S.cf = arg && F[arg] ? arg : S.cf || 'all'; S.cq = S.cq || ''; S.csort = S.csort || 'last';
-    main.innerHTML = `<div class="pg-h"><h1>Клієнти</h1>${isBoss() ? `<button class="btn" id="cl-imp" title="Додати клієнтів з таблиці Excel (наприклад, експорт з EasyWeek)">⬆ Імпорт</button><button class="btn" id="cl-copy" title="Скопіювати телефони клієнтів зі списку нижче — для розсилки">Скопіювати номери</button>` : ''}<button class="btn pri" id="cl-new" title="Записати клієнта">${IC.plus} Запис</button></div>
+    main.innerHTML = `<div class="pg-h"><h1>Клієнти</h1>${isBoss() ? `<button class="btn" id="cl-imp" title="Додати клієнтів з таблиці Excel (наприклад, експорт з EasyWeek)">⬆ Імпорт</button><button class="btn" id="cl-copy" title="Скопіювати телефони клієнтів зі списку нижче — для розсилки"><span class="lg-t">Скопіювати номери</span><span class="ph-t">📋 Номери</span></button><button class="btn" id="cl-copyig" title="Скопіювати нікнейми Instagram клієнтів зі списку нижче — для розсилки в директ"><span class="lg-t">Скопіювати нікнейми</span><span class="ph-t">📋 Нікнейми</span></button>` : ''}<button class="btn pri" id="cl-new" title="Записати клієнта">${IC.plus} Запис</button></div>
       <div class="search mb">${IC.search}<input class="inp" id="cl-q" placeholder="Пошук за імʼям, телефоном або Instagram" value="${esc(S.cq)}"></div>
       <div class="chips scroll mb">${Object.entries(F).map(([k, [n, f]]) => `<button class="chip ${S.cf === k ? 'on' : ''}" data-f="${k}" title="Фільтр: ${esc(n)}">${esc(n)} <span class="n">${rows.filter(f).length}</span></button>`).join('')}</div>
       <div class="row sp mb"><div class="sm mut" id="cl-cnt"></div><select class="inp" id="cl-sort" style="max-width:230px;min-height:36px;padding:6px 10px" title="Сортування списку">
@@ -979,6 +979,11 @@ const Staff = (() => {
       try { await navigator.clipboard.writeText(txt); toast(`Скопійовано ${S.cshown.length} номерів`); } catch (e) { toast('Не вдалося скопіювати', 'bad'); }
     };
     const im = $('#cl-imp'); if (im) im.onclick = () => importSheet(rows);
+    const ci = $('#cl-copyig'); if (ci) ci.onclick = async () => {
+      const L = (S.cshown || []).filter((c) => c.instagram);
+      if (!L.length) return toast('У списку нижче немає клієнтів з Instagram', 'bad');
+      try { await navigator.clipboard.writeText(L.map((c) => `${c.name}\t@${c.instagram}\thttps://instagram.com/${c.instagram}`).join('\n')); toast(`Скопійовано ${L.length} ${plural(L.length, 'нікнейм', 'нікнейми', 'нікнеймів')}`); } catch (e) { toast('Не вдалося скопіювати', 'bad'); }
+    };
   }
 
   /* імпорт клієнтів з Excel / CSV (EasyWeek: Клієнти → Експорт) — лише імʼя, телефон, день народження, дата створення */

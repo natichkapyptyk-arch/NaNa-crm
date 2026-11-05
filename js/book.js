@@ -230,7 +230,7 @@ const Client = (() => {
         <label class="lb" for="f-n">Імʼя <span class="req">*</span></label><input class="inp" id="f-n" autocomplete="given-name" value="${esc(me.name || '')}" placeholder="Як до вас звертатись" maxlength="60">
         <label class="lb" for="f-p">Номер телефону <span class="req">*</span></label><input class="inp" id="f-p" type="tel" inputmode="tel" autocomplete="tel" value="${esc(me.phone || '')}" placeholder="+380 __ ___ __ __" maxlength="20">
         <label class="lb">Як з вами звʼязатись <span class="req">*</span></label><div class="cm-opts" id="f-c">${opts}</div>
-        <div id="f-ig-w" class="${me.contact === 'instagram' ? '' : 'hide'}"><label class="lb" for="f-ig">Ваш нік в Instagram</label><input class="inp" id="f-ig" value="${esc(me.instagram || '')}" placeholder="@nickname" maxlength="40"></div>
+        <div id="f-ig-w" class="${me.contact === 'instagram' ? '' : 'hide'}"><label class="lb" for="f-ig">Ваш Instagram</label><input class="inp" id="f-ig" value="${esc(me.instagram || '')}" placeholder="@нікнейм або посилання на профіль" maxlength="120" autocomplete="off"><div class="hint" id="f-igh"></div></div>
         <label class="lb" for="f-cm">Коментар <span class="mut" style="font-weight:600">(необовʼязково)</span></label><textarea class="inp" id="f-cm" rows="2" maxlength="300" placeholder="Коментар, уточнення для майстра"></textarea>
         <div class="errtxt hide" id="f-err"></div>
         <div class="cart-tot"><span>${st.cart.length} ${plural(st.cart.length, 'послуга', 'послуги', 'послуг')}</span><span>${cartFrom()}${money(cartTotal())}</span></div>
@@ -324,16 +324,21 @@ const Client = (() => {
   function bindContacts(f) {
     let cm = (ls.get('me', {}) || {}).contact || '';
     $$('[data-cm]', f).forEach((b) => (b.onclick = () => { cm = b.dataset.cm; $$('[data-cm]', f).forEach((x) => x.classList.toggle('on', x === b)); $('#f-ig-w', f).classList.toggle('hide', cm !== 'instagram'); }));
+    const igIn = $('#f-ig', f), igH = $('#f-igh', f);
+    const igSync = () => { const v = igIn.value.trim(), u = igUrl(v); igIn.classList.remove('err');
+      igH.innerHTML = !v ? '' : u ? `Перевірте, чи це ваш профіль: <a href="${esc(u)}" target="_blank" rel="noopener"><b>${esc(u.slice(8))}</b> ↗</a>` : '<span style="color:var(--bad)">Не схоже на нікнейм Instagram — лише латинські літери, цифри, крапка і _</span>'; };
+    igIn.oninput = igSync; igSync();
     const ph = $('#f-p', f);
     ph.addEventListener('focus', () => { if (!ph.value) ph.value = '+380'; });
     f.addEventListener('keydown', (e) => { if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); $('#f-go', f).click(); } });
     f.onsubmit = async (e) => {
       e.preventDefault();
-      const name = $('#f-n', f).value.trim(), phone = normPhone(ph.value), ig = igNick($('#f-ig', f).value) || $('#f-ig', f).value.trim().replace(/^@/, '').slice(0, 40), cmt = $('#f-cm', f).value.trim();
+      const name = $('#f-n', f).value.trim(), phone = normPhone(ph.value), ig = igNick($('#f-ig', f).value), cmt = $('#f-cm', f).value.trim();
       const err = $('#f-err', f); const bad = [];
       $('#f-n', f).classList.toggle('err', name.length < 2); if (name.length < 2) bad.push('вкажіть імʼя');
       ph.classList.toggle('err', !phone); if (!phone) bad.push('вкажіть правильний номер телефону');
       if (!cm) bad.push('оберіть, як з вами звʼязатись');
+      if (cm === 'instagram') { const okIg = !!igNick(igIn.value); igIn.classList.toggle('err', !okIg); if (!okIg) bad.push('вкажіть правильний нікнейм Instagram'); }
       if (bad.length) { err.textContent = 'Будь ласка, ' + bad.join(', ') + '.'; err.classList.remove('hide'); return; }
       err.classList.add('hide');
       await busy($('#f-go', f), async () => {
