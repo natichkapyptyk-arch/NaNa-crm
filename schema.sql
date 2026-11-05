@@ -507,7 +507,8 @@ declare a appointments; v_dur int; v_err text;
 begin
   select * into a from appointments where id = p_appt;
   if a.id is null or not is_staff() then raise exception 'Немає доступу'; end if;
-  if not (is_boss() or (a.staff_id = me() and p_staff = me())) then raise exception 'Майстер може змінювати лише свої записи'; end if;
+  -- власниця/адмін — будь-який запис; майстер — свій у межах свого стовпчика; хто створив запис до іншої майстрині — може його перенести (виправити помилку)
+  if not (is_boss() or (a.staff_id = me() and p_staff = me()) or (a.status = 'booked' and a.created_by is not null and a.created_by = auth.uid())) then raise exception 'Майстер може змінювати лише свої записи'; end if;
   if p_staff <> a.staff_id then if not exists (select 1 from master_services x where x.staff_id = p_staff and x.service_id = a.service_id and x.is_active) then raise exception 'Цей майстер не виконує обрану послугу'; end if; end if;
   v_dur := coalesce(p_dur, extract(epoch from (a.ends_at - a.starts_at))::int / 60);
   perform pg_advisory_xact_lock(hashtext(p_staff::text));
@@ -557,7 +558,8 @@ declare a appointments; pct numeric;
 begin
   select * into a from appointments where id = p_appt;
   if a.id is null or not is_staff() then raise exception 'Немає доступу'; end if;
-  if not (is_boss() or a.staff_id = me()) then raise exception 'Майстер може змінювати лише свої записи'; end if;
+  -- хто створив запис до іншої майстрині — може лише скасувати його (якщо помилився)
+  if not (is_boss() or a.staff_id = me() or (p_status = 'cancel' and a.status = 'booked' and a.created_by is not null and a.created_by = auth.uid())) then raise exception 'Майстер може змінювати лише свої записи'; end if;
   if p_status not in ('booked','done','cancel','noshow') then raise exception 'Невідомий статус'; end if;
   if a.status = 'done' and not is_boss() then raise exception 'Змінити завершений візит може лише власниця або адмін'; end if;
   if p_status = 'done' then

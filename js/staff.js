@@ -348,7 +348,7 @@ const Staff = (() => {
     const wrap = $('.cal-wrap', body); if (!wrap) return;
     const step = +S.settings.step_min || 15;
     let d = null, skipClick = false;
-    const can = (g) => g.items.every((a) => a.status === 'booked') && (isBoss() || g.items[0].staff_id === S.me.id);
+    const can = (g) => g.items.every((a) => a.status === 'booked') && (isBoss() || g.items[0].staff_id === S.me.id || g.items.every(madeByMe));
     const colAt = (x) => $$('.cal-col', body).find((c) => { const r = c.getBoundingClientRect(); return x >= r.left && x <= r.right; });
     const durOf = (g) => (Date.parse(g.items[g.items.length - 1].ends_at) - Date.parse(g.items[0].starts_at)) / 6e4;
     const begin = (el, g, x, y, touch) => {
@@ -384,7 +384,7 @@ const Staff = (() => {
       const g = x.g, a0 = g.items[0], from = kParts(a0.starts_at).min, mid = x.col?.dataset.col;
       const back = () => { x.gh?.remove(); x.el.classList.remove('drg-src'); };
       if (!mid || x.min == null || (mid === a0.staff_id && x.min === from)) return back();
-      if (!isBoss() && mid !== S.me.id) { back(); return toast('Переносити можна лише у свій стовпчик', 'bad'); }
+      if (!isBoss() && mid !== S.me.id && !g.items.every(madeByMe)) { back(); return toast('Переносити можна лише у свій стовпчик', 'bad'); }
       if (mid !== a0.staff_id) { const bad = g.items.find((a) => !msOf(mid).some((m) => m.service_id === a.service_id));
         if (bad) { back(); return toast(`${byId(mid)?.first_name || 'Цей майстер'} не виконує «${svcById(bad.service_id)?.name || 'цю послугу'}»`, 'bad', 4500); } }
       const delta = x.min - from, other = mid !== a0.staff_id;
@@ -478,11 +478,18 @@ const Staff = (() => {
   const refresh = () => { const h = location.hash; if (h.startsWith('#/staff/cal') || h === '#/staff' || h === '#staff') open(h.replace(/^#\/?staff\/?/, '')); else if (h.startsWith('#/staff/clients')) open('clients'); };
 
   /* ================= картка запису ================= */
+  // запис, який майстриня сама створила до іншої майстрині, — може перенести або скасувати (виправити помилку)
+  const madeByMe = (a) => !isBoss() && a.status === 'booked' && !!a.created_by && a.created_by === S.me.user_id && a.staff_id !== S.me.id;
+  const staffByUser = (uid) => uid && S.staff.find((x) => x.user_id === uid);
   async function openAppt(a) {
     const m = byId(a.staff_id), sv = svcById(a.service_id), c = a.clients || {};
-    const mine = isBoss() || a.staff_id === S.me.id;
+    const mine = isBoss() || a.staff_id === S.me.id, made = madeByMe(a);
+    const who = a.visits?.source === 'online' ? 'клієнт(ка) онлайн' : staffByUser(a.created_by) ? (a.created_by === S.me.user_id ? 'ви' : staffByUser(a.created_by).first_name) : '';
     const pay = a.payments;
-    const actions = !mine ? '' : a.status === 'booked' ? `
+    const actions = made ? `
+        <button class="btn" data-act="move" title="Ви створили цей запис — можна змінити день, час або майстра">Перенести</button>
+        <button class="btn red" data-act="cancel" title="Ви створили цей запис — можна скасувати, якщо помилились">Скасувати</button>`
+      : !mine ? '' : a.status === 'booked' ? `
         <button class="btn pri" data-act="done" title="Відмітити, що клієнт прийшов, і записати оплату">✓ Завершити й оплатити</button>
         <button class="btn" data-act="move" title="Змінити день, час або майстра">Перенести</button>
         <button class="btn" data-act="noshow" title="Клієнт не прийшов на запис">Не прийшов(ла)</button>
@@ -493,6 +500,7 @@ const Staff = (() => {
       <div class="row wrap mb"><span class="pill ${a.status}">${STATUS[a.status]}</span>${a.visits?.source === 'online' ? '<span class="pill i">записався(лась) онлайн</span>' : ''}${a.demo ? '<span class="pill g" title="Демо-запис — можна видалити в Налаштуваннях">демо</span>' : ''}</div>
       <dl class="kv"><dt>Коли</dt><dd>${esc(fmtDay(dayOf(a.starts_at), { weekday: 'long', day: 'numeric', month: 'long' }))}, ${fmtT(a.starts_at)}–${fmtT(a.ends_at)}</dd>
         <dt>Майстер</dt><dd>${esc(fullName(m || {}))}</dd><dt>Ціна</dt><dd>${money(a.price)}</dd>
+        ${who ? `<dt>Записав(ла)</dt><dd>${esc(who)}${a.created_at ? ` · ${esc(relDay(dayOf(a.created_at)))}, ${fmtT(a.created_at)}` : ''}</dd>` : ''}
         ${pay ? `<dt>Оплачено</dt><dd>${money(pay.amount)} · ${esc(pay.method)}</dd>` : ''}
         ${a.cancel_reason ? `<dt>Причина</dt><dd>${esc(a.cancel_reason)}</dd>` : ''}${a.cancelled_by ? `<dt>Скасував(ла)</dt><dd>${a.cancelled_by === 'client' ? 'клієнт онлайн' : 'салон'}</dd>` : ''}
         ${a.visits?.comment ? `<dt>Коментар</dt><dd>${esc(a.visits.comment)}</dd>` : ''}</dl><div id="a-visit"></div>
@@ -677,7 +685,7 @@ const Staff = (() => {
   function moveSheet(a) {
     const st = { mid: a.staff_id, day: dayOf(a.starts_at), min: kParts(a.starts_at).min, dur: Math.round((Date.parse(a.ends_at) - Date.parse(a.starts_at)) / 6e4) };
     const s = sheet({ title: 'Перенести запис', body: `<div class="sm mut mb">${esc(svcById(a.service_id)?.name)} · ${esc(a.clients?.name || '')} · зараз ${esc(relDay(st.day))}, ${fmtT(a.starts_at)}</div>
-      ${isBoss() ? `<label class="lb" for="mv-m">Майстер <span class="mut" style="font-weight:600">· хто виконує цю послугу</span></label><select class="inp" id="mv-m">${masters().filter((m) => m.id === st.mid || msOf(m.id).some((x) => x.service_id === a.service_id)).map((m) => `<option value="${m.id}" ${m.id === st.mid ? 'selected' : ''}>${esc(fullName(m))}</option>`).join('')}</select>` : ''}
+      ${isBoss() || madeByMe(a) ? `<label class="lb" for="mv-m">Майстер <span class="mut" style="font-weight:600">· хто виконує цю послугу</span></label><select class="inp" id="mv-m">${masters().filter((m) => m.id === st.mid || msOf(m.id).some((x) => x.service_id === a.service_id)).map((m) => `<option value="${m.id}" ${m.id === st.mid ? 'selected' : ''}>${esc(fullName(m))}</option>`).join('')}</select>` : ''}
       <div class="two"><div><label class="lb" for="mv-d">Дата</label><input class="inp" type="date" id="mv-d" value="${st.day}"></div>
       <div><label class="lb" for="mv-u">Тривалість, хв</label><input class="inp" type="number" id="mv-u" min="5" step="5" value="${st.dur}"></div></div>
       <label class="lb">Час</label><div id="mv-t"></div>`,
