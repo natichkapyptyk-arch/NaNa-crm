@@ -475,7 +475,7 @@ returns uuid language plpgsql volatile security definer set search_path = public
 declare v_client uuid := p_client; v_visit uuid := p_visit; v_dur int; v_price numeric; v_err text; v_id uuid; v_phone text;
 begin
   if not is_staff() then raise exception 'Немає доступу'; end if;
-  if not (is_boss() or p_staff = me()) then raise exception 'Майстер може записувати лише до себе'; end if;
+  -- будь-хто з персоналу може записати клієнта до будь-якого майстра (Поліна — до Лізи тощо)
   select coalesce(p_dur, ms.dur, s.dur), coalesce(p_price, ms.price, s.price) into v_dur, v_price
     from services s left join master_services ms on ms.service_id = s.id and ms.staff_id = p_staff where s.id = p_service;
   if v_dur is null then raise exception 'Оберіть послугу'; end if;

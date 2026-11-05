@@ -336,7 +336,6 @@ const Staff = (() => {
     $$('.cal-col', body).forEach((c) => (c.onclick = (e) => {
       if (e.target.closest('.ap,.blk')) return;
       const r = c.getBoundingClientRect(); let m = s0 + (e.clientY - r.top) / PX; m = Math.floor(m / S.settings.step_min) * S.settings.step_min;
-      if (!isBoss() && c.dataset.col !== S.me.id) return toast('Записувати можна лише до себе', 'bad');
       newAppt({ mid: c.dataset.col, day: S.day, min: m });
     }));
     bindDay(body, dd);
@@ -705,7 +704,7 @@ const Staff = (() => {
     const s = sheet({ title: visit ? 'Додати послугу до візиту' : 'Новий запис', wide: false, body: `
       <label class="lb">Клієнт <span class="req">*</span></label><div id="na-c"></div>
       <label class="lb" for="na-m">Майстер <span class="req">*</span></label>
-      <select class="inp" id="na-m" ${isBoss() ? '' : 'disabled'}><option value="">— оберіть майстра —</option>${ms.map((m) => `<option value="${m.id}" ${m.id === mid ? 'selected' : ''}>${esc(fullName(m))}</option>`).join('')}</select>
+      <select class="inp" id="na-m" title="До якого майстра записати клієнта (можна до будь-кого)"><option value="">— оберіть майстра —</option>${ms.map((m) => `<option value="${m.id}" ${m.id === mid ? 'selected' : ''}>${esc(fullName(m))}</option>`).join('')}</select>
       <label class="lb" for="na-s">Послуга <span class="req">*</span></label><select class="inp" id="na-s"></select>
       <div class="two"><div><label class="lb" for="na-u">Тривалість, хв</label><input class="inp" id="na-u" type="number" min="5" step="5"></div><div><label class="lb" for="na-p">Ціна, ₴</label><input class="inp" id="na-p" type="number" min="0" step="10"></div></div>
       <label class="lb ${visit ? 'hide' : ''}" for="na-d">Дата <span class="req">*</span></label><input class="inp ${visit ? 'hide' : ''}" id="na-d" type="date" value="${day}">
@@ -769,7 +768,7 @@ const Staff = (() => {
     $('#na-u', el).onchange = (e) => { st.dur = Math.max(5, +e.target.value || 0) || null; drawTime(); };
     $('#na-p', el).onchange = (e) => (st.price = e.target.value === '' ? null : +e.target.value);
     $('#na-d', el).onchange = (e) => { if (e.target.value) { st.day = e.target.value; drawTime(); } };
-    if (!isBoss()) { st.mid = S.me.id; msel.value = S.me.id; }
+    if (!isBoss() && !st.mid && S.me.is_bookable) { st.mid = S.me.id; msel.value = S.me.id; }   // за замовчуванням — до себе, але можна обрати будь-кого
     fillSvc();
     $('[data-x2]', el).onclick = s.close;
     el.addEventListener('keydown', (e) => { if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') $('#na-ok', el).click(); });
