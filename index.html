@@ -6,6 +6,7 @@
 <title>NaNa studio — онлайн-запис</title>
 <meta name="description" content="NaNa studio, Львів, просп. Свободи 41 — брови, вії, манікюр, педикюр, макіяж, укладки. Онлайн-запис.">
 <meta name="theme-color" content="#4E4E4C">
+<script>if(navigator.standalone)document.documentElement.classList.add('pwa')</script>
 <script>/* тема до завантаження стилів — щоб не блимало */try{var t=JSON.parse(localStorage.getItem('nana.theme')||'"auto"');if(t==='dark'||t==='light')document.documentElement.dataset.theme=t;if(t==='dark'||(t!=='light'&&matchMedia('(prefers-color-scheme: dark)').matches))document.querySelector('meta[name="theme-color"]').content='#1F1F1D'}catch(e){}</script>
 <meta property="og:title" content="NaNa studio — онлайн-запис">
 <meta property="og:description" content="Брови, вії, манікюр, педикюр. Львів, просп. Свободи 41">
@@ -21,15 +22,21 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;700;800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="css/app.css?v=202611051340">
+<link rel="stylesheet" href="css/app.css?v=202611051350">
 </head>
 <body>
+<div id="splash" aria-hidden="true"><img src="img/banana-t.png" alt=""><b>NaNa</b><i></i></div>
 <div id="app"><div class="spin"></div></div>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
-<script src="js/core.js?v=202611051340"></script>
-<script src="js/book.js?v=202611051340"></script>
-<script src="js/staff.js?v=202611051340"></script>
-<script src="js/admin.js?v=202611051340"></script>
+<script src="js/core.js?v=202611051350"></script>
+<script src="js/book.js?v=202611051350"></script>
+<script src="js/staff.js?v=202611051350"></script>
+<script src="js/admin.js?v=202611051350"></script>
 <script>route();</script>
+<script>/* заставка застосунку: ховаємо, коли зʼявилась перша сторінка (не раніше 0,7 с і не пізніше 8 с) */
+(function () { var s = document.getElementById('splash'); if (!s) return; if (getComputedStyle(s).display === 'none') { s.remove(); return; }
+  var t0 = Date.now(), ready = function () { var a = document.getElementById('app').firstElementChild, m = document.getElementById('st-main'), f = m && m.firstElementChild;
+    return a && !a.classList.contains('spin') && !(f && f.classList.contains('spin')); };
+  var iv = setInterval(function () { var d = Date.now() - t0; if ((ready() && d > 700) || d > 8000) { clearInterval(iv); s.classList.add('out'); setTimeout(function () { s.remove(); }, 450); } }, 100); })();</script>
 </body>
 </html>

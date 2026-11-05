@@ -598,3 +598,14 @@ body.cal-full .st-tabs,body.cal-full .cal-bar #c-new{display:none!important}
 /* короткі підписи кнопок на телефоні */
 .ph-t{display:none}
 @media (max-width:759px){.lg-t{display:none}.ph-t{display:inline}}
+
+/* заставка при відкритті застосунку з головного екрана телефона */
+#splash{display:none}
+@media (display-mode:standalone){#splash{display:flex}}
+.pwa #splash{display:flex}
+#splash{position:fixed;inset:0;z-index:10000;background:#262624;flex-direction:column;align-items:center;justify-content:center;gap:14px;transition:opacity .4s ease}
+#splash img{width:132px;animation:spl-b 1.6s ease-in-out infinite;transform-origin:60% 60%}
+#splash b{color:#E4EA20;font-size:22px;font-weight:800;letter-spacing:.08em;opacity:.9}
+#splash i{width:24px;height:24px;margin-top:10px;border-radius:50%;border:3px solid rgba(228,234,32,.22);border-top-color:#E4EA20;animation:sp .8s linear infinite}
+#splash.out{opacity:0;pointer-events:none}
+@keyframes spl-b{0%,100%{transform:rotate(-7deg)}50%{transform:rotate(7deg) scale(1.04)}}
