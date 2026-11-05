@@ -942,7 +942,7 @@ const Staff = (() => {
     const F = { all: ['Усі', () => true], stale: [`Застарілі (${stale}+ днів)`, isStale], next: ['Мають запис', (c) => !!c.next_visit],
       fresh: ['Нові за 30 днів', (c) => daysBetween(dayOf(c.created_at), t) <= 30], noshow: ['Не приходили', (c) => c.noshows > 0], never: ['Без візитів', (c) => !c.visits && !c.next_visit] };
     S.cf = arg && F[arg] ? arg : S.cf || 'all'; S.cq = S.cq || ''; S.csort = S.csort || 'last';
-    main.innerHTML = `<div class="pg-h"><h1>Клієнти</h1>${isBoss() ? `<button class="btn" id="cl-copy" title="Скопіювати телефони клієнтів зі списку нижче — для розсилки">Скопіювати номери</button>` : ''}<button class="btn pri" id="cl-new" title="Записати клієнта">${IC.plus} Запис</button></div>
+    main.innerHTML = `<div class="pg-h"><h1>Клієнти</h1>${isBoss() ? `<button class="btn" id="cl-imp" title="Додати клієнтів з таблиці Excel (наприклад, експорт з EasyWeek)">⬆ Імпорт</button><button class="btn" id="cl-copy" title="Скопіювати телефони клієнтів зі списку нижче — для розсилки">Скопіювати номери</button>` : ''}<button class="btn pri" id="cl-new" title="Записати клієнта">${IC.plus} Запис</button></div>
       <div class="search mb">${IC.search}<input class="inp" id="cl-q" placeholder="Пошук за імʼям або телефоном" value="${esc(S.cq)}"></div>
       <div class="chips scroll mb">${Object.entries(F).map(([k, [n, f]]) => `<button class="chip ${S.cf === k ? 'on' : ''}" data-f="${k}" title="Фільтр: ${esc(n)}">${esc(n)} <span class="n">${rows.filter(f).length}</span></button>`).join('')}</div>
       <div class="row sp mb"><div class="sm mut" id="cl-cnt"></div><select class="inp" id="cl-sort" style="max-width:230px;min-height:36px;padding:6px 10px" title="Сортування списку">
@@ -975,6 +975,63 @@ const Staff = (() => {
     const cp = $('#cl-copy'); if (cp) cp.onclick = async () => {
       const txt = (S.cshown || []).map((c) => `${c.name}\t${c.phone}`).join('\n');
       try { await navigator.clipboard.writeText(txt); toast(`Скопійовано ${S.cshown.length} номерів`); } catch (e) { toast('Не вдалося скопіювати', 'bad'); }
+    };
+    const im = $('#cl-imp'); if (im) im.onclick = () => importSheet(rows);
+  }
+
+  /* імпорт клієнтів з Excel / CSV (EasyWeek: Клієнти → Експорт) — лише імʼя, телефон, день народження, дата створення */
+  let _xlsx;
+  const loadXlsx = () => (window.XLSX ? Promise.resolve() : (_xlsx ||= new Promise((ok, bad) => { const s = document.createElement('script'); s.src = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js'; s.onload = ok; s.onerror = () => { _xlsx = null; bad(new Error('Не вдалося завантажити читач Excel. Перевірте інтернет.')); }; document.head.appendChild(s); })));
+  function parseClients(table) {   // table: масив рядків (масивів); 1-й рядок — заголовки
+    const H = (table[0] || []).map((h) => String(h ?? '').trim().toLowerCase().replace(/[ʼ’`]/g, "'"));
+    const col = (...names) => H.findIndex((h) => names.some((n) => h === n || h.startsWith(n)));
+    const iN = col("ім'я", 'імя', 'имя', 'name', 'first name'), iL = col('прізвище', 'фамилия', 'last name', 'surname'), iP = col('телефон', 'phone', 'мобільний'),
+      iB = col('день народження', 'дата народження', 'birthday', 'день рождения'), iC = col('дата створення', 'created');
+    if (iN < 0 || iP < 0) return { err: 'У таблиці не знайдено колонок «Імʼя» і «Телефон».' };
+    const dmy = (v) => { if (v instanceof Date) return { day: `${v.getFullYear()}-${pad(v.getMonth() + 1)}-${pad(v.getDate())}`, min: v.getHours() * 60 + v.getMinutes() };
+      const m = String(v ?? '').match(/(\d{1,2})[./-](\d{1,2})[./-](\d{4})(?:\D+(\d{1,2}):(\d{2}))?/) || String(v ?? '').match(/(\d{4})-(\d{2})-(\d{2})(?:\D+(\d{1,2}):(\d{2}))?/);
+      if (!m) return null; const [y, mo, d] = m[3].length === 4 ? [m[3], m[2], m[1]] : [m[1], m[2], m[3]];
+      if (+mo < 1 || +mo > 12 || +d < 1 || +d > 31) return null; return { day: `${y}-${pad(+mo)}-${pad(+d)}`, min: m[4] ? +m[4] * 60 + +m[5] : 12 * 60 }; };
+    const clean = (s) => String(s ?? '').replace(/\s+/g, ' ').trim();
+    const out = new Map(); let bad = 0;
+    table.slice(1).forEach((r) => {
+      if (!r || r.every((x) => x == null || x === '')) return;
+      const a = clean(r[iN]), b = iL >= 0 ? clean(r[iL]) : '', phone = normPhone(r[iP]);
+      const name = !b || b.toLowerCase() === a.toLowerCase() ? a : a ? `${a} ${b}` : b;
+      if (!phone || !name) { bad++; return; }
+      const bd = iB >= 0 ? dmy(r[iB]) : null, cr = iC >= 0 ? dmy(r[iC]) : null;
+      if (!out.has(phone)) out.set(phone, { name, phone, birthday: bd ? bd.day : null, created_at: cr ? kDate(cr.day, cr.min).toISOString() : undefined });
+    });
+    return { list: [...out.values()], bad };
+  }
+  function importSheet(existing) {
+    const have = new Set(existing.map((c) => c.phone));
+    const s = sheet({ title: 'Імпорт клієнтів', body: `<p class="mut sm" style="margin:0 0 12px">Оберіть таблицю Excel (.xlsx) або CSV. Потрібні колонки «Імʼя» і «Телефон». Також беруться «Прізвище», «День народження» і «Дата створення», якщо вони є. Підходить експорт клієнтів з EasyWeek.</p>
+      <input type="file" class="inp" id="im-f" accept=".xlsx,.xls,.csv"><div id="im-r" class="mt"></div>` });
+    let ready = [];
+    $('#im-f', s.el).onchange = async (e) => {
+      const f = e.target.files[0], box = $('#im-r', s.el); if (!f) return;
+      box.innerHTML = '<div class="spin"></div>';
+      try {
+        await loadXlsx();
+        const wb = XLSX.read(await f.arrayBuffer(), { type: 'array', cellDates: true });
+        const r = parseClients(XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1, raw: true, defval: null }));
+        if (r.err) { box.innerHTML = `<div class="hint" style="color:var(--bad)">${esc(r.err)}</div>`; return; }
+        ready = r.list.filter((c) => !have.has(c.phone)); const dup = r.list.length - ready.length;
+        box.innerHTML = `<div class="card" style="padding:12px 14px"><b>Нових клієнтів: ${ready.length}</b>
+          <div class="sm mut">${dup ? `Уже є в системі (той самий телефон), їх не чіпаю: ${dup}<br>` : ''}${r.bad ? `Без телефону або імені, пропущено: ${r.bad}<br>` : ''}Записи й візити з файлу не переносяться, лише картки клієнтів.</div></div>
+          ${ready.length ? `<div class="sm mut mt">Приклад:</div>${ready.slice(0, 5).map((c) => `<div class="list-row"><div class="grow"><div class="nm ell">${esc(c.name)}</div><div class="sub">${esc(fmtPhone(c.phone))}${c.birthday ? ' · 🎂 ' + esc(fmtDay(c.birthday, { day: 'numeric', month: 'long', year: 'numeric' })) : ''}</div></div></div>`).join('')}
+          <button class="btn pri wide mt" id="im-go">Додати ${ready.length} ${plural(ready.length, 'клієнта', 'клієнтів', 'клієнтів')}</button>` : ''}`;
+        const go = $('#im-go', s.el); if (go) go.onclick = () => busy(go, async () => {
+          let done = 0;
+          for (let i = 0; i < ready.length; i += 400) {
+            const { error } = await sb.from('clients').upsert(ready.slice(i, i + 400), { onConflict: 'phone', ignoreDuplicates: true });
+            if (error) { toast(`Додано ${done}. Помилка: ${errMsg(error)}`, 'bad', 6000); return; }
+            done += Math.min(400, ready.length - i); go.textContent = `Додаю… ${done} з ${ready.length}`;
+          }
+          S.clientsCache = null; s.close(); toast(`Додано ${done} ${plural(done, 'клієнта', 'клієнтів', 'клієнтів')}`); refresh();
+        });
+      } catch (x) { box.innerHTML = `<div class="hint" style="color:var(--bad)">${esc(errMsg(x))}</div>`; }
     };
   }
   async function clientSheet(id) {
