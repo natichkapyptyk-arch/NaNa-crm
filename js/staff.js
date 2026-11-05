@@ -756,7 +756,7 @@ const Staff = (() => {
         if (visit) $('#na-cx', c)?.remove(); else $('#na-cx', c).onclick = () => { st.client = null; drawClient(); };   // у візиті клієнт той самий
         return;
       }
-      c.innerHTML = `<div class="search">${IC.search}<input class="inp" id="na-q" placeholder="Пошук: імʼя або телефон" autocomplete="off" autofocus></div><div id="na-sg"></div>
+      c.innerHTML = `<div class="search">${IC.search}<input class="inp" id="na-q" placeholder="Пошук: імʼя, телефон або Instagram" autocomplete="off" autofocus></div><div id="na-sg"></div>
         <div id="na-newc" class="hide"><div class="two mt"><input class="inp" id="na-cn" placeholder="Імʼя клієнта"><input class="inp" id="na-cp" type="tel" placeholder="+380…"></div><div id="na-dup"></div>
         <div class="chips mt" id="na-cc">${Object.entries(CONTACTS).map(([k, [n]]) => `<button type="button" class="chip ${k === st.contact ? 'on' : ''}" data-cc="${k}" title="Клієнту зручно: ${n}">${n}</button>`).join('')}</div></div>`;
       const q = $('#na-q', c), sg = $('#na-sg', c);
@@ -1168,15 +1168,15 @@ const Staff = (() => {
   }
   function mergeSheet(c, cardSheet) {
     const s = sheet({ title: 'Обʼєднати клієнтів', body: `<div class="hint mb">Знайдіть іншу картку тієї ж людини, що й <b>${esc(c.name)}</b> (${esc(fmtPhone(c.phone))}).</div>
-      <div class="search">${IC.search}<input class="inp" id="mg-q" placeholder="Пошук: імʼя або телефон" autocomplete="off" autofocus></div><div id="mg-sg"></div>` });
+      <div class="search">${IC.search}<input class="inp" id="mg-q" placeholder="Пошук: імʼя, телефон або Instagram" autocomplete="off" autofocus></div><div id="mg-sg"></div>` });
     const q = $('#mg-q', s.el), sg = $('#mg-sg', s.el); let tmr;
     q.oninput = () => { clearTimeout(tmr); tmr = setTimeout(async () => {
-      const v = q.value.trim().replace(/[,()*%\\]/g, ' ').trim(), digits = v.replace(/\D/g, '');
+      const v = q.value.trim().replace(/[,()*%\\"]/g, ' ').trim(), digits = v.replace(/\D/g, ''), vi = igNick(v) || v.replace(/^@/, '');
       if (v.length < 2) { sg.innerHTML = ''; return; }
       let rq = sb.from('clients').select('id,name,phone,contact,instagram').neq('id', c.id).limit(8);
-      rq = digits.length >= 3 ? rq.ilike('phone', '%' + digits + '%') : rq.ilike('name', '%' + v + '%');
+      rq = digits.length >= 3 && !/[a-z]/i.test(v) ? rq.ilike('phone', '%' + digits + '%') : rq.or(`name.ilike.*${v}*,instagram.ilike.*${vi}*`);
       const { data } = await rq;
-      sg.innerHTML = `<div class="sugg">${(data || []).map((x) => `<div data-mg="${x.id}" title="Обрати цю картку"><b>${esc(x.name)}</b> <span class="mut sm">${esc(fmtPhone(x.phone))}</span></div>`).join('') || '<div class="mut" style="cursor:default">Нікого не знайдено</div>'}</div>`;
+      sg.innerHTML = `<div class="sugg">${(data || []).map((x) => `<div data-mg="${x.id}" title="Обрати цю картку"><b>${esc(x.name)}</b> <span class="mut sm">${esc(fmtPhone(x.phone))}${x.instagram ? ' · @' + esc(x.instagram) : ''}</span></div>`).join('') || '<div class="mut" style="cursor:default">Нікого не знайдено</div>'}</div>`;
       $$('[data-mg]', sg).forEach((d) => (d.onclick = () => pick(data.find((x) => x.id === d.dataset.mg))));
     }, 220); };
     const cnt = async (id) => (await sb.from('appointments').select('id', { count: 'exact', head: true }).eq('client_id', id).eq('status', 'done')).count || 0;
