@@ -213,7 +213,7 @@ const Client = (() => {
         <label class="lb" for="f-p">Номер телефону <span class="req">*</span></label><input class="inp" id="f-p" type="tel" inputmode="tel" autocomplete="tel" value="${esc(me.phone || '')}" placeholder="+380 __ ___ __ __" maxlength="20">
         <label class="lb">Як з вами звʼязатись <span class="req">*</span></label><div class="cm-opts" id="f-c">${opts}</div>
         <div id="f-ig-w" class="${me.contact === 'instagram' ? '' : 'hide'}"><label class="lb" for="f-ig">Ваш нік в Instagram</label><input class="inp" id="f-ig" value="${esc(me.instagram || '')}" placeholder="@nickname" maxlength="40"></div>
-        <label class="lb" for="f-cm">Коментар <span class="mut" style="font-weight:600">(необовʼязково)</span></label><textarea class="inp" id="f-cm" rows="2" maxlength="300" placeholder="Побажання майстру, алергії тощо"></textarea>
+        <label class="lb" for="f-cm">Коментар <span class="mut" style="font-weight:600">(необовʼязково)</span></label><textarea class="inp" id="f-cm" rows="2" maxlength="300" placeholder="Коментар, уточнення для майстра"></textarea>
         <div class="errtxt hide" id="f-err"></div>
         <div class="cart-tot"><span>${st.cart.length} ${plural(st.cart.length, 'послуга', 'послуги', 'послуг')}</span><span>${cartFrom()}${money(cartTotal())}</span></div>
         <button class="btn pri lg wide mt" id="f-go" title="Підтвердити запис (Ctrl/⌘+Enter)">Записатися · ${cartFrom()}${money(cartTotal())}</button>
