@@ -7,7 +7,7 @@
 - Копія сайту — vapors.app/nana (репозиторій PachoErerra/crm, папка `public/nana/`): оновлювати лише на прохання, перед цим перевірити зміни.
 - Час салону — Europe/Kyiv. Нічого з демо-даних не вважати справжнім (`demo = true`).
 - База — Supabase, проєкт `arkwtpihdaqnwhdcjpqf`. У `index.html` лише публічний anon key; секретний `service_role` ніколи не додавати в репозиторій.
-- Будь-який коміт у `main` → Netlify сам оновлює сайт за ~1 хвилину.
+- Будь-який коміт у `main` → Cloudflare Pages (проєкт `nana-studio`, https://nana-studio.pages.dev) сам оновлює сайт за ~1 хвилину. Стара адреса на Netlify (marvelous-axolotl-ddd447.netlify.app) з 05.11.2026 не оновлюється — на безкоштовному тарифі закінчився ліміт.
 
 ## Хто вносить зміни
 Зміни роблять **два чати**: Наталки (власниця репозиторію) і співавтора `PachoErerra`.
