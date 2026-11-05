@@ -72,8 +72,7 @@ async function onCallback(cq: any) {
   const { data: s } = await db.from('staff').select('id, first_name').eq('tg_chat_id', chat).eq('is_active', true).maybeSingle();
   if (!s) return tg('answerCallbackQuery', { callback_query_id: cq.id, text: 'Не знайшли вас серед персоналу', show_alert: true });
   const st = await settings();
-  const now = Date.now();
-  const open = (await dayAppts(s.id, d)).filter((a) => a.status === 'booked' && Date.parse(a.starts_at) < now);
+  const open = (await dayAppts(s.id, d)).filter((a) => a.status === 'booked');   // усі незакриті записи за день, навіть пізніші
   if (cq.message) await tg('editMessageReplyMarkup', { chat_id: chat, message_id: cq.message.message_id, reply_markup: { inline_keyboard: [] } });
   if (!open.length) {
     await tg('answerCallbackQuery', { callback_query_id: cq.id, text: 'Дякую! 💛' });
