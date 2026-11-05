@@ -136,10 +136,12 @@ const Staff = (() => {
     const nav = NAV();
     $('#st-nav').innerHTML = nav.map(([k, n, ic]) => `<a href="#/staff/${k}" class="${k === page ? 'on' : ''}" title="${TIPS[k]}">${ic}<span>${n}</span></a>`).join('') +
       `<div class="sep"></div><a href="#" target="_blank" title="Відкрити сторінку онлайн-запису, яку бачать клієнти">${IC.globe.replace('width="14" height="14"', 'width="20" height="20"')}<span>Сторінка запису</span></a>
+       <a href="javascript:void 0" id="nav-th" title="Світла або темна тема">${THEMES[themeNow()][0]}<span>Тема: ${THEMES[themeNow()][1].toLowerCase()}</span></a>
        ${isStandalone() ? '' : `<a href="javascript:void 0" id="nav-app" title="Встановити панель як застосунок на телефон або компʼютер">📲<span>На телефон</span></a>`}
        <a href="javascript:void 0" id="nav-out" title="Вийти з програми на цьому пристрої">${IC.out}<span>Вийти</span></a>`;
     $('#nav-out').onclick = logout;
     const na = $('#nav-app'); if (na) na.onclick = () => installApp(true);
+    $('#nav-th').onclick = () => themeSheet((t) => { $('#nav-th').innerHTML = `${THEMES[t][0]}<span>Тема: ${THEMES[t][1].toLowerCase()}</span>`; });
     const main4 = ['cal', 'clients', 'sched', isBoss() ? 'dash' : 'earn'];
     $('#st-tabs').innerHTML = nav.filter((x) => main4.includes(x[0])).map(([k, n, ic]) => `<a href="#/staff/${k}" class="${k === page ? 'on' : ''}" title="${TIPS[k]}">${ic}<span>${n.replace('Мій заробіток', 'Заробіток')}</span></a>`).join('') +
       `<a href="javascript:void 0" id="tab-more" class="${main4.includes(page) ? '' : 'on'}" title="Інші розділи">${IC.more}<span>Ще</span></a>`;
@@ -147,10 +149,12 @@ const Staff = (() => {
       const s = sheet({ title: 'Розділи', body: nav.filter((x) => !main4.includes(x[0])).map(([k, n, ic]) => `<a class="list-row" href="#/staff/${k}" title="${TIPS[k]}"><span style="width:22px">${ic}</span><div class="grow nm">${n}</div>${IC.fwd}</a>`).join('') +
         `<a class="list-row" href="#" target="_blank" title="Сторінка, яку бачать клієнти"><span style="width:22px">${IC.globe}</span><div class="grow nm">Сторінка онлайн-запису</div></a>
          ${isStandalone() ? '' : `<div class="list-row" id="m-app" title="Іконка NaNa на екрані телефона — відкривається одразу календар"><span style="width:22px;text-align:center">📲</span><div class="grow nm">Встановити на телефон</div>${IC.fwd}</div>`}
+         <div class="list-row" id="m-th" title="Світла або темна тема"><span style="width:22px;text-align:center">${THEMES[themeNow()][0]}</span><div class="grow nm">Тема: ${THEMES[themeNow()][1].toLowerCase()}</div></div>
          <div class="list-row" id="m-out" title="Вийти з програми"><span style="width:22px">${IC.out}</span><div class="grow nm">Вийти</div></div>` });
       $$('a.list-row', s.el).forEach((a) => a.addEventListener('click', () => s.close()));
       const ma = $('#m-app', s.el); if (ma) ma.onclick = () => { s.close(); installApp(true); };
       $('#m-out', s.el).onclick = () => { s.close(); logout(); };
+      $('#m-th', s.el).onclick = () => { s.close(); themeSheet(); };
     };
     const t = nav.find((x) => x[0] === page); $('#st-ttl').textContent = t ? t[1] : '';
     document.title = (t ? t[1] + ' — ' : '') + 'NaNa studio';
@@ -886,7 +890,7 @@ const Staff = (() => {
       <div class="dgrid" style="margin-top:0"><div class="card"><h3>Звичайний тиждень ${avatar(m, 's')}</h3><div class="hint mb" style="margin-top:-6px">У ці години клієнти автоматично можуть записатись онлайн.</div>${rows}
         ${canEdit ? '<button class="btn pri wide mt" id="s-save" title="Зберегти години роботи">Зберегти тиждень</button>' : ''}</div>
       <div class="card"><div class="row sp mb"><button class="btn ico sm" id="s-pm" title="Попередній місяць">${IC.back}</button><h3 style="margin:0;text-transform:capitalize">${MONTHS[+mm - 1]} ${yy}</h3><button class="btn ico sm" id="s-nm" title="Наступний місяць">${IC.fwd}</button></div>
-        <div class="mcal">${cells}</div><div class="legend"><span><i style="background:#fff;border:1.5px solid var(--line2)"></i>за графіком</span><span><i style="background:var(--yels);border:1.5px solid #DCE07A"></i>особливі години</span><span><i style="background:#E5E5DF"></i>вихідний</span></div></div></div>
+        <div class="mcal">${cells}</div><div class="legend"><span><i style="background:var(--card);border:1.5px solid var(--line2)"></i>за графіком</span><span><i style="background:var(--yels);border:1.5px solid var(--yelb)"></i>особливі години</span><span><i style="background:var(--st4)"></i>вихідний</span></div></div></div>
       ${bl.length ? `<div class="card mt"><h3>Закритий час у цьому місяці</h3>${bl.map((b) => `<div class="list-row" style="cursor:default"><div class="grow"><div class="nm">${esc(relDay(dayOf(b.starts_at)))}, ${fmtT(b.starts_at)}–${fmtT(b.ends_at)}</div><div class="sub">${esc(b.reason)}</div></div>${canEdit ? `<button class="btn sm red" data-unb="${b.id}" title="Відкрити цей час для запису">Відкрити</button>` : ''}</div>`).join('')}</div>` : ''}`;
     $$('[data-wd]', main).forEach((c) => (c.onchange = () => { const d = c.dataset.wd; $(`[data-a="${d}"]`, main).disabled = !c.checked; $(`[data-b="${d}"]`, main).disabled = !c.checked; }));
     const sv = $('#s-save', main); if (sv) sv.onclick = () => busy(sv, async () => {

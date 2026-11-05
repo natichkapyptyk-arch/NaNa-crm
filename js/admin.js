@@ -572,7 +572,7 @@ const Admin = (() => {
           <div><label class="lb" for="f-fn">Імʼя <span class="req">*</span></label><input class="inp" id="f-fn" value="${esc(p.first_name)}" ${can ? '' : 'disabled'}></div>
           <div><label class="lb" for="f-mn">По батькові</label><input class="inp" id="f-mn" value="${esc(p.middle_name)}" ${can ? '' : 'disabled'}></div></div>
           <div class="three"><div><label class="lb" for="f-bd">Дата народження</label><input class="inp" type="date" id="f-bd" value="${p.birth_date || ''}" ${can ? '' : 'disabled'}></div>
-          <div><label class="lb">Вік</label><div class="inp" style="background:#F7F7F3" id="f-age" title="Рахується автоматично з дати народження">${age != null ? age + ' ' + plural(age, 'рік', 'роки', 'років') : '—'}</div></div>
+          <div><label class="lb">Вік</label><div class="inp" style="background:var(--ro)" id="f-age" title="Рахується автоматично з дати народження">${age != null ? age + ' ' + plural(age, 'рік', 'роки', 'років') : '—'}</div></div>
           <div><label class="lb" for="f-ex">Досвід / посада</label><input class="inp" id="f-ex" value="${esc(p.experience || '')}" placeholder="напр. Топ майстер, 5 років" ${can ? '' : 'disabled'}></div></div></div></div>
         <label class="lb" for="f-bio">Опис (бачать клієнти)</label><textarea class="inp" id="f-bio" rows="2" maxlength="300" ${can ? '' : 'disabled'}>${esc(p.bio || '')}</textarea>
         ${monthStat}</div>
@@ -583,7 +583,7 @@ const Admin = (() => {
           <label class="lb" for="f-em">Пошта</label><input class="inp" id="f-em" type="email" value="${esc(p.email || '')}" ${can ? '' : 'disabled'}></div>
         <div class="card"><h3>Робота</h3>
           <div class="two"><div><label class="lb" for="f-sd">Початок роботи в салоні</label><input class="inp" type="date" id="f-sd" value="${p.start_date || ''}" ${boss ? '' : 'disabled'}></div>
-          <div><label class="lb">Стаж у салоні</label><div class="inp" style="background:#F7F7F3">${p.start_date ? esc(sinceTxt(p.start_date)) : '—'}</div></div></div>
+          <div><label class="lb">Стаж у салоні</label><div class="inp" style="background:var(--ro)">${p.start_date ? esc(sinceTxt(p.start_date)) : '—'}</div></div></div>
           <div class="two"><div><label class="lb" for="f-pct">Відсоток від чеку, %</label><input class="inp" type="number" min="0" max="100" step="0.5" id="f-pct" value="${num(pct).replace(',', '.')}" ${boss ? '' : 'disabled'} title="${boss ? 'Скільки відсотків від суми оплати отримує майстер' : 'Встановлює власниця'}"></div>
           <div><label class="lb" for="f-role">Роль</label><select class="inp" id="f-role" ${boss && !self ? '' : 'disabled'} title="Власниця і адмін бачать гроші та керують усім">${roleOpts.map((r) => `<option value="${r}" ${p.role === r ? 'selected' : ''}>${ROLE[r]}</option>`).join('')}</select></div></div>
           <div class="col mt"><label class="sw" title="Чи показувати майстра клієнтам для онлайн-запису"><input type="checkbox" id="f-bk" ${p.is_bookable ? 'checked' : ''} ${boss ? '' : 'disabled'}><i></i><span class="b">Приймає записи клієнтів</span></label>

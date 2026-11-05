@@ -16,6 +16,24 @@ const durTxt = (m) => { m = Math.round(m); const h = Math.floor(m / 60), r = m %
 const ls = { get(k, d) { try { const v = localStorage.getItem('nana.' + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
   set(k, v) { try { localStorage.setItem('nana.' + k, JSON.stringify(v)); } catch (e) {} } };
 
+/* ---------- тема: світла / темна / як у системі (зберігається на цьому пристрої) ---------- */
+const THEMES = { auto: ['🖥', 'Як у системі'], light: ['☀️', 'Світла'], dark: ['🌙', 'Темна'] };
+const themeNow = () => { const t = ls.get('theme', 'auto'); return THEMES[t] ? t : 'auto'; };
+const _darkMq = window.matchMedia ? matchMedia('(prefers-color-scheme: dark)') : null;
+function applyTheme(t = themeNow()) {
+  const r = document.documentElement; if (t === 'auto') delete r.dataset.theme; else r.dataset.theme = t;
+  const dark = t === 'dark' || (t === 'auto' && !!_darkMq?.matches);
+  document.querySelectorAll('meta[name="theme-color"]').forEach((m) => (m.content = dark ? '#1F1F1D' : '#4E4E4C'));
+}
+function setTheme(t) { ls.set('theme', t); applyTheme(t); }
+_darkMq?.addEventListener?.('change', () => applyTheme());
+applyTheme();
+function themeSheet(onChange) {
+  const s = sheet({ title: 'Тема оформлення', body: `<p class="mut sm" style="margin:0 0 12px">Запамʼятовується на цьому пристрої.</p><div class="chips">${Object.entries(THEMES).map(([k, [ic, n]]) =>
+    `<button class="chip ${themeNow() === k ? 'on' : ''}" data-th="${k}" title="Тема: ${n}">${ic} ${n}</button>`).join('')}</div>` });
+  $$('[data-th]', s.el).forEach((b) => (b.onclick = () => { setTheme(b.dataset.th); onChange && onChange(b.dataset.th); $$('[data-th]', s.el).forEach((x) => x.classList.toggle('on', x === b)); }));
+}
+
 /* ---------- час салону: Europe/Kyiv ---------- */
 const _kfmt = new Intl.DateTimeFormat('en-GB', { timeZone: TZ, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' });
 function kParts(d) {
