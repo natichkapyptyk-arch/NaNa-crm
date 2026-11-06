@@ -232,7 +232,7 @@ const Staff = (() => {
   async function dayData(day, mids) {
     const from = kDate(day, 0).toISOString(), to = kDate(addDays(day, 1), 0).toISOString();
     const [a, b, o] = await Promise.all([
-      sb.from('appointments').select('*, clients(id,name,phone,contact,instagram,note), visits(*), payments(amount,method,commission)').gte('starts_at', from).lt('starts_at', to).order('starts_at'),
+      sb.from('appointments').select('*, clients(id,name,phone,contact,instagram,note,tg_chat_id), visits(*), payments(amount,method,commission)').gte('starts_at', from).lt('starts_at', to).order('starts_at'),
       sb.from('blocks').select('*').lt('starts_at', to).gt('ends_at', from),
       sb.from('day_overrides').select('*').eq('day', day)]);
     for (const x of [a, b, o]) if (x.error) throw x.error;
@@ -535,7 +535,7 @@ const Staff = (() => {
         ${a.status === 'booked' || isBoss() ? `<button class="btn sm" id="a-svc" title="Якщо фактично зробили іншу послугу — змінити її, ціну й тривалість">✎ Змінити послугу</button>` : ''}
         <button class="btn sm" id="a-add" title="Додати до цього візиту ще одну послугу (одразу після цієї)">${IC.plus} Додати послугу</button></div>` : ''}
       <div class="sect"><h3>${esc(c.name || '')} <a class="btn sm ghost" href="javascript:void 0" id="a-cl" title="Відкрити картку клієнта з історією візитів">картка ${IC.fwd.replace('width="20" height="20"', 'width="14" height="14"')}</a></h3>
-        <div class="sm">${esc(fmtPhone(c.phone))} · зручно: <b>${esc(CONTACTS[c.contact]?.[0] || 'дзвінок')}</b>${c.instagram ? ' · ' + igLink(c.instagram, true) : ''}</div>${c.note ? `<div class="hint">📝 ${esc(c.note)}</div>` : ''}${contactLinks(c)}${a.status === 'booked' && Date.parse(a.starts_at) > nowMs() ? `<button class="btn sm mt" id="a-rem" title="Готовий текст нагадування для Viber, Telegram або SMS">${IC.bell} Нагадати про візит</button>` : ''}</div>
+        <div class="sm">${esc(fmtPhone(c.phone))} · зручно: <b>${esc(CONTACTS[c.contact]?.[0] || 'дзвінок')}</b>${c.instagram ? ' · ' + igLink(c.instagram, true) : ''}</div>${c.note ? `<div class="hint">📝 ${esc(c.note)}</div>` : ''}${contactLinks(c)}${a.status === 'booked' && Date.parse(a.starts_at) > nowMs() ? `<div class="row wrap mt" style="gap:8px">${c.tg_chat_id ? `<span class="pill done" title="Клієнт(ка) отримує нагадування й підтверджує візит у Telegram автоматично">🔔 бот підключено</span>` : S.settings.tg_bot ? `<button class="btn sm pri" id="a-bot" title="Надіслати клієнтці підтвердження запису з посиланням на бота — далі нагадування приходитимуть самі">${IC.tg} Надіслати посилання на бота</button>` : ''}<button class="btn sm" id="a-rem" title="Готовий текст нагадування для Viber, Telegram або SMS">${IC.bell} Нагадати про візит</button></div>` : ''}</div>
       <label class="lb mt" for="a-note">Нотатка до запису</label><textarea class="inp" id="a-note" rows="2" placeholder="Видно лише персоналу" ${mine ? '' : 'disabled'}>${esc(a.note || '')}</textarea>`,
       foot: actions });
     const note = $('#a-note', s.el);
@@ -569,6 +569,7 @@ const Staff = (() => {
       const { data: vis } = await vq; const end = (vis || []).reduce((t, x) => Math.max(t, Date.parse(x.ends_at)), Date.parse(a.ends_at));
       s.close(); newAppt({ client: { id: c.id, name: c.name, phone: c.phone }, mid: a.staff_id, day: dayOf(new Date(end).toISOString()), min: kParts(new Date(end).toISOString()).min, visit: a.visit_id }); };
     const rb = $('#a-rem', s.el); if (rb) rb.onclick = () => remindSheet(a.id, c);
+    const bb = $('#a-bot', s.el); if (bb) bb.onclick = () => remindSheet(a.id, c, true);
     $$('[data-act]', s.el).forEach((b) => (b.onclick = async () => {
       const act = b.dataset.act;
       if (act === 'done') return paySheet(a, () => { s.close(); refresh(); });
@@ -718,12 +719,12 @@ const Staff = (() => {
     });
   }
   async function withForce(fn) {   // якщо час поза графіком/зайнятий — запитати «все одно?»
-    let { error } = await fn(false);
+    let { data, error } = await fn(false);
     if (error && /^CHECK:/.test(error.message)) {
       if (!(await confirmBox(error.message.slice(6), { ok: 'Все одно записати', sub: 'Час поза графіком майстра або занадто близько до іншого запису.' }))) return { cancelled: true };
-      ({ error } = await fn(true));
+      ({ data, error } = await fn(true));
     }
-    return { error };
+    return { data, error };
   }
   function moveSheet(a) {
     const st = { mid: a.staff_id, day: dayOf(a.starts_at), min: kParts(a.starts_at).min, dur: Math.round((Date.parse(a.ends_at) - Date.parse(a.starts_at)) / 6e4) };
@@ -835,6 +836,10 @@ const Staff = (() => {
       if (r.cancelled) return; if (r.error) return toast(errMsg(r.error), 'bad', 5000);
       s.close(); toast(visit ? 'Послугу додано до візиту' : 'Запис створено'); S.clientsCache = null;
       if (location.hash.startsWith('#/staff/cal')) go('#/staff/cal/' + st.day); else go('#/staff/cal/' + st.day);
+      if (!visit && r.data && S.settings.tg_bot) {
+        const { data: ap } = await sb.from('appointments').select('id, clients(id,name,phone,contact,instagram,tg_chat_id)').eq('id', r.data).maybeSingle();
+        if (ap?.clients && !ap.clients.tg_chat_id) setTimeout(() => remindSheet(ap.id, ap.clients, true), 350);   // після переходу на день запису (перехід закриває вікна)
+      }
     });
   }
 
@@ -1134,8 +1139,8 @@ const Staff = (() => {
   }
 
   /* ================= нагадування клієнту ================= */
-  async function remindSheet(apptId, c) {
-    const s = sheet({ title: 'Нагадати про візит', body: '<div class="spin"></div>' });
+  async function remindSheet(apptId, c, confirm = false) {   // confirm — одразу після запису: «Ви записані…» + посилання на бота
+    const s = sheet({ title: confirm ? 'Надіслати клієнтці підтвердження' : 'Нагадати про візит', body: '<div class="spin"></div>' });
     const body = $('.sh-b', s.el);
     const { data: a0, error } = await sb.from('appointments').select('visit_id').eq('id', apptId).single();
     if (error) { body.innerHTML = `<div class="empty">${esc(errMsg(error))}</div>`; return; }
@@ -1145,11 +1150,14 @@ const Staff = (() => {
     if (!list?.length) { body.innerHTML = '<div class="empty">Немає майбутніх записів для нагадування</div>'; return; }
     const set = S.settings, t0 = list[0].starts_at, nm = String(c.name || '').trim().split(/\s+/)[0];
     const site = String(set.site_url || location.origin + location.pathname).replace(/#.*$/, '');
-    const txt = [`Вітаємо${nm ? ', ' + nm : ''}! 💛`, `Нагадуємо про ваш запис у ${set.salon_name || 'NaNa studio'}:`,
+    const bot = set.tg_bot && !c.tg_chat_id && v?.token ? `https://t.me/${set.tg_bot}?start=v_${v.token}` : '';
+    const txt = [`Вітаємо${nm ? ', ' + nm : ''}! 💛`, confirm ? `Ви записані в ${set.salon_name || 'NaNa studio'}:` : `Нагадуємо про ваш запис у ${set.salon_name || 'NaNa studio'}:`,
       `📅 ${fmtDay(dayOf(t0), { weekday: 'long', day: 'numeric', month: 'long' })} о ${fmtT(t0)}`,
       ...list.map((x) => `• ${list.length > 1 ? fmtT(x.starts_at) + ' ' : ''}${svcById(x.service_id)?.name || ''} — майстер ${byId(x.staff_id)?.first_name || ''}`),
-      set.address ? `📍 ${set.address}` : '', v?.token ? `Переглянути, перенести чи скасувати: ${site}#/v/${v.token}` : '',
-      'Якщо плани змінились — напишіть нам, будь ласка.'].filter(Boolean).join('\n');
+      set.address ? `📍 ${set.address}` : '',
+      bot ? `\n🔔 Підтвердіть запис у Telegram — бот нагадає про візит за добу (натисніть «Почати»): ${bot}` : '',
+      v?.token ? `Переглянути, перенести чи скасувати: ${site}#/v/${v.token}` : '',
+      confirm ? '' : 'Якщо плани змінились — напишіть нам, будь ласка.'].filter(Boolean).join('\n');
     msgBox(s, c, txt, 9, 'Текст можна змінити. Натисніть месенджер — текст скопіюється й відкриється чат клієнта, залишиться лише вставити. Клієнти, які підключили Telegram-бота салону, отримують нагадування й автоматично.');
   }
   // текст + кнопки Viber / Telegram / SMS / Instagram: копіює текст і відкриває чат клієнта
