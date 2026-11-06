@@ -208,7 +208,7 @@ const Staff = (() => {
     setTimeout(() => document.addEventListener('click', off), 0);
     const { data } = await sb.from('notifications').select('*').eq('staff_id', S.me.id).order('created_at', { ascending: false }).limit(60);
     const all = data || [], isOn = (n) => n.title === ONLINE, isSelf = (n) => /^Ви /.test(n.title || '');
-    const ic = (n) => (isSelf(n) ? '✍️' : isOn(n) ? '🌐' : { new: '🆕', cancel: '❌', move: '🔁' }[n.kind] || '🔔');
+    const ic = (n) => (isSelf(n) ? '✍️' : isOn(n) ? '🌐' : { new: '🆕', cancel: '❌', move: '🔁', confirm: '✅' }[n.kind] || '🔔');
     let only = S.nOnly && all.some(isOn) ? 1 : 0;
     const draw = () => {
       const unOn = all.filter((n) => isOn(n) && !n.read_at).length, list = only ? all.filter(isOn) : all;
@@ -232,7 +232,7 @@ const Staff = (() => {
   async function dayData(day, mids) {
     const from = kDate(day, 0).toISOString(), to = kDate(addDays(day, 1), 0).toISOString();
     const [a, b, o] = await Promise.all([
-      sb.from('appointments').select('*, clients(id,name,phone,contact,instagram,note), visits(source,comment,token), payments(amount,method,commission)').gte('starts_at', from).lt('starts_at', to).order('starts_at'),
+      sb.from('appointments').select('*, clients(id,name,phone,contact,instagram,note), visits(*), payments(amount,method,commission)').gte('starts_at', from).lt('starts_at', to).order('starts_at'),
       sb.from('blocks').select('*').lt('starts_at', to).gt('ends_at', from),
       sb.from('day_overrides').select('*').eq('day', day)]);
     for (const x of [a, b, o]) if (x.error) throw x.error;
@@ -314,7 +314,7 @@ const Staff = (() => {
       } else out.push({ status: a.status, items: [a] }); });
     return out;
   }
-  const apHtml = (a) => `<span class="t">${fmtT(a.starts_at)}–${fmtT(a.ends_at)}${a.visits?.source === 'online' ? ' 🌐' : ''}</span><b>${esc(a.clients?.name || '')}</b>${esc(svcById(a.service_id)?.name || '')}`;
+  const apHtml = (a) => `<span class="t">${fmtT(a.starts_at)}–${fmtT(a.ends_at)}${a.visits?.source === 'online' ? ' 🌐' : ''}${a.visits?.confirmed_at && a.status === 'booked' ? ' <span title="Клієнт(ка) підтвердив(ла) візит у Telegram">✅</span>' : ''}</span><b>${esc(a.clients?.name || '')}</b>${esc(svcById(a.service_id)?.name || '')}`;
   function drawGrid(body, shown, dd, appts) {
     const PX = 1.25;
     let s0 = toMin(S.settings.open_time), s1 = toMin(S.settings.close_time);
@@ -333,7 +333,7 @@ const Staff = (() => {
       const ap = visitGroups(appts.filter((a) => a.staff_id === m.id)).map((g) => { const a = g.items[0], z = g.items[g.items.length - 1]; G[a.id] = g;
         const st = kParts(a.starts_at).min, en = dayOf(z.ends_at) === S.day ? kParts(z.ends_at).min : 1440, box = `style="top:${y(st)}px;height:${Math.max(24, (en - st) * PX - 2)}px"`;
         if (g.items.length === 1) return `<div class="ap ${a.status}" data-ap="${a.id}" ${box} title="${esc(STATUS[a.status])}: ${esc(a.clients?.name)} — ${esc(svcById(a.service_id)?.name)}">${apHtml(a)}</div>`;
-        return `<div class="ap grp ${g.status}" data-ap="${a.id}" ${box} title="Візит: ${g.items.length} ${plural(g.items.length, 'послуга', 'послуги', 'послуг')} — ${esc(a.clients?.name)}"><span class="t">${fmtT(a.starts_at)}–${fmtT(z.ends_at)}${a.visits?.source === 'online' ? ' 🌐' : ''} · ${g.items.length} ${plural(g.items.length, 'послуга', 'послуги', 'послуг')}</span><b>${esc(a.clients?.name || '')}</b>`
+        return `<div class="ap grp ${g.status}" data-ap="${a.id}" ${box} title="Візит: ${g.items.length} ${plural(g.items.length, 'послуга', 'послуги', 'послуг')} — ${esc(a.clients?.name)}"><span class="t">${fmtT(a.starts_at)}–${fmtT(z.ends_at)}${a.visits?.source === 'online' ? ' 🌐' : ''}${a.visits?.confirmed_at && g.status === 'booked' ? ' ✅' : ''} · ${g.items.length} ${plural(g.items.length, 'послуга', 'послуги', 'послуг')}</span><b>${esc(a.clients?.name || '')}</b>`
           + g.items.map((x) => `<div class="ap-ln ${x.status}" data-ap="${x.id}" title="Відкрити: ${esc(svcById(x.service_id)?.name)}">${fmtT(x.starts_at)} ${esc(svcById(x.service_id)?.name || '')}</div>`).join('') + `</div>`; }).join('');
       return `<div class="cal-col" data-col="${m.id}" style="height:${H}px" title="Натисніть на вільне місце, щоб записати клієнта">${lines}${off}${bl}${ap}</div>`;
     }).join('');
@@ -524,7 +524,7 @@ const Staff = (() => {
       : a.status === 'done' ? (isBoss() ? `<button class="btn" data-act="done" title="Виправити суму або спосіб оплати">Змінити оплату</button><button class="btn red" data-act="booked" title="Повернути запис у стан «Записано» (оплата зникне)">Скасувати завершення</button>` : '')
       : `<button class="btn" data-act="booked" title="Повернути запис — знову «Записано»">Відновити запис</button>`;
     const s = sheet({ title: esc(sv?.name || 'Запис'), body: `
-      <div class="row wrap mb"><span class="pill ${a.status}">${STATUS[a.status]}</span>${a.visits?.source === 'online' ? '<span class="pill i">записався(лась) онлайн</span>' : ''}${a.demo ? '<span class="pill g" title="Демо-запис — можна видалити в Налаштуваннях">демо</span>' : ''}</div>
+      <div class="row wrap mb"><span class="pill ${a.status}">${STATUS[a.status]}</span>${a.visits?.confirmed_at && a.status === 'booked' ? `<span class="pill done" title="Натиснув(ла) «Так, я буду» в нагадуванні">✅ підтвердив(ла) ${esc(relDay(dayOf(a.visits.confirmed_at)).toLowerCase())}, ${fmtT(a.visits.confirmed_at)}</span>` : ''}${a.visits?.source === 'online' ? '<span class="pill i">записався(лась) онлайн</span>' : ''}${a.demo ? '<span class="pill g" title="Демо-запис — можна видалити в Налаштуваннях">демо</span>' : ''}</div>
       <dl class="kv"><dt>Коли</dt><dd>${esc(fmtDay(dayOf(a.starts_at), { weekday: 'long', day: 'numeric', month: 'long' }))}, ${fmtT(a.starts_at)}–${fmtT(a.ends_at)}</dd>
         <dt>Майстер</dt><dd>${esc(fullName(m || {}))}</dd><dt>Ціна</dt><dd>${money(a.price)}</dd>
         ${who ? `<dt>Записав(ла)</dt><dd>${esc(who)}${a.created_at ? ` · ${esc(relDay(dayOf(a.created_at)))}, ${fmtT(a.created_at)}` : ''}</dd>` : ''}

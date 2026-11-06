@@ -99,8 +99,25 @@ async function onMonthDone(cq: any, chat: number, mo: string) {
     [[{ text: '✅ Готово', callback_data: 'mo:' + mo }], schedBtn(st)]);
 }
 
+// клієнтка натиснула «✅ Так, я буду»
+async function onVisitConfirm(cq: any, chat: number, visitId: string) {
+  const { data: r } = await db.rpc('visit_confirm_tg', { p_visit: visitId, p_chat: chat });
+  const res: any = r ?? {};
+  const keepUrl = (cq.message?.reply_markup?.inline_keyboard ?? []).flat().filter((b: any) => b.url).map((b: any) => [b]);
+  if (cq.message) await tg('editMessageReplyMarkup', { chat_id: chat, message_id: cq.message.message_id, reply_markup: { inline_keyboard: keepUrl } });
+  if (res.ok || res.already) {
+    await tg('answerCallbackQuery', { callback_query_id: cq.id, text: 'Дякуємо! 💛' });
+    if (res.already) return { ok: true };
+    return send(chat, `✅ Дякуємо, що підтвердили! Чекаємо вас ${day(res.starts_at)} о ${hm(res.starts_at)} 💛`);
+  }
+  await tg('answerCallbackQuery', { callback_query_id: cq.id, text: res.err === 'no_active' ? 'Цей запис уже змінено або скасовано' : 'Не вдалося підтвердити', show_alert: true });
+  return { ok: false };
+}
+
 async function onCallback(cq: any) {
   const chat = (cq.message?.chat?.id ?? cq.from?.id) as number;
+  const vc = String(cq.data ?? '').match(/^vc:([0-9a-f-]{36})$/)?.[1];
+  if (vc) return onVisitConfirm(cq, chat, vc);
   const mo = String(cq.data ?? '').match(/^mo:(\d{4}-\d{2})$/)?.[1];
   if (mo) return onMonthDone(cq, chat, mo);
   const d = String(cq.data ?? '').match(/^cl:(\d{4}-\d{2}-\d{2})$/)?.[1];
@@ -175,7 +192,7 @@ async function notify(id: string) {
   const { data: a } = await db.from('appointments')
     .select('starts_at, ends_at, price, note, cancel_reason, cancelled_by, services(name), staff(first_name, last_name), clients(name, phone, contact, instagram), visits(source, comment)')
     .eq('id', n.appointment_id).single();
-  const icon: Record<string, string> = { new: '🆕', cancel: '❌', move: '🔁' };
+  const icon: Record<string, string> = { new: '🆕', cancel: '❌', move: '🔁', confirm: '✅' };
   let t = `${icon[n.kind] ?? '🔔'} <b>${esc(n.title)}</b>`;
   if (a) {
     const c: any = a.clients, v: any = a.visits;
@@ -196,20 +213,35 @@ async function remind() {
   const hours: number[] = (st.remind_hours ?? [24, 2]).slice().sort((a: number, b: number) => a - b);
   const now = Date.now();
   const { data: rows } = await db.from('appointments')
-    .select('id, starts_at, ends_at, reminded, services(name), staff(first_name), clients!inner(name, tg_chat_id), visits(token)')
+    .select('id, visit_id, starts_at, ends_at, reminded, services(name), staff(first_name), clients!inner(name, tg_chat_id), visits(*)')
     .eq('status', 'booked').not('clients.tg_chat_id', 'is', null)
-    .gt('starts_at', new Date(now).toISOString()).lt('starts_at', new Date(now + (Math.max(...hours) + 1) * 3600e3).toISOString());
-  let sent = 0;
+    .gt('starts_at', new Date(now).toISOString()).lt('starts_at', new Date(now + (Math.max(...hours) + 1) * 3600e3).toISOString())
+    .order('starts_at');
+  // одне нагадування на візит (усі послуги разом), з кнопкою «Так, я буду», поки клієнтка не підтвердила
+  const groups = new Map<string, { h: number; items: any[] }>();
   for (const a of rows ?? []) {
     const left = (new Date(a.starts_at).getTime() - now) / 3600e3;
     const h = hours.find((x) => left <= x);
     if (h === undefined || (a.reminded ?? []).includes(h)) continue;
-    const c: any = a.clients;
+    const k = (a.visit_id ?? a.id) + '|' + h;
+    if (!groups.has(k)) groups.set(k, { h, items: [] });
+    groups.get(k)!.items.push(a);
+  }
+  let sent = 0;
+  for (const { h, items } of groups.values()) {
+    const a: any = items[0], c: any = a.clients, v: any = a.visits ?? {};
+    const left = (new Date(a.starts_at).getTime() - now) / 3600e3;
     const when = left <= 3 ? `сьогодні о ${hm(a.starts_at)}` : `${day(a.starts_at)} о ${hm(a.starts_at)}`;
+    const masters = [...new Set(items.map((x: any) => x.staff?.first_name).filter(Boolean))].join(', ');
+    const svc = items.map((x: any) => `💅 <b>${esc(x.services?.name)}</b>`).join('\n');
+    const ask = v.id && !v.confirmed_at;
+    const btns: Btn[][] = [];
+    if (ask) btns.push([{ text: '✅ Так, я буду', callback_data: 'vc:' + v.id }]);
+    btns.push([{ text: 'Перенести / скасувати', url: site(st) + '#/v/' + v.token }]);
     const r = await send(c.tg_chat_id,
-      `⏰ ${esc(c.name)}, нагадуємо про запис у ${esc(st.salon_name || 'NaNa studio')}\n💅 <b>${esc((a as any).services?.name)}</b>\n📅 ${when}\n👩 Майстер: ${esc((a as any).staff?.first_name)}\n📍 ${esc(st.address || '')}`,
-      [[{ text: 'Перенести / скасувати', url: site(st) + '#/v/' + (a as any).visits?.token }]]);
-    if (r.ok) { sent++; await db.from('appointments').update({ reminded: hours.filter((x) => x >= h) }).eq('id', a.id); }
+      `⏰ ${esc(c.name)}, нагадуємо про запис у ${esc(st.salon_name || 'NaNa studio')}\n${svc}\n📅 ${when}\n👩 Майстер: ${esc(masters)}\n📍 ${esc(st.address || '')}`
+      + (ask ? '\n\nБудь ласка, підтвердіть, що прийдете 👇' : ''), btns);
+    if (r.ok) { sent++; for (const x of items) await db.from('appointments').update({ reminded: hours.filter((y) => y >= h) }).eq('id', x.id); }
   }
   return { sent };
 }
