@@ -616,3 +616,7 @@ body.cal-full .st-tabs,body.cal-full .cal-bar #c-new{display:none!important}
 .mo-st.lock{background:var(--warns);border:1.5px solid var(--warnb);color:var(--ink)}
 
 .vis-ln .vis-rm{flex:none;width:32px;min-height:32px;padding:0;margin-left:2px;opacity:.7} .vis-ln .vis-rm:hover{opacity:1;color:var(--bad);border-color:var(--badb)}
+
+/* екран «Ви записані»: останній крок — Telegram */
+.tg-step{text-align:left;background:var(--yels);border:1.5px solid var(--yelb);border-radius:var(--r3);padding:12px 14px}
+.tg-step .sm{margin-top:4px;color:var(--ink2)}

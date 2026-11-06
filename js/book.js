@@ -247,8 +247,9 @@ const Client = (() => {
       <p class="mut" style="margin:6px 0 14px">Чекаємо вас у ${esc(C.settings.salon_name)} 💛</p>
       <div style="text-align:left">${d.items.map((x) => `<div class="cart-item"><div class="grow"><div class="b">${esc(x.service)}</div><div class="sm mut">${esc(fmtDay(dayOf(x.s), { weekday: 'long', day: 'numeric', month: 'long' }))}, ${fmtT(x.s)}–${fmtT(x.e)} · ${esc(x.master)}</div></div><div class="b">${money(x.price)}</div></div>`).join('')}
       <div class="cart-tot"><span>Разом</span><span>${money(d.total)}</span></div></div>
+      ${tg ? `<div class="tg-step mt"><b>Останній крок 👇</b><div class="sm">${d.tgOpened ? 'Ми відкрили Telegram — натисніть там <b>«Почати»</b> (Start). Якщо не відкрилось, натисніть кнопку нижче.' : 'Підтвердіть запис у Telegram: бот нагадає про візит за добу і за 2 години, а ви одним натиском підтвердите, що прийдете.'}</div>
+        <a class="btn pri lg wide mt" href="https://t.me/${esc(tg)}?start=v_${d.token}" target="_blank" rel="noopener" title="Відкрити нашого бота в Telegram і натиснути «Почати»">${IC.tg} Підтвердити запис у Telegram</a></div>` : ''}
       <div class="col mt">
-        ${tg ? `<a class="btn pri lg" href="https://t.me/${esc(tg)}?start=v_${d.token}" target="_blank" rel="noopener" title="Бот нагадає про візит за добу і за 2 години">${IC.tg} Нагадування в Telegram</a>` : ''}
         <button class="btn lg" id="ics" title="Завантажити подію для календаря телефону">${IC.cal} Додати в календар</button>
         <a class="btn lg" href="#/v/${d.token}" title="Тут можна перенести або скасувати запис">Мій запис — перенести / скасувати</a>
         <button class="btn ghost" data-new title="Почати новий запис">Записатися ще</button></div>
@@ -343,19 +344,23 @@ const Client = (() => {
       if (cm === 'instagram') { const okIg = !!igNick(igIn.value); igIn.classList.toggle('err', !okIg); if (!okIg) bad.push('вкажіть правильний нікнейм Instagram'); }
       if (bad.length) { err.textContent = 'Будь ласка, ' + bad.join(', ') + '.'; err.classList.remove('hide'); return; }
       err.classList.add('hide');
+      const tgBot = C.settings.tg_bot; let tgw = null;
+      if (tgBot && cm === 'telegram') { try { tgw = window.open('', '_blank'); if (tgw) tgw.document.write('<meta name="viewport" content="width=device-width"><p style="font:16px system-ui;padding:24px;text-align:center">Відкриваємо Telegram…</p>'); } catch (e3) { tgw = null; } }
       await busy($('#f-go', f), async () => {
         const args = { p_items: st.cart.map((x) => ({ staff: x.mid, service: x.sid, start: new Date(x.s).toISOString() })),
           p_name: name, p_phone: phone, p_contact: cm, p_instagram: cm === 'instagram' ? ig : null, p_comment: cmt || null };
         let { data, error } = await sb.rpc('book_visit', { ...args, p_ref: REF });
         if (error && (error.code === 'PGRST202' || /p_ref|function .*book_visit/i.test(error.message || ''))) ({ data, error } = await sb.rpc('book_visit', args));   // база ще без джерела запису
         if (error) {
+          try { tgw && tgw.close(); } catch (e4) {}
           err.textContent = errMsg(error); err.classList.remove('hide'); toast(errMsg(error), 'bad', 5000);
           try { await loadBusy(); } catch (e2) {}
           return;
         }
         ls.set('me', { name, phone, contact: cm, instagram: ig });
         const items = st.cart.map((x) => ({ ...x, service: C.svc.get(x.sid).name, master: fullName(C.mas.get(x.mid)) }));
-        st.done = { token: data.token, name, items, total: cartTotal() };
+        st.done = { token: data.token, name, items, total: cartTotal(), tgOpened: false };
+        if (tgw) { try { tgw.location.href = `https://t.me/${tgBot}?start=v_${data.token}`; st.done.tgOpened = true; } catch (e5) {} }
         const v = (ls.get('visits', []) || []).filter((y) => y.until > nowMs());
         v.push({ token: data.token, until: Math.max(...st.cart.map((x) => x.e)), title: relDay(dayOf(st.cart[0].s)) + ' ' + fmtT(st.cart[0].s) });
         ls.set('visits', v.slice(-5));
@@ -424,7 +429,7 @@ const Client = (() => {
     app().innerHTML = `<div class="cl-wrap">${hero(true)}<div class="st-title"><h2>Мій запис</h2><a class="btn sm" href="#" title="Записатися ще на якусь послугу">${IC.plus} Новий запис</a></div>
       <div class="card"><div class="mut sm">${esc(v.client.name)} · ${esc(fmtPhone(v.client.phone))}</div>${rows}</div>
       <div class="col mt">
-        ${tg && !v.client.tg && live.length ? `<a class="btn pri lg" href="https://t.me/${esc(tg)}?start=v_${v.token}" target="_blank" rel="noopener" title="Бот нагадає про візит">${IC.tg} Нагадування в Telegram</a>` : ''}
+        ${tg && !v.client.tg && live.length ? `<a class="btn pri lg" href="https://t.me/${esc(tg)}?start=v_${v.token}" target="_blank" rel="noopener" title="Бот нагадає про візит і попросить підтвердити, що ви прийдете">${IC.tg} Підтвердити запис у Telegram</a>` : ''}
         ${live.length ? `<button class="btn lg" id="ics" title="Завантажити подію для календаря">${IC.cal} Додати в календар</button>` : ''}
         ${live.filter(can).length > 1 ? `<button class="btn red" id="cnall" title="Скасувати всі послуги цього візиту">Скасувати весь візит</button>` : ''}
         ${ph ? `<a class="btn" href="tel:${esc(ph)}" title="Зателефонувати в салон">${IC.call.replace('<svg', '<svg width="18" height="18"')} Зателефонувати в салон</a>` : ''}
