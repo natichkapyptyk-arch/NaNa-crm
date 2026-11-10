@@ -636,5 +636,19 @@ label.check{display:flex;align-items:center;gap:8px;font-size:14px;cursor:pointe
 .disc-tag{color:var(--warn);font-weight:600}
 
 /* налаштування: картка Telegram-бота */
-.tg-set>.two{margin-top:14px}
-.tg-set>.hint+.two{margin-top:10px}
+.scols{align-items:start}
+.scol{display:flex;flex-direction:column;gap:14px;min-width:0}
+.tg-it{border-top:1px solid var(--sep);margin:0 -4px}
+.tg-it:first-of-type{margin-top:10px}
+.tg-it>summary{list-style:none;display:flex;align-items:center;gap:10px;padding:12px 4px;cursor:pointer;border-radius:10px}
+.tg-it>summary::-webkit-details-marker{display:none}
+.tg-it>summary:hover{background:var(--st1)}
+.tg-it>summary::after{content:'';flex:none;width:8px;height:8px;border-right:2px solid var(--mut);border-bottom:2px solid var(--mut);transform:rotate(45deg);margin:0 4px 4px 2px;transition:transform .15s}
+.tg-it[open]>summary::after{transform:rotate(-135deg);margin-bottom:-2px}
+.tg-it>summary b{font-size:15px}
+.tg-l{margin-top:2px}
+.tg-l.warn{color:var(--warn);font-weight:600}
+.tg-v{flex:none;font-size:13px;font-weight:700;padding:4px 10px;border-radius:999px;background:var(--yels);color:var(--pilly);white-space:nowrap;max-width:46%;overflow:hidden;text-overflow:ellipsis}
+.tg-v.off{background:var(--st2);color:var(--mut);font-weight:500}
+.tg-b{padding:0 4px 14px}
+.tg-b>.two:first-child,.tg-b>.lb:first-child{margin-top:0}

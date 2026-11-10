@@ -751,15 +751,24 @@ const Admin = (() => {
     const teamUrl = siteBase() + '#/team/' + tl.token, bookUrl = siteBase();
     const { count: demoN } = await sb.from('appointments').select('id', { count: 'exact', head: true }).eq('demo', true);
     let methods = [...(s.pay_methods || [])];
-    main.innerHTML = `<div class="pg-h"><h1>Налаштування</h1></div><div class="dgrid" style="margin-top:0">
+    // коли бот востаннє надсилав (дати *_sent у settings); ⚠️ — якщо увімкнено, а надсилань давно не було
+    const TGL = { daily: ['daily_sent', 'daily_hour', 2, 'надіслано'], close: ['close_sent', 'close_hour', 2, 'надіслано'], report: ['report_sent', 'report_on', 32, 'автоматично'],
+      weekly: ['weekly_sent', 'weekly_on', 8, 'автоматично'], nudge: ['nudge_sent', 'nudge1_days', 2, 'перевірка'], open: ['open_sent', 'open_day', 0, 'нагадування'] };
+    const tgLastTxt = (key, d) => { const [, on, warnD, w] = TGL[key];
+      const enabled = key === 'nudge' ? (s.nudge1_days != null || s.nudge2_days != null) : (typeof s[on] === 'boolean' ? s[on] : s[on] != null);
+      if (!d) return [enabled ? 'ще не надсилалось' : '', false];
+      const n = Math.round((Date.parse(today()) - Date.parse(d)) / 864e5);
+      const when = n <= 0 ? 'сьогодні' : n === 1 ? 'вчора' : fmtDay(d, { day: 'numeric', month: 'long' });
+      return [`${w}: ${when}`, enabled && warnD && n > warnD]; };
+    const tgLast = (key, d = s[TGL[key][0]]) => { const [t, bad] = tgLastTxt(key, d);
+      return `<div class="xs tg-l ${bad ? 'warn' : 'mut'}" title="${bad ? 'Давно не було надсилань — перевірте, чи працює бот' : 'Коли бот востаннє надсилав це автоматично'}">${bad ? '⚠️ ' : ''}${t}</div>`; };
+    main.innerHTML = `<div class="pg-h"><h1>Налаштування</h1></div><div class="dgrid scols" style="margin-top:0">
+      <div class="scol">
       <div class="card"><h3>Салон</h3>
         <label class="lb" for="s-n">Назва</label><input class="inp" id="s-n" value="${esc(s.salon_name)}">
         <label class="lb" for="s-a">Адреса</label><input class="inp" id="s-a" value="${esc(s.address || '')}">
         <div class="two"><div><label class="lb" for="s-p">Телефон</label><input class="inp" id="s-p" type="tel" value="${esc(s.phone || '')}"></div><div><label class="lb" for="s-i">Instagram</label><input class="inp" id="s-i" value="${esc(s.instagram || '')}"></div></div>
         <label class="lb" for="s-u">Адреса сайту (для посилань у Telegram)</label><input class="inp" id="s-u" value="${esc(s.site_url || '')}" placeholder="https://…"></div>
-      <div class="card"><h3>Посилання на запис</h3><div class="hint mb">Вставте ці посилання в Instagram (у шапку профілю й кнопку «Записатися») і в профіль Google Maps (поле «Сайт» / «Запис»). Тоді на дашборді в плитці «Записи» буде видно, скільки записів прийшло звідки.</div>
-        ${[['insta', '📸 Instagram'], ['gmaps', '📍 Google Maps'], ['tiktok', '🎵 TikTok'], ['facebook', '👍 Facebook']].map(([k, n]) => { const u = location.origin + location.pathname.replace(/index\.html$/, '') + '?from=' + k;
-          return `<div class="row ref-ln" style="gap:8px;margin-top:8px"><b class="sm" style="width:118px;flex:none">${n}</b><input class="inp" readonly value="${esc(u)}" onclick="this.select()" style="flex:1;min-width:0"><button class="btn sm" data-cp="${esc(u)}" title="Скопіювати посилання">📋</button></div>`; }).join('')}</div>
       <div class="card"><h3>Правила онлайн-запису</h3>
         <div class="two"><div><label class="lb" for="s-o">Салон працює з</label><input class="inp" type="time" step="600" id="s-o" value="${s.open_time.slice(0, 5)}"></div><div><label class="lb" for="s-c">до</label><input class="inp" type="time" step="600" id="s-c" value="${s.close_time.slice(0, 5)}"></div></div>
         <div class="two"><div><label class="lb" for="s-l">Останній запис о</label><input class="inp" type="time" step="600" id="s-l" value="${s.last_start.slice(0, 5)}" title="Пізніше цього часу клієнти онлайн не запишуться"></div>
@@ -771,37 +780,42 @@ const Admin = (() => {
         <div class="two"><div><label class="lb" for="s-sd">«Застарілий» клієнт після, днів</label><input class="inp" type="number" min="7" max="720" id="s-sd" value="${s.stale_days}"></div>
         <div><label class="lb" for="s-rh">Нагадування клієнтам за, год</label><input class="inp" id="s-rh" value="${(s.remind_hours || []).join(', ')}" placeholder="24, 2" title="Через кому, напр. 24, 2"></div></div>
       </div>
-      <div class="card tg-set"><h3>Telegram-бот: сповіщення й звіти</h3>
-        <div class="hint" style="margin-top:-4px">Що й коли бот надсилає майстриням і вам. Кнопки поруч надсилають просто зараз, щоб перевірити.</div>
-        ${'daily_hour' in s ? `<div class="two"><div><label class="lb" for="s-dh">Розклад на день у Telegram о</label><select class="inp" id="s-dh" title="Зранку кожен з підключеним ботом отримує розклад: майстриня — свої записи, власниця й адмін — усі">
-          <option value="" ${s.daily_hour == null ? 'selected' : ''}>не надсилати</option>${[6, 7, 8, 9, 10, 11, 12].map((h) => `<option value="${h}" ${+s.daily_hour === h && s.daily_hour != null ? 'selected' : ''}>${String(h).padStart(2, '0')}:00</option>`).join('')}</select></div>
-          <div><label class="lb">&nbsp;</label><button class="btn" id="s-dn" title="Надіслати розклад на сьогодні всім, хто підключив бота, — зараз">${IC.tg.replace('<svg', '<svg width="16" height="16"')} Надіслати зараз</button></div></div>
-          <div class="hint">Майстриня отримує лише свої записи на сьогодні, власниця й адмін — усі. Якщо записів немає — повідомлення не приходить.</div>` : ''}
-        ${'close_hour' in s ? `<div class="two"><div><label class="lb" for="s-clh">Вечірня перевірка записів о</label><select class="inp" id="s-clh" title="Кожна майстриня, у якої сьогодні були записи, отримує в Telegram питання з кнопкою «Так, усе закрила». Бот перевіряє, чи не лишилось незавершених записів">
-          <option value="" ${s.close_hour == null ? 'selected' : ''}>не питати</option>${[17, 18, 19, 20, 21, 22, 23].map((h) => `<option value="${h}" ${+s.close_hour === h && s.close_hour != null ? 'selected' : ''}>${h}:00</option>`).join('')}</select></div>
-          <div><label class="lb">&nbsp;</label><button class="btn" id="s-cln" title="Надіслати перевірку за сьогодні зараз — тим, у кого сьогодні були записи">${IC.tg.replace('<svg', '<svg width="16" height="16"')} Надіслати зараз</button></div></div>
-          <div class="hint">Після кнопки «Так, усе закрила» бот перевіряє, чи всі записи за день «Завершено» або «Не прийшла». Якщо ні — пише, які саме, і просить натиснути «Готово» ще раз.</div>` : ''}
-        ${'report_on' in s ? `<div class="two"><div><label class="lb" for="s-ro">Щомісячний звіт у Telegram</label><select class="inp" id="s-ro" title="1 числа о 10:00 власниці й адміну приходить Excel з клієнтками за минулий місяць і цифри (виторг, візити, нові клієнти)">
-          <option value="1" ${s.report_on ? 'selected' : ''}>1 числа о 10:00</option><option value="0" ${s.report_on ? '' : 'selected'}>не надсилати</option></select></div>
-          <div><label class="lb">&nbsp;</label><button class="btn" id="s-rn" title="Надіслати звіт за цей місяць (з 1 числа по сьогодні) собі в Telegram зараз">${IC.tg.replace('<svg', '<svg width="16" height="16"')} Звіт зараз</button></div></div>` : ''}
-        ${'weekly_on' in s ? `<div class="two"><div><label class="lb" for="s-wo">Підсумок тижня в Telegram</label><select class="inp" id="s-wo" title="Щопонеділка о 10:00 власниці й адміну — виторг, візити, нові клієнти, скасування й найкраща майстриня за минулий тиждень, з порівнянням">
-          <option value="1" ${s.weekly_on ? 'selected' : ''}>щопонеділка о 10:00</option><option value="0" ${s.weekly_on ? '' : 'selected'}>не надсилати</option></select></div>
-          <div><label class="lb">&nbsp;</label><button class="btn" id="s-wn" title="Надіслати підсумок минулого тижня собі в Telegram зараз">${IC.tg.replace('<svg', '<svg width="16" height="16"')} Тиждень зараз</button></div></div>` : ''}
-        ${'nudge_pct' in s ? `<label class="lb" style="margin-top:14px">Повторні візити через бота</label><div class="two">
-          <div><label class="lb" for="s-n1">«Час оновити» через, днів</label><input class="inp" id="s-n1" type="number" min="7" max="180" value="${s.nudge1_days ?? ''}" placeholder="не надсилати" title="Через скільки днів після останнього візиту бот пише «найкращий час оновити манікюр / брівки / вії» з кнопкою «Записатися»"></div>
-          <div><label class="lb" for="s-n2">«Знижка, давно не були» через, днів</label><input class="inp" id="s-n2" type="number" min="14" max="365" value="${s.nudge2_days ?? ''}" placeholder="не надсилати" title="Через скільки днів бот пропонує знижку тим, хто не повернувся"></div></div>
-          <div class="two"><div><label class="lb" for="s-np">Знижка, %</label><input class="inp" id="s-np" type="number" min="1" max="50" value="${s.nudge_pct ?? 10}" title="Знижка діє 30 днів; під час оплати майстриня бачить кнопку «Застосувати −%»"></div>
-          <div><label class="lb">&nbsp;</label><button class="btn" id="s-nt" title="Надіслати всі три повідомлення (час оновити, знижка, «скучили») собі в Telegram — подивитись, як їх бачать клієнтки">${IC.tg.replace('<svg', '<svg width="16" height="16"')} Тест собі в бот</button></div></div>
-          <div class="hint">Лише клієнткам з підключеним ботом і без майбутнього запису, щодня об 11:00. Хто часто скасовує (3+) чи не приходить (2+) — отримує «скучили за вами» без знижки. Порожнє поле — не надсилати.</div>` : ''}
-        ${'open_day' in s ? `<div class="two"><div><label class="lb" for="s-od">Нагадувати відкрити графік з</label><select class="inp" id="s-od" title="З цього числа щодня о 12:00 бот нагадує майстриням відкрити графік на наступний місяць, доки не відкриють. Тобі — з +3 днів, хто ще не відкрив">
-          <option value="" ${s.open_day == null ? 'selected' : ''}>не нагадувати</option>${[15, 18, 20, 22, 25].map((d) => `<option value="${d}" ${+s.open_day === d && s.open_day != null ? 'selected' : ''}>${d} числа</option>`).join('')}</select></div>
-          <div><label class="lb">&nbsp;</label><button class="btn" id="s-odn" title="Надіслати нагадування про графік на наступний місяць зараз — тим, хто ще не відкрив">${IC.tg.replace('<svg', '<svg width="16" height="16"')} Надіслати зараз</button></div></div>
-          <div class="hint">Онлайн-запис на місяць відкривається, коли майстриня натисне «Відкрити графік на …» у «Графіку». Кнопка «Готово» в боті перевіряє, чи це зроблено.</div>` : ''}
-      </div>
       <div class="card"><h3>Оплата</h3><label class="lb">Способи оплати</label><div class="chips" id="s-pm"></div>
         <div class="row mt"><input class="inp" id="s-pmn" placeholder="Новий спосіб, напр. Термінал"><button class="btn" id="s-pma" title="Додати спосіб оплати">${IC.plus}</button></div>
         <label class="lb" for="s-pl">Посилання для оплати за QR</label><input class="inp" id="s-pl" value="${esc(s.pay_link || '')}" placeholder="напр. посилання на банку Monobank">
         <div class="hint">Коли майстер обирає оплату «QR», на екрані зʼявиться QR-код з цим посиланням.</div></div>
+      </div>
+      <div class="scol">
+      <div class="card"><h3>Посилання на запис</h3><div class="hint mb">Вставте ці посилання в Instagram (у шапку профілю й кнопку «Записатися») і в профіль Google Maps (поле «Сайт» / «Запис»). Тоді на дашборді в плитці «Записи» буде видно, скільки записів прийшло звідки.</div>
+        ${[['insta', '📸 Instagram'], ['gmaps', '📍 Google Maps'], ['tiktok', '🎵 TikTok'], ['facebook', '👍 Facebook']].map(([k, n]) => { const u = location.origin + location.pathname.replace(/index\.html$/, '') + '?from=' + k;
+          return `<div class="row ref-ln" style="gap:8px;margin-top:8px"><b class="sm" style="width:118px;flex:none">${n}</b><input class="inp" readonly value="${esc(u)}" onclick="this.select()" style="flex:1;min-width:0"><button class="btn sm" data-cp="${esc(u)}" title="Скопіювати посилання">📋</button></div>`; }).join('')}</div>
+      <div class="card tg-set"><h3>Telegram-бот: сповіщення й звіти</h3>
+        <div class="hint" style="margin-top:-4px">Що й коли бот надсилає майстриням і вам. Натисніть рядок, щоб змінити. Кнопки «зараз» надсилають одразу — щоб перевірити.</div>
+        ${'daily_hour' in s ? `<details class="tg-it" data-tg="daily"><summary><div class="grow"><b>Розклад на день</b>${tgLast('daily')}</div><span class="tg-v" data-tgv></span></summary><div class="tg-b"><div class="two"><div><label class="lb" for="s-dh">Розклад на день у Telegram о</label><select class="inp" id="s-dh" title="Зранку кожен з підключеним ботом отримує розклад: майстриня — свої записи, власниця й адмін — усі">
+          <option value="" ${s.daily_hour == null ? 'selected' : ''}>не надсилати</option>${[6, 7, 8, 9, 10, 11, 12].map((h) => `<option value="${h}" ${+s.daily_hour === h && s.daily_hour != null ? 'selected' : ''}>${String(h).padStart(2, '0')}:00</option>`).join('')}</select></div>
+          <div><label class="lb">&nbsp;</label><button class="btn" id="s-dn" title="Надіслати розклад на сьогодні всім, хто підключив бота, — зараз">${IC.tg.replace('<svg', '<svg width="16" height="16"')} Надіслати зараз</button></div></div>
+          <div class="hint">Майстриня отримує лише свої записи на сьогодні, власниця й адмін — усі. Якщо записів немає — повідомлення не приходить.</div></div></details>` : ''}
+        ${'close_hour' in s ? `<details class="tg-it" data-tg="close"><summary><div class="grow"><b>Вечірня перевірка записів</b>${tgLast('close')}</div><span class="tg-v" data-tgv></span></summary><div class="tg-b"><div class="two"><div><label class="lb" for="s-clh">Вечірня перевірка записів о</label><select class="inp" id="s-clh" title="Кожна майстриня, у якої сьогодні були записи, отримує в Telegram питання з кнопкою «Так, усе закрила». Бот перевіряє, чи не лишилось незавершених записів">
+          <option value="" ${s.close_hour == null ? 'selected' : ''}>не питати</option>${[17, 18, 19, 20, 21, 22, 23].map((h) => `<option value="${h}" ${+s.close_hour === h && s.close_hour != null ? 'selected' : ''}>${h}:00</option>`).join('')}</select></div>
+          <div><label class="lb">&nbsp;</label><button class="btn" id="s-cln" title="Надіслати перевірку за сьогодні зараз — тим, у кого сьогодні були записи">${IC.tg.replace('<svg', '<svg width="16" height="16"')} Надіслати зараз</button></div></div>
+          <div class="hint">Після кнопки «Так, усе закрила» бот перевіряє, чи всі записи за день «Завершено» або «Не прийшла». Якщо ні — пише, які саме, і просить натиснути «Готово» ще раз.</div></div></details>` : ''}
+        ${'report_on' in s ? `<details class="tg-it" data-tg="report"><summary><div class="grow"><b>Щомісячний звіт</b>${tgLast('report')}</div><span class="tg-v" data-tgv></span></summary><div class="tg-b"><div class="two"><div><label class="lb" for="s-ro">Щомісячний звіт у Telegram</label><select class="inp" id="s-ro" title="1 числа о 10:00 власниці й адміну приходить Excel з клієнтками за минулий місяць і цифри (виторг, візити, нові клієнти)">
+          <option value="1" ${s.report_on ? 'selected' : ''}>1 числа о 10:00</option><option value="0" ${s.report_on ? '' : 'selected'}>не надсилати</option></select></div>
+          <div><label class="lb">&nbsp;</label><button class="btn" id="s-rn" title="Надіслати звіт за цей місяць (з 1 числа по сьогодні) собі в Telegram зараз">${IC.tg.replace('<svg', '<svg width="16" height="16"')} Звіт зараз</button></div></div></div></details>` : ''}
+        ${'weekly_on' in s ? `<details class="tg-it" data-tg="weekly"><summary><div class="grow"><b>Підсумок тижня</b>${tgLast('weekly')}</div><span class="tg-v" data-tgv></span></summary><div class="tg-b"><div class="two"><div><label class="lb" for="s-wo">Підсумок тижня в Telegram</label><select class="inp" id="s-wo" title="Щопонеділка о 10:00 власниці й адміну — виторг, візити, нові клієнти, скасування й найкраща майстриня за минулий тиждень, з порівнянням">
+          <option value="1" ${s.weekly_on ? 'selected' : ''}>щопонеділка о 10:00</option><option value="0" ${s.weekly_on ? '' : 'selected'}>не надсилати</option></select></div>
+          <div><label class="lb">&nbsp;</label><button class="btn" id="s-wn" title="Надіслати підсумок минулого тижня собі в Telegram зараз">${IC.tg.replace('<svg', '<svg width="16" height="16"')} Тиждень зараз</button></div></div></div></details>` : ''}
+        ${'nudge_pct' in s ? `<details class="tg-it" data-tg="nudge"><summary><div class="grow"><b>Повторні візити</b>${tgLast('nudge')}</div><span class="tg-v" data-tgv></span></summary><div class="tg-b"><div class="two">
+          <div><label class="lb" for="s-n1">«Час оновити» через, днів</label><input class="inp" id="s-n1" type="number" min="7" max="180" value="${s.nudge1_days ?? ''}" placeholder="не надсилати" title="Через скільки днів після останнього візиту бот пише «найкращий час оновити манікюр / брівки / вії» з кнопкою «Записатися»"></div>
+          <div><label class="lb" for="s-n2">«Знижка, давно не були» через, днів</label><input class="inp" id="s-n2" type="number" min="14" max="365" value="${s.nudge2_days ?? ''}" placeholder="не надсилати" title="Через скільки днів бот пропонує знижку тим, хто не повернувся"></div></div>
+          <div class="two"><div><label class="lb" for="s-np">Знижка, %</label><input class="inp" id="s-np" type="number" min="1" max="50" value="${s.nudge_pct ?? 10}" title="Знижка діє 30 днів; під час оплати майстриня бачить кнопку «Застосувати −%»"></div>
+          <div><label class="lb">&nbsp;</label><button class="btn" id="s-nt" title="Надіслати всі три повідомлення (час оновити, знижка, «скучили») собі в Telegram — подивитись, як їх бачать клієнтки">${IC.tg.replace('<svg', '<svg width="16" height="16"')} Тест собі в бот</button></div></div>
+          <div class="hint">Лише клієнткам з підключеним ботом і без майбутнього запису, щодня об 11:00. Хто часто скасовує (3+) чи не приходить (2+) — отримує «скучили за вами» без знижки. Порожнє поле — не надсилати.</div></div></details>` : ''}
+        ${'open_day' in s ? `<details class="tg-it" data-tg="open"><summary><div class="grow"><b>Нагадати відкрити графік</b>${tgLast('open')}</div><span class="tg-v" data-tgv></span></summary><div class="tg-b"><div class="two"><div><label class="lb" for="s-od">Нагадувати відкрити графік з</label><select class="inp" id="s-od" title="З цього числа щодня о 12:00 бот нагадує майстриням відкрити графік на наступний місяць, доки не відкриють. Тобі — з +3 днів, хто ще не відкрив">
+          <option value="" ${s.open_day == null ? 'selected' : ''}>не нагадувати</option>${[15, 18, 20, 22, 25].map((d) => `<option value="${d}" ${+s.open_day === d && s.open_day != null ? 'selected' : ''}>${d} числа</option>`).join('')}</select></div>
+          <div><label class="lb">&nbsp;</label><button class="btn" id="s-odn" title="Надіслати нагадування про графік на наступний місяць зараз — тим, хто ще не відкрив">${IC.tg.replace('<svg', '<svg width="16" height="16"')} Надіслати зараз</button></div></div>
+          <div class="hint">Онлайн-запис на місяць відкривається, коли майстриня натисне «Відкрити графік на …» у «Графіку». Кнопка «Готово» в боті перевіряє, чи це зроблено.</div></div></details>` : ''}
+      </div>
       <div class="card"><h3>Посилання</h3>
         <label class="lb">Онлайн-запис для клієнтів</label><div class="row"><input class="inp" readonly value="${esc(bookUrl)}"><button class="btn" data-cp="${esc(bookUrl)}" title="Скопіювати посилання">Копіювати</button></div>
         <div class="row mt"><button class="btn" id="s-qr" title="Показати QR-код для друку на рецепції">QR-код для рецепції</button>${s.instagram ? '<span class="hint" style="margin:0">Додайте посилання в шапку Instagram</span>' : ''}</div>
@@ -810,6 +824,7 @@ const Admin = (() => {
         <div class="hint">⚠️ Хто має це посилання, може увійти як будь-хто з персоналу без пароля. Надсилайте лише працівникам.</div>
         <div class="row wrap mt"><button class="btn sm" id="s-tl" title="${tl.enabled ? 'Вимкнути вхід без пароля' : 'Увімкнути вхід за посиланням'}">${tl.enabled ? 'Вимкнути' : 'Увімкнути'}</button><button class="btn sm red" id="s-tr" title="Створити нове посилання — старе перестане працювати">Нове посилання</button></div>
         ${s.tg_bot ? `<label class="lb">Telegram-бот</label><a class="btn sm" href="https://t.me/${esc(s.tg_bot)}" target="_blank" rel="noopener" title="Відкрити бота салону">${IC.tg.replace('<svg', '<svg width="16" height="16"')} @${esc(s.tg_bot)}</a>` : ''}</div>
+      </div>
       ${demoN ? `<div class="card full"><h3>Демо-дані</h3><p class="mut sm" style="margin:0 0 10px">У програмі ${demoN} демо-записів і приклади клієнтів — щоб подивитись, як усе працює. Коли почнете працювати по-справжньому, приберіть їх.</p>
         <button class="btn red" id="s-demo" title="Видалити всі демо-записи, демо-клієнтів і приклад-майстра">Прибрати демо-дані</button></div>` : ''}
     </div><div class="row mt2" style="justify-content:flex-end"><button class="btn pri lg" id="s-save" title="Зберегти налаштування">Зберегти налаштування</button></div>`;
@@ -820,6 +835,20 @@ const Admin = (() => {
     $$('[data-cp]', main).forEach((b) => (b.onclick = async () => { try { await navigator.clipboard.writeText(b.dataset.cp); toast('Скопійовано'); } catch (e) { toast('Не вдалося скопіювати', 'bad'); } }));
     $('#s-qr', main).onclick = async () => { const svg = await qrSvg(bookUrl, 8);
       sheet({ title: 'QR-код для запису', body: `<div style="text-align:center"><img src="img/logo.png" style="height:70px;background:var(--gr);padding:10px;border-radius:12px" alt=""><div class="qr-box mt">${svg}</div><p class="b">Записатися онлайн</p><p class="hint">Зробіть знімок екрана або роздрукуйте (Ctrl/⌘+P)</p></div>` }); };
+    // Telegram-рядки: короткий підсумок праворуч (оновлюється одразу при зміні)
+    const tgSel = (id, off) => { const e = $(id, main); if (!e) return ['', true]; const t = e.options[e.selectedIndex]?.text || ''; return e.value === '' || e.value === '0' ? [off, true] : [t, false]; };
+    const TGV = {
+      daily: () => tgSel('#s-dh', 'вимкнено'), close: () => tgSel('#s-clh', 'вимкнено'),
+      report: () => { const [t, o] = tgSel('#s-ro', 'вимкнено'); return [o ? t : '1 числа', o]; },
+      weekly: () => { const [t, o] = tgSel('#s-wo', 'вимкнено'); return [o ? t : 'пн 10:00', o]; },
+      nudge: () => { const v = (id) => $(id, main)?.value.trim() || '', a = v('#s-n1'), b = v('#s-n2'), pc = v('#s-np') || 10;
+        const l = [a && `${a} дн.`, b && `${b} дн. −${pc}%`].filter(Boolean); return l.length ? [l.join(' · '), false] : ['вимкнено', true]; },
+      open: () => { const [t, o] = tgSel('#s-od', 'вимкнено'); return [o ? t : 'з ' + t, o]; },
+    };
+    $$('.tg-it', main).forEach((d) => { const v = $('[data-tgv]', d), f = TGV[d.dataset.tg];
+      const upd = () => { const [t, off] = f(); v.textContent = t; v.classList.toggle('off', off); };
+      upd(); d.addEventListener('input', upd); d.addEventListener('change', upd); });
+    const tgNow = (key) => { const l = $(`.tg-it[data-tg="${key}"] .tg-l`, main); if (l) l.outerHTML = tgLast(key, today()); };
     $('#s-tl', main).onclick = async () => { const { error } = await sb.rpc('team_link', { p_regen: false, p_enabled: !tl.enabled }); if (error) return toast(errMsg(error), 'bad'); toast(tl.enabled ? 'Швидкий вхід вимкнено' : 'Швидкий вхід увімкнено'); settings(main); };
     $('#s-tr', main).onclick = async () => { if (!(await confirmBox('Створити нове посилання?', { ok: 'Створити', sub: 'Старе посилання перестане працювати.' }))) return;
       const { error } = await sb.rpc('team_link', { p_regen: true }); if (error) return toast(errMsg(error), 'bad'); toast('Нове посилання створено'); settings(main); };
@@ -829,7 +858,7 @@ const Admin = (() => {
     };
     const dn = $('#s-dn', main); if (dn) dn.onclick = (e) => busy(e.currentTarget, async () => {
       if (!(await confirmBox('Надіслати розклад на сьогодні зараз?', { ok: 'Надіслати', sub: 'Кожен, хто підключив бота, отримає свій розклад у Telegram. Автоматично сьогодні вже не надсилатиметься.' }))) return;
-      const { data, error } = await sb.rpc('daily_send_now'); if (error) return toast(errMsg(error), 'bad', 5000);
+      const { data, error } = await sb.rpc('daily_send_now'); if (error) return toast(errMsg(error), 'bad', 5000); tgNow('daily');
       toast(data ? `Надіслано: ${data} ${plural(data, 'повідомлення', 'повідомлення', 'повідомлень')}` : 'Сьогодні ні в кого немає записів (або ніхто не підключив бота)', data ? 'ok' : '', 5000);
     });
     const wn = $('#s-wn', main); if (wn) wn.onclick = (e) => busy(e.currentTarget, async () => {
@@ -843,12 +872,12 @@ const Admin = (() => {
       toast('Надіслано 3 повідомлення у ваш Telegram-бот', 'ok', 4000); });
     const odn = $('#s-odn', main); if (odn) odn.onclick = (e) => busy(e.currentTarget, async () => {
       if (!(await confirmBox('Надіслати нагадування про графік зараз?', { ok: 'Надіслати', sub: 'Майстрині, які ще не відкрили графік на наступний місяць, отримають нагадування з кнопкою «Готово», а ти — список, хто ще не відкрив. Автоматично сьогодні вже не надсилатиметься.' }))) return;
-      const { data, error } = await sb.rpc('open_send_now'); if (error) return toast(errMsg(error), 'bad', 5000);
+      const { data, error } = await sb.rpc('open_send_now'); if (error) return toast(errMsg(error), 'bad', 5000); tgNow('open');
       toast(data ? `Надіслано: ${data} ${plural(data, 'повідомлення', 'повідомлення', 'повідомлень')}` : 'Усі вже відкрили графік (або ніхто не підключив бота)', data ? 'ok' : '', 5000);
     });
     const cn = $('#s-cln', main); if (cn) cn.onclick = (e) => busy(e.currentTarget, async () => {
       if (!(await confirmBox('Надіслати вечірню перевірку зараз?', { ok: 'Надіслати', sub: 'Кожна майстриня з підключеним ботом, у якої сьогодні були записи, отримає питання «Чи позакривала записи?». Автоматично сьогодні вже не надсилатиметься.' }))) return;
-      const { data, error } = await sb.rpc('close_send_now'); if (error) return toast(errMsg(error), 'bad', 5000);
+      const { data, error } = await sb.rpc('close_send_now'); if (error) return toast(errMsg(error), 'bad', 5000); tgNow('close');
       toast(data ? `Надіслано: ${data} ${plural(data, 'майстрині', 'майстриням', 'майстриням')}` : 'Сьогодні ні в кого з підключеним ботом не було записів', data ? 'ok' : '', 5000);
     });
     $('#s-save', main).onclick = (e) => busy(e.currentTarget, async () => {
