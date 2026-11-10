@@ -493,6 +493,7 @@ table.tbl{width:100%;border-collapse:collapse;font-size:13.5px;background:var(--
 .ms-all:hover{text-decoration:underline}
 .ms-q{margin:4px 0 4px}
 .ms-row[hidden],.ms-cat[hidden]{display:none}
+.sw[hidden]{display:none}
 /* ===== телефон ===== */
 /* місячний графік: 7 колонок завжди влазять у ширину екрана */
 .mcal{grid-template-columns:repeat(7,minmax(0,1fr))}

@@ -650,7 +650,7 @@ const Admin = (() => {
               + '<div class="empty" id="ms-none" hidden>Послуг не знайдено</div>'; })()}
           <div class="hint">Колонки: тривалість (хв) і ціна (₴) саме в цього майстра.</div></div>
         <div class="card"><h3>Сповіщення</h3>
-          <div class="col">${[['new', 'Нові записи'], ['cancel', 'Скасування'], ['move', 'Перенесення'], ['confirm', 'Клієнт підтвердив візит (✅ у боті)'], ['daily', 'Розклад на день зранку (у Telegram)'], ['close', 'Ввечері: «чи закрила записи?» (у Telegram)'], ['open', 'З 22-го: «відкрий графік на наступний місяць» (у Telegram)'], ['report', '1 числа: звіт за місяць з Excel (лише власниця / адмін)'], ['weekly', 'Понеділок: підсумок тижня (лише власниця / адмін)']].map(([k, n]) => `<label class="sw" title="Отримувати сповіщення: ${n.toLowerCase()}"><input type="checkbox" data-nt="${k}" ${nt[k] !== false ? 'checked' : ''} ${can ? '' : 'disabled'}><i></i><span>${n}</span></label>`).join('')}
+          <div class="col">${[['new', 'Нові записи'], ['cancel', 'Скасування'], ['move', 'Перенесення'], ['confirm', 'Клієнт підтвердив візит (✅ у боті)'], ['daily', 'Розклад на день зранку (у Telegram)'], ['close', 'Ввечері: «чи закрила записи?» (у Telegram)'], ['open', 'З 22-го: «відкрий графік на наступний місяць» (у Telegram)'], ['report', '1 числа: звіт за місяць з Excel (лише власниця / адмін)'], ['weekly', 'Понеділок: підсумок тижня (лише власниця / адмін)']].map(([k, n]) => `<label class="sw" ${k === 'report' || k === 'weekly' ? `data-boss-nt ${p.role === 'master' ? 'hidden' : ''}` : ''} title="Отримувати сповіщення: ${n.toLowerCase()}"><input type="checkbox" data-nt="${k}" ${nt[k] !== false ? 'checked' : ''} ${can ? '' : 'disabled'}><i></i><span>${n}</span></label>`).join('')}
           <label class="sw" title="Дублювати сповіщення в Telegram"><input type="checkbox" data-nt="tg" ${nt.tg !== false ? 'checked' : ''} ${can ? '' : 'disabled'}><i></i><span>Надсилати в Telegram</span></label></div>
           <div class="hint">${p.role === 'master' ? 'Майстер отримує сповіщення лише про свої записи, а зранку — розклад лише своїх записів.' : 'Власниця й адмін отримують сповіщення про всі записи, а зранку — розклад усього салону.'}</div>
           ${!isNew && bot ? `<div class="sect"><h3>${IC.tg.replace('<svg', '<svg width="18" height="18"')} Telegram ${p.tg_chat_id ? '<span class="pill done">підключено</span>' : '<span class="pill g">не підключено</span>'}</h3>
@@ -709,6 +709,8 @@ const Admin = (() => {
       if (error) return toast(errMsg(error), 'bad', 5000);
       await Staff.reload(); $('#f-pw', main).value = ''; toast('Вхід збережено' + (pw ? ' — новий пароль діє' : ''));
     });
+    // звіт за місяць і підсумок тижня — лише власниці й адміну: майстру ці перемикачі не показуємо
+    const fr = $('#f-role', main); if (fr) fr.addEventListener('change', () => $$('[data-boss-nt]', main).forEach((l) => (l.hidden = fr.value === 'master')));
     // попередження, якщо вийти з картки, не зберігши зміни
     const snap = () => $$('input,select,textarea', main).filter((x) => !['ms-q', 'f-lg', 'f-pw', 'ph-in'].includes(x.id)).map((x) => (x.type === 'checkbox' ? x.checked : x.value)).join('\u0001') + '|' + photo;
     const snap0 = snap();
