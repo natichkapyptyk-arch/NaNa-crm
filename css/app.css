@@ -280,8 +280,8 @@ h3{font-size:16px}
 .st-top{position:sticky;top:0;z-index:60;background:var(--gr);color:#fff;display:flex;align-items:center;gap:10px;padding:8px 14px;min-height:58px;padding-top:calc(8px + env(safe-area-inset-top))}
 .st-top .brand{display:flex;align-items:center;gap:9px;text-decoration:none;color:#fff;cursor:pointer}
 .st-top .brand img{height:30px}
-.st-top .brand b{font-size:17px;letter-spacing:.01em}
-.st-top .ttl{flex:1;min-width:0;font-weight:700;font-size:16px;opacity:.95}
+.st-top .brand b{font-size:17px;letter-spacing:.01em;color:var(--yel)}
+.st-top .ttl{flex:1;min-width:0;font-weight:700;font-size:16px;color:var(--yel)}
 .st-top .btn{background:transparent;border-color:rgba(255,255,255,.25);color:#fff}
 .st-top .btn:hover{border-color:var(--yel);color:var(--yel);background:rgba(255,255,255,.06)}
 .st-top .me{display:flex;align-items:center;gap:8px;cursor:pointer;padding:3px 10px 3px 3px;border-radius:999px;border:1.5px solid rgba(255,255,255,.22)}
