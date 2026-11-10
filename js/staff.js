@@ -993,7 +993,7 @@ const Staff = (() => {
       fresh: ['Нові за 30 днів', (c) => daysBetween(dayOf(c.created_at), t) <= 30], ig: ['Є Instagram', (c) => !!c.instagram],
       ...(S.settings.tg_bot ? { nobot: ['Без бота', (c) => !c.tg], soon: ['Візит скоро, без бота', (c) => !c.tg && !!c.next_visit && daysBetween(t, dayOf(c.next_visit)) <= 7] } : {}), noshow: ['Не приходили', (c) => c.noshows > 0], never: ['Без візитів', (c) => !c.visits && !c.next_visit] };
     S.cf = arg && F[arg] ? arg : S.cf || 'all'; S.cq = S.cq || ''; S.csort = S.csort || 'last';
-    main.innerHTML = `<div class="pg-h"><h1>Клієнти</h1>${isBoss() ? `<button class="btn" id="cl-imp" title="Додати клієнтів з таблиці Excel (наприклад, експорт з EasyWeek)">⬆ Імпорт</button><button class="btn" id="cl-copy" title="Скопіювати телефони клієнтів зі списку нижче — для розсилки"><span class="lg-t">Скопіювати номери</span><span class="ph-t">📋 Номери</span></button><button class="btn" id="cl-copyig" title="Скопіювати нікнейми Instagram клієнтів зі списку нижче — для розсилки в директ"><span class="lg-t">Скопіювати нікнейми</span><span class="ph-t">📋 Нікнейми</span></button>` : ''}<button class="btn pri" id="cl-new" title="Записати клієнта">${IC.plus} Запис</button></div>
+    main.innerHTML = `<div class="pg-h"><h1>Клієнти</h1>${isBoss() ? `<button class="btn" id="cl-exp" title="Завантажити клієнтів у таблицю Excel за тиждень, місяць або свій період">⬇ Експорт</button><button class="btn" id="cl-imp" title="Додати клієнтів з таблиці Excel (наприклад, експорт з EasyWeek)">⬆ Імпорт</button><button class="btn" id="cl-copy" title="Скопіювати телефони клієнтів зі списку нижче — для розсилки"><span class="lg-t">Скопіювати номери</span><span class="ph-t">📋 Номери</span></button><button class="btn" id="cl-copyig" title="Скопіювати нікнейми Instagram клієнтів зі списку нижче — для розсилки в директ"><span class="lg-t">Скопіювати нікнейми</span><span class="ph-t">📋 Нікнейми</span></button>` : ''}<button class="btn pri" id="cl-new" title="Записати клієнта">${IC.plus} Запис</button></div>
       <div class="search mb">${IC.search}<input class="inp" id="cl-q" placeholder="Пошук за імʼям, телефоном або Instagram" value="${esc(S.cq)}"></div>
       <div class="chips scroll mb">${Object.entries(F).map(([k, [n, f]]) => `<button class="chip ${S.cf === k ? 'on' : ''}" data-f="${k}" title="Фільтр: ${esc(n)}">${esc(n)} <span class="n">${rows.filter(f).length}</span></button>`).join('')}</div>
       <div class="row sp mb"><div class="sm mut" id="cl-cnt"></div><select class="inp" id="cl-sort" style="max-width:230px;min-height:36px;padding:6px 10px" title="Сортування списку">
@@ -1035,6 +1035,7 @@ const Staff = (() => {
       try { await navigator.clipboard.writeText(txt); toast(`Скопійовано ${S.cshown.length} номерів`); } catch (e) { toast('Не вдалося скопіювати', 'bad'); }
     };
     const im = $('#cl-imp'); if (im) im.onclick = () => importSheet(rows);
+    const ex = $('#cl-exp'); if (ex) ex.onclick = () => exportSheet(rows);
     const ci = $('#cl-copyig'); if (ci) ci.onclick = async () => {
       const L = (S.cshown || []).filter((c) => c.instagram);
       if (!L.length) return toast('У списку нижче немає клієнтів з Instagram', 'bad');
@@ -1067,6 +1068,67 @@ const Staff = (() => {
     });
     return { list: [...out.values()], bad };
   }
+  /* експорт клієнтів у Excel: хто був у салоні за період, від найранішої дати; або вся база */
+  function exportSheet(rows) {
+    const t = today(), mon = addDays(t, 1 - isoDow(t)), m1 = t.slice(0, 8) + '01';
+    const pm = (() => { const [y, m] = t.split('-').map(Number); const d = new Date(Date.UTC(y, m - 2, 1)); return d.toISOString().slice(0, 10); })();
+    const P = { week: ['Цей тиждень', mon, t], month: ['Цей місяць', m1, t], prev: ['Минулий місяць', pm, addDays(m1, -1)], custom: ['Свій період'], all: ['Уся база'] };
+    let cur = 'month';
+    const s = sheet({ title: 'Експорт клієнтів у Excel', body: `
+      <div class="chips mb">${Object.entries(P).map(([k, [n]]) => `<button class="chip ${k === cur ? 'on' : ''}" data-xp="${k}" title="${esc(n)}">${esc(n)}</button>`).join('')}</div>
+      <div class="two"><div><label class="lb" for="xp-f">Від</label><input class="inp" id="xp-f" type="date" value="${m1}"></div><div><label class="lb" for="xp-t">До</label><input class="inp" id="xp-t" type="date" value="${t}"></div></div>
+      <div class="hint" id="xp-h"></div>`,
+      foot: `<button class="btn" data-x2 title="Закрити">Скасувати</button><button class="btn pri" id="xp-go" title="Завантажити файл Excel">⬇ Завантажити Excel</button>` });
+    const f = $('#xp-f', s.el), to = $('#xp-t', s.el), h = $('#xp-h', s.el);
+    const hint = () => { h.innerHTML = cur === 'all' ? 'Усі клієнти бази, від найдавнішого останнього візиту до найсвіжішого (ті, хто ще не був, — у кінці).'
+      : 'Клієнти, які були в салоні за період (завершені візити), від найранішої дати: спочатку ті, хто був першого дня, потім наступного… Якщо клієнтка була кілька разів — кожен візит окремим рядком.';
+      f.disabled = to.disabled = cur === 'all'; };
+    $$('[data-xp]', s.el).forEach((b) => (b.onclick = () => { cur = b.dataset.xp; $$('[data-xp]', s.el).forEach((x) => x.classList.toggle('on', x === b));
+      if (P[cur][1]) { f.value = P[cur][1]; to.value = P[cur][2]; } hint(); }));
+    [f, to].forEach((i) => (i.oninput = () => { if (cur !== 'all') { cur = 'custom'; $$('[data-xp]', s.el).forEach((x) => x.classList.toggle('on', x.dataset.xp === 'custom')); } }));
+    hint();
+    $('#xp-go', s.el).onclick = (e) => busy(e.currentTarget, async () => {
+      const from = f.value, till = to.value;
+      if (cur !== 'all' && (!from || !till || from > till)) return toast('Перевірте дати періоду', 'bad');
+      await loadXlsx();
+      const clMap = Object.fromEntries(rows.filter((c) => !c.demo).map((c) => [c.id, c]));
+      const D = (iso) => { if (!iso) return ''; const p = kParts(new Date(iso)); const [y, m, d] = p.day.split('-').map(Number); return { xd: Date.UTC(y, m - 1, d, Math.floor(p.min / 60), p.min % 60) / 864e5 + 25569 }; };
+      const ig = (c) => igUrl(c.instagram) || '';
+      let head, data, name;
+      if (cur === 'all') {
+        const list = Object.values(clMap).sort((a, b) => (a.last_visit ? 0 : 1) - (b.last_visit ? 0 : 1) || (a.last_visit || '').localeCompare(b.last_visit || '') || a.name.localeCompare(b.name, 'uk'));
+        head = ['ПІБ', 'Телефон', 'Instagram', 'Останній візит', 'Візитів усього', 'Наступний запис', 'Нотатки'];
+        data = list.map((c) => [c.name, fmtPhone(c.phone), ig(c), D(c.last_visit), c.visits || 0, D(c.next_visit), c.note || '']);
+        name = `NaNa клієнти — уся база ${t}.xlsx`;
+      } else {
+        let ap = [], i = 0; const [fa, ta] = [kDate(from, 0).toISOString(), kDate(addDays(till, 1), 0).toISOString()];
+        for (;;) { const { data: d, error } = await sb.from('appointments').select('client_id,starts_at,service_id,staff_id,visit_id,payments(amount)').eq('status', 'done').eq('demo', false)
+            .gte('starts_at', fa).lt('starts_at', ta).order('starts_at').range(i, i + 999);
+          if (error) throw error; ap = ap.concat(d); if (d.length < 1000) break; i += 1000; }
+        // один рядок = клієнтка в один день (усі послуги того дня разом)
+        const G = new Map();
+        ap.forEach((a) => { const k = a.client_id + '|' + dayOf(a.starts_at); if (!G.has(k)) G.set(k, { c: a.client_id, at: a.starts_at, sv: [], ms: new Set(), sum: 0 });
+          const g = G.get(k); g.sv.push(svcById(a.service_id)?.name || ''); g.ms.add(byId_(a.staff_id)); g.sum += +(Array.isArray(a.payments) ? a.payments[0]?.amount : a.payments?.amount) || 0; });
+        head = ['Дата візиту', 'ПІБ', 'Телефон', 'Instagram', 'Послуги', 'Майстер', 'Сума, ₴', 'Останній візит', 'Візитів усього'];
+        data = [...G.values()].filter((g) => clMap[g.c]).sort((a, b) => a.at.localeCompare(b.at)).map((g) => { const c = clMap[g.c];
+          return [D(g.at), c.name, fmtPhone(c.phone), ig(c), g.sv.join(', '), [...g.ms].filter(Boolean).join(', '), g.sum, D(c.last_visit), c.visits || 0]; });
+        name = `NaNa клієнти ${from.split('-').reverse().join('.')}–${till.split('-').reverse().join('.')}.xlsx`;
+      }
+      if (!data.length) return toast('За цей період візитів не знайдено', 'bad');
+      const ws = XLSX.utils.aoa_to_sheet([head, ...data.map((r) => r.map((v) => (v && v.xd ? null : v)))]);
+      const dateCols = head.map((x, j) => (/Дата|візит$|запис$/i.test(x) && !/Візитів/.test(x) ? j : -1)).filter((j) => j >= 0);
+      for (let r = 1; r <= data.length; r++) {
+        dateCols.forEach((j) => { const v = data[r - 1][j]; if (v && v.xd) ws[XLSX.utils.encode_cell({ r, c: j })] = { t: 'n', v: v.xd, z: j === 0 && cur !== 'all' ? 'dd.mm.yyyy hh:mm' : 'dd.mm.yyyy' }; });
+        const igc = head.indexOf('Instagram'), a = XLSX.utils.encode_cell({ r, c: igc }); if (ws[a] && ws[a].v) ws[a].l = { Target: ws[a].v };
+      }
+      ws['!cols'] = head.map((x) => ({ wch: { 'ПІБ': 26, 'Телефон': 18, 'Instagram': 34, 'Послуги': 44, 'Нотатки': 40, 'Майстер': 16, 'Дата візиту': 17 }[x] || 15 }));
+      ws['!autofilter'] = { ref: XLSX.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: data.length, c: head.length - 1 } }) };
+      const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, 'Клієнти');
+      XLSX.writeFile(wb, name);
+      toast(`Завантажено: ${data.length} ${plural(data.length, 'рядок', 'рядки', 'рядків')}`); s.close();
+    });
+  }
+  const byId_ = (id) => byId(id)?.first_name || '';
   function importSheet(existing) {
     const have = new Set(existing.map((c) => c.phone));
     const s = sheet({ title: 'Імпорт клієнтів', body: `<p class="mut sm" style="margin:0 0 12px">Оберіть таблицю Excel (.xlsx) або CSV. Потрібні колонки «Імʼя» і «Телефон». Також беруться «Прізвище», «День народження» і «Дата створення», якщо вони є. Підходить експорт клієнтів з EasyWeek.</p>
