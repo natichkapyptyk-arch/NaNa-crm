@@ -634,3 +634,7 @@ label.check{display:flex;align-items:center;gap:8px;font-size:14px;cursor:pointe
 .disc .chips{margin:0}
 .disc-own{display:flex;align-items:center;gap:4px} .disc-own .inp{width:74px;min-height:38px;padding:6px 10px} .disc-own span{font-weight:700;color:var(--mut)}
 .disc-tag{color:var(--warn);font-weight:600}
+
+/* налаштування: картка Telegram-бота */
+.tg-set>.two{margin-top:14px}
+.tg-set>.hint+.two{margin-top:10px}

@@ -770,6 +770,9 @@ const Admin = (() => {
         <div><label class="lb" for="s-ch">Скасування онлайн до, год</label><input class="inp" type="number" min="0" max="72" id="s-ch" value="${s.cancel_hours}"></div></div>
         <div class="two"><div><label class="lb" for="s-sd">«Застарілий» клієнт після, днів</label><input class="inp" type="number" min="7" max="720" id="s-sd" value="${s.stale_days}"></div>
         <div><label class="lb" for="s-rh">Нагадування клієнтам за, год</label><input class="inp" id="s-rh" value="${(s.remind_hours || []).join(', ')}" placeholder="24, 2" title="Через кому, напр. 24, 2"></div></div>
+      </div>
+      <div class="card tg-set"><h3>Telegram-бот: сповіщення й звіти</h3>
+        <div class="hint" style="margin-top:-4px">Що й коли бот надсилає майстриням і вам. Кнопки поруч надсилають просто зараз, щоб перевірити.</div>
         ${'daily_hour' in s ? `<div class="two"><div><label class="lb" for="s-dh">Розклад на день у Telegram о</label><select class="inp" id="s-dh" title="Зранку кожен з підключеним ботом отримує розклад: майстриня — свої записи, власниця й адмін — усі">
           <option value="" ${s.daily_hour == null ? 'selected' : ''}>не надсилати</option>${[6, 7, 8, 9, 10, 11, 12].map((h) => `<option value="${h}" ${+s.daily_hour === h && s.daily_hour != null ? 'selected' : ''}>${String(h).padStart(2, '0')}:00</option>`).join('')}</select></div>
           <div><label class="lb">&nbsp;</label><button class="btn" id="s-dn" title="Надіслати розклад на сьогодні всім, хто підключив бота, — зараз">${IC.tg.replace('<svg', '<svg width="16" height="16"')} Надіслати зараз</button></div></div>
@@ -793,7 +796,8 @@ const Admin = (() => {
         ${'open_day' in s ? `<div class="two"><div><label class="lb" for="s-od">Нагадувати відкрити графік з</label><select class="inp" id="s-od" title="З цього числа щодня о 12:00 бот нагадує майстриням відкрити графік на наступний місяць, доки не відкриють. Тобі — з +3 днів, хто ще не відкрив">
           <option value="" ${s.open_day == null ? 'selected' : ''}>не нагадувати</option>${[15, 18, 20, 22, 25].map((d) => `<option value="${d}" ${+s.open_day === d && s.open_day != null ? 'selected' : ''}>${d} числа</option>`).join('')}</select></div>
           <div><label class="lb">&nbsp;</label><button class="btn" id="s-odn" title="Надіслати нагадування про графік на наступний місяць зараз — тим, хто ще не відкрив">${IC.tg.replace('<svg', '<svg width="16" height="16"')} Надіслати зараз</button></div></div>
-          <div class="hint">Онлайн-запис на місяць відкривається, коли майстриня натисне «Відкрити графік на …» у «Графіку». Кнопка «Готово» в боті перевіряє, чи це зроблено.</div>` : ''}</div>
+          <div class="hint">Онлайн-запис на місяць відкривається, коли майстриня натисне «Відкрити графік на …» у «Графіку». Кнопка «Готово» в боті перевіряє, чи це зроблено.</div>` : ''}
+      </div>
       <div class="card"><h3>Оплата</h3><label class="lb">Способи оплати</label><div class="chips" id="s-pm"></div>
         <div class="row mt"><input class="inp" id="s-pmn" placeholder="Новий спосіб, напр. Термінал"><button class="btn" id="s-pma" title="Додати спосіб оплати">${IC.plus}</button></div>
         <label class="lb" for="s-pl">Посилання для оплати за QR</label><input class="inp" id="s-pl" value="${esc(s.pay_link || '')}" placeholder="напр. посилання на банку Monobank">
