@@ -977,7 +977,8 @@ const Staff = (() => {
     const lastDays = (c) => (c.last_visit ? daysBetween(dayOf(c.last_visit), t) : null);
     const isStale = (c) => c.last_visit && !c.next_visit && lastDays(c) >= stale;
     const F = { all: ['Усі', () => true], stale: [`Застарілі (${stale}+ днів)`, isStale], next: ['Мають запис', (c) => !!c.next_visit],
-      fresh: ['Нові за 30 днів', (c) => daysBetween(dayOf(c.created_at), t) <= 30], ig: ['Є Instagram', (c) => !!c.instagram], noshow: ['Не приходили', (c) => c.noshows > 0], never: ['Без візитів', (c) => !c.visits && !c.next_visit] };
+      fresh: ['Нові за 30 днів', (c) => daysBetween(dayOf(c.created_at), t) <= 30], ig: ['Є Instagram', (c) => !!c.instagram],
+      ...(S.settings.tg_bot ? { nobot: ['Без бота', (c) => !c.tg], soon: ['Візит скоро, без бота', (c) => !c.tg && !!c.next_visit && daysBetween(t, dayOf(c.next_visit)) <= 7] } : {}), noshow: ['Не приходили', (c) => c.noshows > 0], never: ['Без візитів', (c) => !c.visits && !c.next_visit] };
     S.cf = arg && F[arg] ? arg : S.cf || 'all'; S.cq = S.cq || ''; S.csort = S.csort || 'last';
     main.innerHTML = `<div class="pg-h"><h1>Клієнти</h1>${isBoss() ? `<button class="btn" id="cl-imp" title="Додати клієнтів з таблиці Excel (наприклад, експорт з EasyWeek)">⬆ Імпорт</button><button class="btn" id="cl-copy" title="Скопіювати телефони клієнтів зі списку нижче — для розсилки"><span class="lg-t">Скопіювати номери</span><span class="ph-t">📋 Номери</span></button><button class="btn" id="cl-copyig" title="Скопіювати нікнейми Instagram клієнтів зі списку нижче — для розсилки в директ"><span class="lg-t">Скопіювати нікнейми</span><span class="ph-t">📋 Нікнейми</span></button>` : ''}<button class="btn pri" id="cl-new" title="Записати клієнта">${IC.plus} Запис</button></div>
       <div class="search mb">${IC.search}<input class="inp" id="cl-q" placeholder="Пошук за імʼям, телефоном або Instagram" value="${esc(S.cq)}"></div>
@@ -997,13 +998,19 @@ const Staff = (() => {
       S.cshown = list;
       $('#cl-list').innerHTML = list.slice(0, 300).map((c) => { const ld = lastDays(c);
         return `<div class="list-row" data-c="${c.id}" title="Відкрити картку клієнта"><span class="ava s ${isStale(c) ? '' : 'y'}">${esc(c.name[0] || '?')}</span><div class="grow">
-          <div class="nm ell">${esc(c.name)} ${igLink(c.instagram)}${isStale(c) ? `<span class="pill w" title="Не було понад ${stale} днів і немає запису — варто нагадати про себе">не було ${ld} ${plural(ld, 'день', 'дні', 'днів')}</span>` : ''}${c.next_visit ? `<span class="pill booked" title="Найближчий запис">${esc(relDay(dayOf(c.next_visit)))}</span>` : ''}${c.demo ? ' <span class="pill g">демо</span>' : ''}</div>
+          <div class="nm ell">${esc(c.name)} ${c.tg ? '<span class="tg-on" title="Telegram-бот підключено: нагадування й підтвердження візиту приходять автоматично">🔔</span>' : ''}${igLink(c.instagram)}${isStale(c) ? `<span class="pill w" title="Не було понад ${stale} днів і немає запису — варто нагадати про себе">не було ${ld} ${plural(ld, 'день', 'дні', 'днів')}</span>` : ''}${c.next_visit ? `<span class="pill booked" title="Найближчий запис">${esc(relDay(dayOf(c.next_visit)))}</span>` : ''}${c.demo ? ' <span class="pill g">демо</span>' : ''}</div>
           <div class="sub ell">${esc(fmtPhone(c.phone))} · ${c.last_visit ? 'був(ла) ' + esc(relDay(dayOf(c.last_visit))) : 'ще не був(ла)'} · ${c.visits} ${plural(c.visits, 'візит', 'візити', 'візитів')}${isBoss() ? ' · ' + money(c.spent) : ''}</div></div>
-          ${isStale(c) ? `<button class="btn sm inv-b" data-inv="${c.id}" title="Готовий текст запрошення — відкрити Viber / Telegram клієнта">${IC.bell}<span>Нагадати</span></button>` : ''}
+          ${isStale(c) ? `<button class="btn sm inv-b" data-inv="${c.id}" title="Готовий текст запрошення — відкрити Viber / Telegram клієнта">${IC.bell}<span>Нагадати</span></button>`
+            : !c.tg && c.next_visit && S.settings.tg_bot ? `<button class="btn sm inv-b" data-bot="${c.id}" title="Надіслати клієнтці підтвердження найближчого запису з посиланням на бота — далі нагадування приходитимуть самі">${IC.tg}<span>Бот</span></button>` : ''}
           <span class="mut" style="width:20px" title="Зручний спосіб звʼязку: ${esc(CONTACTS[c.contact]?.[0] || '')}">${CONTACTS[c.contact]?.[1] || ''}</span></div>`; }).join('') +
         (list.length > 300 ? `<div class="hint" style="text-align:center">Показано 300 з ${list.length}. Уточніть пошук.</div>` : '') || '<div class="card empty"><div class="big">🔎</div>Нікого не знайдено</div>';
       $$('[data-c]', main).forEach((r) => (r.onclick = () => clientSheet(r.dataset.c)));
       $$('[data-inv]', main).forEach((b) => (b.onclick = (e) => { e.stopPropagation(); inviteSheet(rows.find((x) => x.id === b.dataset.inv)); }));
+      $$('[data-bot]', main).forEach((b) => (b.onclick = (e) => { e.stopPropagation(); busy(b, async () => {
+        const c = rows.find((x) => x.id === b.dataset.bot);
+        const { data: ap } = await sb.from('appointments').select('id').eq('client_id', c.id).eq('status', 'booked').gt('starts_at', new Date().toISOString()).order('starts_at').limit(1).maybeSingle();
+        if (!ap) return toast('Не знайшли найближчого запису', 'bad');
+        remindSheet(ap.id, { ...c, tg_chat_id: null }, true); }); }));
     };
     draw();
     let tmr; $('#cl-q').oninput = (e) => { clearTimeout(tmr); tmr = setTimeout(() => { S.cq = e.target.value.trim(); draw(); }, 150); };
