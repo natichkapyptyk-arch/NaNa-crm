@@ -195,7 +195,7 @@ const Admin = (() => {
     // категорії (з оплат): скільки й на яку суму
     const ct = {}; pays.forEach((p) => { const c = Staff.svcById(one(p.appointments)?.service_id)?.category || 'Інше'; ct[c] = ct[c] || { n: 0, r: 0 }; ct[c].n++; ct[c].r += +p.amount; });
     const ctList = Object.entries(ct).sort((a, b) => b[1].r - a[1].r); const ctMax = Math.max(1, ...ctList.map((x) => x[1].r));
-    const ctColors = ['#4E4E4C', '#D3DA0C', '#2F8A57', '#2F6FB0', '#B4B4A6', '#C0392B', '#8E6CB5', '#D98E2B'];
+    const ctColors = ['#E4EA20', '#8E930C', '#4FB07A', '#5B8DD6', '#C9CE5E', '#E06A5A', '#A98BD4', '#E6A94F'];   // без темно-сірого — у темній темі зливався
     // дні тижня
     const wd = [0, 0, 0, 0, 0, 0, 0, 0]; live.forEach((a) => wd[isoDow(dayOf(a.starts_at))]++); const wdMax = Math.max(1, ...wd);
     // години
