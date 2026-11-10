@@ -174,6 +174,7 @@ function igNick(v) {
   s = s.replace(/^@/, '').replace(/[/?#].*$/, ''); return /^[A-Za-z0-9._]{1,30}$/.test(s) && !/^(p|reel|reels|stories|explore)$/i.test(s) ? s : '';
 }
 const igUrl = (v) => { const n = igNick(v); return n ? 'https://instagram.com/' + n : ''; };
+const igDm = (v) => { const n = igNick(v); return n ? 'https://ig.me/m/' + n : ''; };   // одразу відкрити директ
 // маленьке посилання-іконка на профіль (у списках, картках)
 const igLink = (v, txt = false) => { const u = igUrl(v); return u ? `<a class="ig-l" href="${esc(u)}" target="_blank" rel="noopener" title="Відкрити Instagram @${esc(igNick(v))}" onclick="event.stopPropagation()">${IC.ig}${txt ? `<span>@${esc(igNick(v))}</span>` : ''}</a>` : ''; };
 function fmtPhone(p) { const m = String(p || '').match(/^\+380(\d{2})(\d{3})(\d{2})(\d{2})$/); return m ? `+380 ${m[1]} ${m[2]} ${m[3]} ${m[4]}` : p || ''; }

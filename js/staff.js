@@ -1149,8 +1149,9 @@ const Staff = (() => {
   async function remindSheet(apptId, c, confirm = false) {   // confirm — одразу після запису: «Ви записані…» + посилання на бота
     const s = sheet({ title: confirm ? 'Надіслати клієнтці підтвердження' : 'Нагадати про візит', body: '<div class="spin"></div>' });
     const body = $('.sh-b', s.el);
-    const { data: a0, error } = await sb.from('appointments').select('visit_id').eq('id', apptId).single();
+    const { data: a0, error } = await sb.from('appointments').select('visit_id, clients(id,name,phone,contact,instagram,tg_chat_id)').eq('id', apptId).single();
     if (error) { body.innerHTML = `<div class="empty">${esc(errMsg(error))}</div>`; return; }
+    if (a0.clients) c = { ...c, ...a0.clients, tg_chat_id: confirm ? null : a0.clients.tg_chat_id };
     const [{ data: list }, { data: v }] = await Promise.all([
       sb.from('appointments').select('starts_at,service_id,staff_id').eq('visit_id', a0.visit_id).eq('status', 'booked').order('starts_at'),
       sb.from('visits').select('token').eq('id', a0.visit_id).single()]);
@@ -1171,18 +1172,18 @@ const Staff = (() => {
   function msgBox(s, c, txt, rows, hint, onSent = () => {}) {
     const body = $('.sh-b', s.el);
     const p = String(c.phone || '').replace(/[^\d+]/g, ''), pref = c.contact === 'call' ? 'sms' : c.contact;
-    const B = [['viber', `${IC.vb} Viber`], ['telegram', `${IC.tg} Telegram`], ['sms', '💬 SMS'], ...(c.instagram ? [['instagram', `${IC.ig} Instagram`]] : []), ['copy', '📋 Лише скопіювати']];
+    const B = [['viber', `${IC.vb} Viber`], ['telegram', `${IC.tg} Telegram`], ['sms', '💬 SMS'], ...(igNick(c.instagram) ? [['instagram', `${IC.ig} Директ`]] : []), ['copy', '📋 Лише скопіювати']];
     body.innerHTML = `<div class="sm mb"><b>${esc(c.name || '')}</b> · ${esc(fmtPhone(c.phone))}</div>
       <textarea class="inp" id="rm-t" rows="${rows}">${esc(txt)}</textarea>
       <div class="hint">${hint}</div>
-      <div class="contact-btns">${B.map(([k, n]) => `<button class="btn sm ${k === pref ? 'pri' : ''}" data-rm="${k}" title="${k === 'copy' ? 'Скопіювати текст' : 'Скопіювати текст і відкрити ' + k}${k === pref ? ' — клієнту так зручніше' : ''}">${n}</button>`).join('')}</div>`;
+      <div class="contact-btns">${B.map(([k, n]) => `<button class="btn sm ${k === pref ? 'pri' : ''}" data-rm="${k}" title="${k === 'copy' ? 'Скопіювати текст' : k === 'instagram' ? 'Скопіювати текст і відкрити директ Instagram @' + igNick(c.instagram) : 'Скопіювати текст і відкрити ' + k}${k === pref ? ' — клієнту так зручніше' : ''}">${n}</button>`).join('')}</div>`;
     $$('[data-rm]', s.el).forEach((b) => (b.onclick = async () => {
       const k = b.dataset.rm, text = $('#rm-t', s.el).value;
       let ok = false; try { await navigator.clipboard.writeText(text); ok = true; } catch (e) { /* без доступу до буфера */ }
       onSent(k);
       if (k === 'sms') { location.href = `sms:${p}?&body=${encodeURIComponent(text)}`; return; }
       if (k === 'copy') return toast(ok ? 'Текст скопійовано' : 'Не вдалося скопіювати — виділіть текст вручну', ok ? '' : 'bad');
-      const url = { viber: `viber://chat?number=${encodeURIComponent(p)}`, telegram: `https://t.me/${p}`, instagram: igUrl(c.instagram) }[k];
+      const url = { viber: `viber://chat?number=${encodeURIComponent(p)}`, telegram: `https://t.me/${p}`, instagram: igDm(c.instagram) }[k];
       toast(ok ? 'Текст скопійовано — вставте його в чат' : 'Скопіюйте текст вручну', ok ? '' : 'bad', 4000);
       if (k === 'viber') location.href = url; else window.open(url, '_blank', 'noopener');
     }));
