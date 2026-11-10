@@ -73,6 +73,7 @@ const Client = (() => {
   const REF = (() => {
     const KEY = 'nana_ref', AL = { instagram: 'insta', ig: 'insta', inst: 'insta', maps: 'gmaps', googlemaps: 'gmaps', google_maps: 'gmaps', gbp: 'gmaps', fb: 'facebook', tt: 'tiktok' };
     const q = new URLSearchParams(location.search), ua = navigator.userAgent || '', rf = document.referrer || '';
+    const pr = +(q.get('promo') || 0); if (pr > 0 && pr <= 50) ls.set('promo', { p: pr, t: Date.now() });
     let r = (q.get('from') || q.get('utm_source') || '').toLowerCase().replace(/[^a-z0-9._-]/g, '');
     if (!r) {
       if (/Instagram/i.test(ua) || /instagram\./i.test(rf)) r = 'insta';
@@ -103,8 +104,10 @@ const Client = (() => {
         ${s.address ? `<a href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(s.salon_name + ' ' + s.address)}" target="_blank" rel="noopener" title="Відкрити адресу на мапі">${IC.pin}${esc(s.address)}</a>` : ''}
         ${ph ? `<a href="tel:${esc(ph)}" title="Зателефонувати в салон">${IC.call.replace('<svg', '<svg width="15" height="15"')}${esc(fmtPhone(ph))}</a>` : ''}
         ${s.instagram ? `<a href="https://instagram.com/${encodeURIComponent(s.instagram)}" target="_blank" rel="noopener" title="Instagram салону — роботи майстрів">${IC.ig.replace('<svg', '<svg width="15" height="15"')}@${esc(s.instagram)}</a>` : ''}
-      </div>${small ? '' : '<div class="tag">твій банановий бюті простір 🍌</div>'}</header>`;
+      </div>${small ? '' : '<div class="tag">твій банановий бюті простір 🍌</div>'}${promoTag()}</header>`;
   }
+  // знижка за посиланням з Telegram-бота (?promo=10) — показуємо 30 днів; майстриня врахує під час оплати
+  function promoTag() { const p = ls.get('promo', null); return p && p.p && Date.now() - p.t < 30 * 864e5 ? `<div class="promo-tag">🎁 Ваша знижка ${+p.p}% на будь-яку послугу — майстриня врахує її під час оплати</div>` : ''; }
   function stepsBar() {
     const order = ['pick', 'cart', 'contacts', 'done'];
     const cur = ['masters', 'services', 'time'].includes(st.step) ? 'pick' : st.step;

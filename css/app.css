@@ -622,3 +622,8 @@ body.cal-full .st-tabs,body.cal-full .cal-bar #c-new{display:none!important}
 .tg-step .sm{margin-top:4px;color:var(--ink2)}
 
 .tg-on{font-size:12px;vertical-align:1px;margin-right:2px}
+
+/* знижка із запрошення в боті */
+.promo-bar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;background:var(--yels);border:1.5px solid var(--yelb);border-radius:var(--r3);padding:9px 12px;margin-bottom:12px;font-size:13.5px}
+.promo-bar .btn{margin-left:auto}
+.promo-tag{margin-top:12px;background:var(--yel);color:#1E1E1C;border-radius:999px;padding:7px 14px;font-weight:700;font-size:13.5px;display:inline-block}

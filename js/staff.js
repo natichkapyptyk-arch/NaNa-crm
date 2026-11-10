@@ -232,7 +232,7 @@ const Staff = (() => {
   async function dayData(day, mids) {
     const from = kDate(day, 0).toISOString(), to = kDate(addDays(day, 1), 0).toISOString();
     const [a, b, o] = await Promise.all([
-      sb.from('appointments').select('*, clients(id,name,phone,contact,instagram,note,tg_chat_id), visits(*), payments(amount,method,commission)').gte('starts_at', from).lt('starts_at', to).order('starts_at'),
+      sb.from('appointments').select('*, clients(*), visits(*), payments(amount,method,commission)').gte('starts_at', from).lt('starts_at', to).order('starts_at'),
       sb.from('blocks').select('*').lt('starts_at', to).gt('ends_at', from),
       sb.from('day_overrides').select('*').eq('day', day)]);
     for (const x of [a, b, o]) if (x.error) throw x.error;
@@ -524,7 +524,7 @@ const Staff = (() => {
       : a.status === 'done' ? (isBoss() ? `<button class="btn" data-act="done" title="Виправити суму або спосіб оплати">Змінити оплату</button><button class="btn red" data-act="booked" title="Повернути запис у стан «Записано» (оплата зникне)">Скасувати завершення</button>` : '')
       : `<button class="btn" data-act="booked" title="Повернути запис — знову «Записано»">Відновити запис</button>`;
     const s = sheet({ title: esc(sv?.name || 'Запис'), body: `
-      <div class="row wrap mb"><span class="pill ${a.status}">${STATUS[a.status]}</span>${a.visits?.confirmed_at && a.status === 'booked' ? `<span class="pill done" title="Натиснув(ла) «Так, я буду» в нагадуванні">✅ підтвердив(ла) ${esc(relDay(dayOf(a.visits.confirmed_at)).toLowerCase())}, ${fmtT(a.visits.confirmed_at)}</span>` : ''}${a.visits?.source === 'online' ? '<span class="pill i">записався(лась) онлайн</span>' : ''}${a.demo ? '<span class="pill g" title="Демо-запис — можна видалити в Налаштуваннях">демо</span>' : ''}</div>
+      <div class="row wrap mb"><span class="pill ${a.status}">${STATUS[a.status]}</span>${a.visits?.confirmed_at && a.status === 'booked' ? `<span class="pill done" title="Натиснув(ла) «Так, я буду» в нагадуванні">✅ підтвердив(ла) ${esc(relDay(dayOf(a.visits.confirmed_at)).toLowerCase())}, ${fmtT(a.visits.confirmed_at)}</span>` : ''}${a.visits?.source === 'online' ? '<span class="pill i">записався(лась) онлайн</span>' : ''}${a.status === 'booked' && promoOf(c, dayOf(a.starts_at)) ? `<span class="pill w" title="Знижка із запрошення в Telegram-боті — врахуйте під час оплати">🎁 −${c.promo_pct}% до ${esc(fmtDay(c.promo_until, { day: 'numeric', month: 'short' }))}</span>` : ''}${a.demo ? '<span class="pill g" title="Демо-запис — можна видалити в Налаштуваннях">демо</span>' : ''}</div>
       <dl class="kv"><dt>Коли</dt><dd>${esc(fmtDay(dayOf(a.starts_at), { weekday: 'long', day: 'numeric', month: 'long' }))}, ${fmtT(a.starts_at)}–${fmtT(a.ends_at)}</dd>
         <dt>Майстер</dt><dd>${esc(fullName(m || {}))}</dd><dt>Ціна</dt><dd>${money(a.price)}</dd>
         ${who ? `<dt>Записав(ла)</dt><dd>${esc(who)}${a.created_at ? ` · ${esc(relDay(dayOf(a.created_at)))}, ${fmtT(a.created_at)}` : ''}</dd>` : ''}
@@ -585,6 +585,10 @@ const Staff = (() => {
     }));
   }
   // «Завершити й оплатити»: якщо у візиті кілька незавершених послуг — закриваємо всі разом (кожна — своя оплата)
+  // знижка з бота (update-16): активна, якщо діє на день візиту
+  const promoOf = (c, day) => (c?.promo_pct && c.promo_until && c.promo_until >= day ? +c.promo_pct : 0);
+  const promoBar = (p, until) => `<div class="promo-bar">🎁 У клієнтки знижка <b>${p}%</b> із запрошення в боті (до ${esc(fmtDay(until, { day: 'numeric', month: 'short' }))}) <button class="btn sm" id="p-promo" title="Зменшити суму на ${p}%">Застосувати −${p}%</button></div>`;
+  const promoUsed = (cid) => sb.from('clients').update({ promo_pct: null, promo_until: null }).eq('id', cid);
   async function paySheet(a, done) {
     if (a.status === 'booked' && a.visit_id) {
       const { data: vis } = await sb.from('appointments').select('id,staff_id,service_id,starts_at,price,status').eq('visit_id', a.visit_id).eq('status', 'booked').order('starts_at');
@@ -597,7 +601,8 @@ const Staff = (() => {
   function payVisitSheet(a, items, others, done) {
     const methods = S.settings.pay_methods || ['Готівка'];
     let method = methods[0];
-    const s = sheet({ title: 'Оплата візиту', body: `<div class="sm mut mb">${esc(a.clients?.name || '')} · ${items.length} ${plural(items.length, 'послуга', 'послуги', 'послуг')}</div>
+    const pp = promoOf(a.clients, dayOf(a.starts_at)); let pUsed = false;
+    const s = sheet({ title: 'Оплата візиту', body: `<div class="sm mut mb">${esc(a.clients?.name || '')} · ${items.length} ${plural(items.length, 'послуга', 'послуги', 'послуг')}</div>${pp ? promoBar(pp, a.clients.promo_until) : ''}
       <div id="pv-l">${items.map((x) => `<label class="pv-row"><input type="checkbox" data-pv="${x.id}" checked title="Завершити й оплатити цю послугу">
         <div class="grow"><div class="b ell">${esc(svcById(x.service_id)?.name || '')}</div><div class="xs mut">${fmtT(x.starts_at)} · ${esc(byId(x.staff_id)?.first_name || '')} · ціна ${money(x.price)}</div></div>
         <input class="inp" type="number" inputmode="decimal" min="0" step="1" data-pa="${x.id}" value="${+x.price}" title="Сума за цю послугу, ₴"></label>`).join('')}</div>
@@ -620,6 +625,9 @@ const Staff = (() => {
     $$('[data-pv],[data-pa]', s.el).forEach((x) => (x.oninput = x.onchange = upd)); upd();
     $$('[data-m]', s.el).forEach((b) => (b.onclick = () => { method = b.dataset.m; $$('[data-m]', s.el).forEach((x) => { x.classList.toggle('on', x === b); x.classList.toggle('y', x === b); }); upd(); }));
     $('[data-x2]', s.el).onclick = s.close;
+    const pb = $('#p-promo', s.el); if (pb) pb.onclick = () => { if (pUsed) return;
+      items.forEach((x) => { const i = $(`[data-pa="${x.id}"]`, s.el); i.value = Math.round((+i.value || 0) * (100 - pp) / 100); });
+      pUsed = true; pb.disabled = true; pb.textContent = `✓ −${pp}% застосовано`; upd(); };
     s.el.addEventListener('keydown', (e) => { if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') $('#p-ok', s.el).click(); });
     $('#p-ok', s.el).onclick = (e) => busy(e.currentTarget, async () => {
       const l = sel(); if (!l.length) return toast('Позначте хоча б одну послугу', 'bad');
@@ -628,13 +636,15 @@ const Staff = (() => {
       for (const r of l) { const { error } = await sb.rpc('appt_status', { p_appt: r.x.id, p_status: 'done', p_amount: +r.v, p_method: method });
         if (error) { toast(`${svcById(r.x.service_id)?.name}: ${errMsg(error)}`, 'bad', 6000); break; } ok++; sum += +r.v; }
       if (!ok) return;
+      if (pUsed && a.client_id) await promoUsed(a.client_id);
       s.close(); toast(`Оплату збережено · ${ok} ${plural(ok, 'послуга', 'послуги', 'послуг')} · ${money(sum)}`); done();
     });
   }
   function paySingle(a, done) {
     const methods = S.settings.pay_methods || ['Готівка'];
     let method = a.payments?.method || methods[0];
-    const s = sheet({ title: 'Оплата', body: `<div class="sm mut mb">${esc(svcById(a.service_id)?.name)} · ${esc(a.clients?.name || '')}</div>
+    const pp = a.status === 'booked' ? promoOf(a.clients, dayOf(a.starts_at)) : 0; let pUsed = false;
+    const s = sheet({ title: 'Оплата', body: `<div class="sm mut mb">${esc(svcById(a.service_id)?.name)} · ${esc(a.clients?.name || '')}</div>${pp ? promoBar(pp, a.clients.promo_until) : ''}
       <label class="lb" for="p-am">Сума, ₴</label><input class="inp" id="p-am" type="number" inputmode="decimal" min="0" step="1" value="${+(a.payments?.amount ?? a.price)}" style="font-size:22px;font-weight:800">
       <div class="hint">Ціна послуги: ${money(a.price)}. Змініть, якщо була знижка чи доплата.</div>
       <label class="lb">Спосіб оплати</label><div class="chips" id="p-m">${methods.map((x) => `<button class="chip ${x === method ? 'on y' : ''}" data-m="${esc(x)}" title="Оплата: ${esc(x)}">${esc(x)}</button>`).join('')}</div>
@@ -652,10 +662,13 @@ const Staff = (() => {
     $$('[data-m]', s.el).forEach((b) => (b.onclick = () => { method = b.dataset.m; $$('[data-m]', s.el).forEach((x) => { x.classList.toggle('on', x === b); x.classList.toggle('y', x === b); }); upd(); }));
     $('[data-x2]', s.el).onclick = s.close;
     s.el.addEventListener('keydown', (e) => { if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') $('#p-ok', s.el).click(); });
+    const pb = $('#p-promo', s.el); if (pb) pb.onclick = () => { if (pUsed) return;
+      am.value = Math.round((+am.value || 0) * (100 - pp) / 100); pUsed = true; pb.disabled = true; pb.textContent = `✓ −${pp}% застосовано`; upd(); };
     $('#p-ok', s.el).onclick = (e) => busy(e.currentTarget, async () => {
       const v = +am.value; if (!(v >= 0) || am.value === '') { am.classList.add('err'); return; }
       const { error } = await sb.rpc('appt_status', { p_appt: a.id, p_status: 'done', p_amount: v, p_method: method });
       if (error) return toast(errMsg(error), 'bad', 5000);
+      if (pUsed && a.client_id) await promoUsed(a.client_id);
       s.close(); toast('Оплату збережено · ' + money(v)); done();
     });
   }

@@ -320,7 +320,10 @@ Deno.serve(async (req) => {
         return json({ names: Object.keys(Deno.env.toObject()).filter((k) => /TG|TELEGRAM|BOT/i.test(k)), len: raw.length, trimmed: TOKEN.length,
           shape: /^\d{6,12}:[A-Za-z0-9_-]{30,}$/.test(TOKEN), spaces: /\s/.test(raw) });
       }
-      case 'send': return json(await send(Number(body.chat_id), String(body.text ?? '')));
+      case 'send': {   // довільне повідомлення; buttons — [[{text, url}]] (лише посилання)
+        const kb = Array.isArray(body.buttons) ? body.buttons.map((r: any) => (Array.isArray(r) ? r : []).filter((x: any) => x?.text && /^https:\/\//.test(String(x.url ?? ''))).map((x: any) => ({ text: String(x.text).slice(0, 60), url: String(x.url) }))).filter((r: any[]) => r.length) : undefined;
+        return json(await send(Number(body.chat_id), String(body.text ?? ''), kb?.length ? kb : undefined));
+      }
       case 'month_ask': return json(await monthAsk(String(body.staff_id), String(body.month ?? ''), !!body.first));
       case 'close_ask': return json(await closeAsk(String(body.staff_id), String(body.day ?? kDay())));
       default: return json({ error: 'unknown action' }, 400);

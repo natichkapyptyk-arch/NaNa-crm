@@ -87,7 +87,7 @@ const Admin = (() => {
     pb.bind(main);
     /* ---- джерела записів: Instagram, Google Maps… (visits.ref, ставить сторінка онлайн-запису) ---- */
     const SRC = { insta: ['📸', 'Instagram'], gmaps: ['📍', 'Google Maps'], google: ['🔎', 'Google пошук'], facebook: ['👍', 'Facebook'], tiktok: ['🎵', 'TikTok'],
-      direct: ['🔗', 'Пряме посилання'], unknown: ['❔', 'Без позначки'], staff: ['🏠', 'Записали в салоні'] };
+      telegram: ['✈️', 'Telegram-бот'], direct: ['🔗', 'Пряме посилання'], unknown: ['❔', 'Без позначки'], staff: ['🏠', 'Записали в салоні'] };
     const SRC_ORD = Object.keys(SRC);
     const srcOf = (v) => (v.source === 'staff' ? 'staff' : v.ref || 'unknown');
     const srcIc = (k) => (SRC[k] || ['🌐'])[0], srcNm = (k) => (SRC[k] || [null, k])[1];
@@ -731,6 +731,11 @@ const Admin = (() => {
           <option value="" ${s.close_hour == null ? 'selected' : ''}>не питати</option>${[17, 18, 19, 20, 21, 22, 23].map((h) => `<option value="${h}" ${+s.close_hour === h && s.close_hour != null ? 'selected' : ''}>${h}:00</option>`).join('')}</select></div>
           <div><label class="lb">&nbsp;</label><button class="btn" id="s-cln" title="Надіслати перевірку за сьогодні зараз — тим, у кого сьогодні були записи">${IC.tg.replace('<svg', '<svg width="16" height="16"')} Надіслати зараз</button></div></div>
           <div class="hint">Після кнопки «Так, усе закрила» бот перевіряє, чи всі записи за день «Завершено» або «Не прийшла». Якщо ні — пише, які саме, і просить натиснути «Готово» ще раз.</div>` : ''}
+        ${'nudge_pct' in s ? `<label class="lb" style="margin-top:14px">Повторні візити через бота</label><div class="two">
+          <div><label class="lb" for="s-n1">«Час оновити» через, днів</label><input class="inp" id="s-n1" type="number" min="7" max="180" value="${s.nudge1_days ?? ''}" placeholder="не надсилати" title="Через скільки днів після останнього візиту бот пише «найкращий час оновити манікюр / брівки / вії» з кнопкою «Записатися»"></div>
+          <div><label class="lb" for="s-n2">«Знижка, давно не були» через, днів</label><input class="inp" id="s-n2" type="number" min="14" max="365" value="${s.nudge2_days ?? ''}" placeholder="не надсилати" title="Через скільки днів бот пропонує знижку тим, хто не повернувся"></div></div>
+          <div class="two"><div><label class="lb" for="s-np">Знижка, %</label><input class="inp" id="s-np" type="number" min="1" max="50" value="${s.nudge_pct ?? 10}" title="Знижка діє 30 днів; під час оплати майстриня бачить кнопку «Застосувати −%»"></div><div></div></div>
+          <div class="hint">Лише клієнткам з підключеним ботом і без майбутнього запису, щодня об 11:00. Порожнє поле — не надсилати.</div>` : ''}
         ${'open_day' in s ? `<div class="two"><div><label class="lb" for="s-od">Нагадувати відкрити графік з</label><select class="inp" id="s-od" title="З цього числа щодня о 12:00 бот нагадує майстриням відкрити графік на наступний місяць, доки не відкриють. Тобі — з +3 днів, хто ще не відкрив">
           <option value="" ${s.open_day == null ? 'selected' : ''}>не нагадувати</option>${[15, 18, 20, 22, 25].map((d) => `<option value="${d}" ${+s.open_day === d && s.open_day != null ? 'selected' : ''}>${d} числа</option>`).join('')}</select></div>
           <div><label class="lb">&nbsp;</label><button class="btn" id="s-odn" title="Надіслати нагадування про графік на наступний місяць зараз — тим, хто ще не відкрив">${IC.tg.replace('<svg', '<svg width="16" height="16"')} Надіслати зараз</button></div></div>
@@ -788,6 +793,9 @@ const Admin = (() => {
         cancel_hours: Math.max(0, +$('#s-ch', main).value || 0), stale_days: Math.max(7, +$('#s-sd', main).value || 60), remind_hours: rh.length ? rh : [24, 2],
         pay_methods: methods, pay_link: $('#s-pl', main).value.trim() || null, updated_at: new Date().toISOString() };
       if ($('#s-dh', main)) row.daily_hour = $('#s-dh', main).value === '' ? null : +$('#s-dh', main).value;
+      if ($('#s-n1', main)) { const n1 = $('#s-n1', main).value, n2 = $('#s-n2', main).value;
+        row.nudge1_days = n1 === '' ? null : Math.min(180, Math.max(7, +n1)); row.nudge2_days = n2 === '' ? null : Math.min(365, Math.max(14, +n2));
+        row.nudge_pct = Math.min(50, Math.max(1, +$('#s-np', main).value || 10)); }
       if ($('#s-od', main)) row.open_day = $('#s-od', main).value === '' ? null : +$('#s-od', main).value;
       if ($('#s-clh', main)) row.close_hour = $('#s-clh', main).value === '' ? null : +$('#s-clh', main).value;
       if (toMin(row.close_time) <= toMin(row.open_time)) return toast('Час закриття має бути пізніше за відкриття', 'bad');
