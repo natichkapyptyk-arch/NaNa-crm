@@ -2,7 +2,7 @@
 :root{
   --bg:#F2F2EE; --card:#FFFFFF; --ink:#262624; --ink2:#4E4E4C; --mut:#76766F; --line:#E1E1DA; --line2:#CFCFC6;
   --gr:#4E4E4C; --gr2:#3E3E3C; --sage:#B4B4A6; --sage2:#E9E9E1;
-  --yel:#E4EA20; --yel2:#D3DA0C; --yels:#F6F8C8; --yelt:#7A7E00;
+  --yel:#E4EA20; --yel2:#D3DA0C; --yels:#F6F8C8; --yelt:#7A7E00; --hd:var(--yelt);
   --ok:#2F8A57; --oks:#E3F3E9; --bad:#C0392B; --bads:#FBE7E4; --warn:#B7791F; --warns:#FCF1DC; --info:#2F6FB0; --infos:#E5EEF8;
   --r:16px; --r2:12px; --r3:10px; --sh:0 1px 2px rgba(30,30,28,.06),0 6px 24px rgba(30,30,28,.07);
   --sh2:0 10px 40px rgba(30,30,28,.18);
@@ -15,7 +15,7 @@
 :root[data-theme="dark"]{
   --bg:#141413; --card:#1F1F1D; --ink:#EDEDE6; --ink2:#CFCFC6; --mut:#9B9B92; --line:#30302C; --line2:#45453F;
   --gr:#2E2E2B; --gr2:#3C3C38; --sage:#7E7E73; --sage2:#262623;
-  --yel:#E4EA20; --yel2:#CBD10B; --yels:#2F311A; --yelt:#D8DD55;
+  --yel:#E4EA20; --yel2:#CBD10B; --yels:#2F311A; --yelt:#D8DD55; --hd:var(--yel);
   --ok:#5BC489; --oks:#15291D; --bad:#F27A6B; --bads:#36201C; --warn:#E6A94F; --warns:#33280F; --info:#74ABEA; --infos:#16263A;
   --sh:0 1px 2px rgba(0,0,0,.4),0 6px 24px rgba(0,0,0,.35); --sh2:0 10px 40px rgba(0,0,0,.6);
   --sep:#2A2A27; --soft:#252523; --sect:#1A1A18; --ro:#262623; --yelb:#5B5E1D; --okb:#2A5A3D; --badb:#6B3029; --badb2:#6B3029; --warnb:#6A5220;
@@ -26,7 +26,7 @@
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
   --bg:#141413; --card:#1F1F1D; --ink:#EDEDE6; --ink2:#CFCFC6; --mut:#9B9B92; --line:#30302C; --line2:#45453F;
   --gr:#2E2E2B; --gr2:#3C3C38; --sage:#7E7E73; --sage2:#262623;
-  --yel:#E4EA20; --yel2:#CBD10B; --yels:#2F311A; --yelt:#D8DD55;
+  --yel:#E4EA20; --yel2:#CBD10B; --yels:#2F311A; --yelt:#D8DD55; --hd:var(--yel);
   --ok:#5BC489; --oks:#15291D; --bad:#F27A6B; --bads:#36201C; --warn:#E6A94F; --warns:#33280F; --info:#74ABEA; --infos:#16263A;
   --sh:0 1px 2px rgba(0,0,0,.4),0 6px 24px rgba(0,0,0,.35); --sh2:0 10px 40px rgba(0,0,0,.6);
   --sep:#2A2A27; --soft:#252523; --sect:#1A1A18; --ro:#262623; --yelb:#5B5E1D; --okb:#2A5A3D; --badb:#6B3029; --badb2:#6B3029; --warnb:#6A5220;
@@ -135,6 +135,7 @@ input[type=date].inp,input[type=time].inp{-webkit-appearance:none;appearance:non
 /* картки */
 .card{background:var(--card);border:1.5px solid var(--line);border-radius:var(--r);box-shadow:var(--sh);padding:18px}
 .card h2,.card h3{margin:0 0 12px}
+.card h3,.sect>h3{color:var(--hd)}   /* заголовки карток — жовті */
 .card+.card{margin-top:14px}
 h1{font-size:24px;margin:0 0 4px;letter-spacing:-.01em}
 h2{font-size:19px;letter-spacing:-.01em}
