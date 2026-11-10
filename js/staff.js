@@ -6,6 +6,8 @@ const Staff = (() => {
   const app = () => $('#app');
   const isBoss = () => !!S.me && ['owner', 'admin'].includes(S.me.role);
   const isOwner = () => !!S.me && S.me.role === 'owner';
+  // гроші (дашборд, виторг, «витратив», відсотки майстрів) — власниця й адмін, якому власниця не вимкнула «бачить гроші»
+  const seesMoney = () => isOwner() || (!!S.me && S.me.role === 'admin' && S.me.see_money !== false);
   const masters = () => S.staff.filter((s) => s.is_active && s.is_bookable);
   const byId = (id) => S.staff.find((s) => s.id === id);
   const svcById = (id) => S.services.find((s) => s.id === id);
@@ -113,7 +115,7 @@ const Staff = (() => {
     ['cal', 'Календар', IC.cal, true],
     ['clients', 'Клієнти', IC.users, true],
     ['sched', 'Графік', IC.clock, true],
-    ['dash', 'Дашборд', IC.chart, isBoss()],
+    ['dash', 'Дашборд', IC.chart, seesMoney()],
     ['earn', 'Мій заробіток', IC.wallet, S.me.is_bookable || !isBoss()],
     ['services', 'Послуги', IC.list, isBoss()],
     ['team', isBoss() ? 'Персонал' : 'Моя картка', IC.user, true],
@@ -142,7 +144,7 @@ const Staff = (() => {
     $('#nav-out').onclick = logout;
     const na = $('#nav-app'); if (na) na.onclick = () => installApp(true);
     $('#nav-th').onclick = () => themeSheet((t) => { $('#nav-th').innerHTML = `${THEMES[t][0]}<span>Тема: ${THEMES[t][1].toLowerCase()}</span>`; });
-    const main4 = ['cal', 'clients', 'sched', isBoss() ? 'dash' : 'earn'];
+    const main4 = ['cal', 'clients', 'sched', seesMoney() ? 'dash' : isBoss() ? 'team' : 'earn'];
     $('#st-tabs').innerHTML = nav.filter((x) => main4.includes(x[0])).map(([k, n, ic]) => `<a href="#/staff/${k}" class="${k === page ? 'on' : ''}" title="${TIPS[k]}">${ic}<span>${n.replace('Мій заробіток', 'Заробіток')}</span></a>`).join('') +
       `<a href="javascript:void 0" id="tab-more" class="${main4.includes(page) ? '' : 'on'}" title="Інші розділи">${IC.more}<span>Ще</span></a>`;
     $('#tab-more').onclick = () => {
@@ -283,7 +285,7 @@ const Staff = (() => {
         <button class="btn pri" id="c-new" title="Створити новий запис клієнта">${IC.plus} Запис</button></div>
       <div class="chips scroll mb">${ms.length > 1 ? `<button class="chip ${S.calSel === 'all' ? 'on' : ''}" data-sel="all" title="Показати всіх майстрів">Усі майстри</button>` : ''}${ms.map((m) => `<button class="chip ${S.calSel === m.id ? 'on' : ''}" data-sel="${m.id}" title="Лише записи майстра ${esc(m.first_name)}">${esc(m.first_name)}</button>`).join('')}
         <label class="chip" title="Показувати також скасовані записи" style="gap:8px"><input type="checkbox" id="c-cn" ${S.showCancel ? 'checked' : ''} style="accent-color:var(--gr)"> скасовані</label></div>
-      <div class="sm mut mb">${act.length} ${plural(act.length, 'запис', 'записи', 'записів')}${act.length ? ` · завершено ${act.filter((a) => a.status === 'done').length}` : ''}${act.some(isDue) ? ` · <b class="due-n" title="Записи, які вже минули, але не закриті">не закрито ${act.filter(isDue).length}</b>` : ''}${isBoss() && act.length ? ` · оплачено ${money(paid)} з ${money(plan)}` : ''}</div>
+      <div class="sm mut mb">${act.length} ${plural(act.length, 'запис', 'записи', 'записів')}${act.length ? ` · завершено ${act.filter((a) => a.status === 'done').length}` : ''}${act.some(isDue) ? ` · <b class="due-n" title="Записи, які вже минули, але не закриті">не закрито ${act.filter(isDue).length}</b>` : ''}${seesMoney() && act.length ? ` · оплачено ${money(paid)} з ${money(plan)}` : ''}</div>
       <div id="c-body"></div>`;
     const body = $('#c-body');
     if (!shown.length) body.innerHTML = '<div class="card empty"><div class="big">👩‍🎨</div>Немає майстрів, які приймають записи. Додайте їх у розділі «Персонал».</div>';
@@ -681,7 +683,7 @@ const Staff = (() => {
       <div class="hint">Ціна послуги: ${money(a.price)}. Суму можна змінити й вручну (доплата, округлення).</div>
       <label class="lb">Спосіб оплати</label><div class="chips" id="p-m">${methods.map((x) => `<button class="chip ${x === method ? 'on y' : ''}" data-m="${esc(x)}" title="Оплата: ${esc(x)}">${esc(x)}</button>`).join('')}</div>
       <div id="p-qr" class="mt"></div>
-      <div class="hint mt">Майстру: ${payPct(a.staff_id)}% = <b id="p-co"></b></div>`,
+      <div class="hint mt" ${seesMoney() || a.staff_id === S.me.id ? '' : 'hidden'}>Майстру: ${payPct(a.staff_id)}% = <b id="p-co"></b></div>`,
       foot: `<button class="btn" data-x2 title="Закрити без змін">Скасувати</button><button class="btn pri" id="p-ok" title="Зберегти оплату й завершити запис (Ctrl/⌘+Enter)">✓ Зберегти</button>` });
     const am = $('#p-am', s.el);
     const dsc = discWire(s, (p) => { am.value = Math.round((+a.price || 0) * (100 - p) / 100); pUsed = !!pp && p === pp;
@@ -1047,7 +1049,7 @@ const Staff = (() => {
       $('#cl-list').innerHTML = list.slice(0, 300).map((c) => { const ld = lastDays(c);
         return `<div class="list-row" data-c="${c.id}" title="Відкрити картку клієнта"><span class="ava s ${isStale(c) ? '' : 'y'}">${esc(c.name[0] || '?')}</span><div class="grow">
           <div class="nm ell">${esc(c.name)} ${c.tg ? '<span class="tg-on" title="Telegram-бот підключено: нагадування й підтвердження візиту приходять автоматично">🔔</span>' : ''}${igLink(c.instagram)}${isStale(c) ? `<span class="pill w" title="Не було понад ${stale} днів і немає запису — варто нагадати про себе">не було ${ld} ${plural(ld, 'день', 'дні', 'днів')}</span>` : ''}${c.next_visit ? `<span class="pill booked" title="Найближчий запис">${esc(relDay(dayOf(c.next_visit)))}</span>` : ''}${c.demo ? ' <span class="pill g">демо</span>' : ''}</div>
-          <div class="sub ell">${esc(fmtPhone(c.phone))} · ${c.last_visit ? 'був(ла) ' + esc(relDay(dayOf(c.last_visit))) : 'ще не був(ла)'} · ${c.visits} ${plural(c.visits, 'візит', 'візити', 'візитів')}${isBoss() ? ' · ' + money(c.spent) : ''}</div></div>
+          <div class="sub ell">${esc(fmtPhone(c.phone))} · ${c.last_visit ? 'був(ла) ' + esc(relDay(dayOf(c.last_visit))) : 'ще не був(ла)'} · ${c.visits} ${plural(c.visits, 'візит', 'візити', 'візитів')}${seesMoney() ? ' · ' + money(c.spent) : ''}</div></div>
           ${isStale(c) ? `<button class="btn sm inv-b" data-inv="${c.id}" title="Чому: не була ${ld} ${plural(ld, 'день', 'дні', 'днів')} (з ${esc(fmtDay(dayOf(c.last_visit), { day: 'numeric', month: 'short' }))}) і нового запису немає. Натисніть — готовий текст запрошення для Viber / Telegram / Instagram">${IC.bell}<span>Нагадати</span></button>`
             : !c.tg && c.next_visit && S.settings.tg_bot ? `<button class="btn sm inv-b" data-bot="${c.id}" title="Чому: запис ${esc(fmtDay(dayOf(c.next_visit), { weekday: 'short', day: 'numeric', month: 'short' }))} о ${fmtT(c.next_visit)}, а Telegram-бот не підключено — нагадування за добу не дійде. Натисніть — надіслати підтвердження з посиланням на бота">${IC.tg}<span>Бот</span></button>` : ''}
           <span class="mut" style="width:20px" title="Зручний спосіб звʼязку: ${esc(CONTACTS[c.contact]?.[0] || '')}">${CONTACTS[c.contact]?.[1] || ''}</span></div>`; }).join('') +
@@ -1211,7 +1213,7 @@ const Staff = (() => {
     $('.sh-b', s.el).innerHTML = `${contactLinks(c)}
       <div class="kpis mt" style="grid-template-columns:repeat(auto-fill,minmax(140px,1fr))">
         <div class="kpi"><div class="l">Візитів</div><div class="v">${done.length}</div></div>
-        ${isBoss() ? `<div class="kpi"><div class="l">Витратив(ла)</div><div class="v">${money(spent)}</div></div><div class="kpi"><div class="l">Середній чек</div><div class="v">${money(done.length ? spent / done.length : 0)}</div></div>` : ''}
+        ${seesMoney() ? `<div class="kpi"><div class="l">Витратив(ла)</div><div class="v">${money(spent)}</div></div><div class="kpi"><div class="l">Середній чек</div><div class="v">${money(done.length ? spent / done.length : 0)}</div></div>` : ''}
         <div class="kpi"><div class="l">Останній візит</div><div class="v" style="font-size:17px">${last ? esc(relDay(dayOf(last.starts_at))) : '—'}</div>${last ? `<div class="d mut">${daysBetween(dayOf(last.starts_at), today())} дн. тому</div>` : ''}</div>
         <div class="kpi"><div class="l">Скасувань / неявок</div><div class="v">${hist.filter((x) => x.status === 'cancel').length} / ${hist.filter((x) => x.status === 'noshow').length}</div></div></div>
       ${fav ? `<div class="hint mt">💛 Улюблена послуга: <b>${esc(svcById(fav[0])?.name || '')}</b> (${fav[1]} р.)</div>` : ''}
@@ -1360,5 +1362,5 @@ const Staff = (() => {
     }
   }
 
-  return { open, quick, pwLink, S, isBoss, isOwner, masters, byId, svcById, msOf, payPct, reload, newAppt, clientSheet, loginPage, dayData, hoursFor };
+  return { open, quick, pwLink, S, isBoss, isOwner, seesMoney, masters, byId, svcById, msOf, payPct, reload, newAppt, clientSheet, loginPage, dayData, hoursFor };
 })();

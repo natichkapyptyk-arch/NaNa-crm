@@ -3,6 +3,7 @@
 const Admin = (() => {
   const S = () => Staff.S;
   const isBoss = () => Staff.isBoss();
+  const money$ = () => Staff.seesMoney();   // бачить гроші (власниця / адмін з доступом)
 
   async function qAll(make) {   // більше 1000 рядків — частинами
     let out = [], i = 0;
@@ -572,7 +573,7 @@ const Admin = (() => {
       <a class="btn pri" href="#/staff/team/new" title="Додати нового співробітника">${IC.plus} Співробітник</a></div>
       <div class="team-grid">${list.map((p) => `<a class="t-card ${p.is_active ? '' : 'off'}" href="#/staff/team/${p.id}" style="text-decoration:none" title="Відкрити картку: ${esc(fullName(p))}">${avatar(p, 'l')}<div class="grow">
         <div class="b">${esc(fullName(p))}</div><div class="sm mut">${ROLE[p.role]}${p.experience ? ' · ' + esc(p.experience) : ''}</div>
-        <div class="row wrap" style="gap:5px;margin-top:6px">${p.is_bookable ? `<span class="pill g">${S().ms.filter((m) => m.staff_id === p.id && m.is_active).length} послуг</span>` : ''}${p.is_bookable ? `<span class="pill i">${Staff.payPct(p.id)}%</span>` : ''}
+        <div class="row wrap" style="gap:5px;margin-top:6px">${p.is_bookable ? `<span class="pill g">${S().ms.filter((m) => m.staff_id === p.id && m.is_active).length} послуг</span>` : ''}${p.is_bookable && money$() ? `<span class="pill i">${Staff.payPct(p.id)}%</span>` : ''}
         ${p.tg_chat_id ? '<span class="pill done" title="Сповіщення в Telegram підключено">Telegram ✓</span>' : ''}${!p.is_active ? '<span class="pill cancel">не працює</span>' : ''}${p.demo ? '<span class="pill g">приклад</span>' : ''}</div></div></a>`).join('')}</div>`;
     $('#t-off').onchange = (e) => { S().teamOff = e.target.checked; team(main); };
   }
@@ -596,6 +597,7 @@ const Admin = (() => {
     const p = isNew ? { id: crypto.randomUUID(), role: 'master', first_name: '', last_name: '', middle_name: '', is_active: true, is_bookable: true, notify: { new: true, cancel: true, move: true, tg: true }, sort: 100 } : Staff.byId(id);
     if (!p) { main.innerHTML = '<div class="card empty">Співробітника не знайдено</div>'; return; }
     const self = p.id === S().me.id, can = boss || self;
+    const roleOk = boss && !self && (p.role !== 'owner' || Staff.isOwner());   // картку власниці (роль, доступ) змінює лише власниця
     const pct = Staff.payPct(p.id), nt = p.notify || {};
     const myS = S().ms.filter((m) => m.staff_id === p.id && m.is_active);
     const svcs = S().services.filter((s) => s.is_active || myS.some((m) => m.service_id === s.id));
@@ -631,10 +633,12 @@ const Admin = (() => {
         <div class="card"><h3>Робота</h3>
           <div class="two"><div><label class="lb" for="f-sd">Початок роботи в салоні</label><input class="inp" type="date" id="f-sd" value="${p.start_date || ''}" ${boss ? '' : 'disabled'}></div>
           <div><label class="lb">Стаж у салоні</label><div class="inp" style="background:var(--ro)">${p.start_date ? esc(sinceTxt(p.start_date)) : '—'}</div></div></div>
-          <div class="two"><div><label class="lb" for="f-pct">Відсоток від чеку, %</label><input class="inp" type="number" min="0" max="100" step="0.5" id="f-pct" value="${num(pct).replace(',', '.')}" ${boss ? '' : 'disabled'} title="${boss ? 'Скільки відсотків від суми оплати отримує майстер' : 'Встановлює власниця'}"></div>
-          <div><label class="lb" for="f-role">Роль</label><select class="inp" id="f-role" ${boss && !self ? '' : 'disabled'} title="Власниця і адмін бачать гроші та керують усім">${roleOpts.map((r) => `<option value="${r}" ${p.role === r ? 'selected' : ''}>${ROLE[r]}</option>`).join('')}</select></div></div>
+          <div class="two">${money$() || self ? `<div><label class="lb" for="f-pct">Відсоток від чеку, %</label><input class="inp" type="number" min="0" max="100" step="0.5" id="f-pct" value="${num(pct).replace(',', '.')}" ${boss && money$() ? '' : 'disabled'} title="${boss && money$() ? 'Скільки відсотків від суми оплати отримує майстер' : 'Встановлює власниця'}"></div>` : ''}
+          <div><label class="lb" for="f-role">Роль</label><select class="inp" id="f-role" ${roleOk ? '' : 'disabled'} title="${p.role === 'owner' && !Staff.isOwner() ? 'Роль власниці змінює лише власниця' : 'Власниця і адмін керують усім; адміну власниця може вимкнути доступ до грошей'}">${roleOpts.map((r) => `<option value="${r}" ${p.role === r ? 'selected' : ''}>${ROLE[r]}</option>`).join('')}</select></div></div>
           <div class="col mt"><label class="sw" title="Чи показувати майстра клієнтам для онлайн-запису"><input type="checkbox" id="f-bk" ${p.is_bookable ? 'checked' : ''} ${boss ? '' : 'disabled'}><i></i><span class="b">Приймає записи клієнтів</span></label>
-          <label class="sw" title="Вимкніть, якщо людина більше не працює — історія збережеться"><input type="checkbox" id="f-ac" ${p.is_active ? 'checked' : ''} ${boss && !self ? '' : 'disabled'}><i></i><span class="b">Працює в салоні</span></label></div>
+          <label class="sw" title="Вимкніть, якщо людина більше не працює — історія збережеться"><input type="checkbox" id="f-ac" ${p.is_active ? 'checked' : ''} ${roleOk ? '' : 'disabled'}><i></i><span class="b">Працює в салоні</span></label>
+          ${Staff.isOwner() && !self ? `<label class="sw" id="f-mw" ${p.role === 'admin' ? '' : 'hidden'} title="Вимкніть, щоб адмін не бачив виторг, прибуток, витрати й заробіток майстрів (записи, клієнтів і закриття візитів — бачить)"><input type="checkbox" id="f-mon" ${p.see_money !== false ? 'checked' : ''}><i></i><span class="b">Бачить гроші</span></label>` : ''}
+          ${p.role === 'owner' && !Staff.isOwner() ? '<div class="hint">Роль, доступ і вхід власниці змінює лише власниця.</div>' : ''}</div>
           ${!isNew ? `<a class="btn wide mt" href="#/staff/sched/${p.id}" title="Години роботи, вихідні, закритий час">${IC.clock} Графік роботи</a>` : ''}</div>
         <div class="card full"><h3>Послуги, які виконує ${boss ? '' : '<span class="mut sm" style="font-weight:600">(змінює власниця)</span>'}</h3>
           ${(() => { // спершу послуги, які майстер виконує, потім усі інші (по категоріях, згорнуто)
@@ -710,7 +714,8 @@ const Admin = (() => {
       await Staff.reload(); $('#f-pw', main).value = ''; toast('Вхід збережено' + (pw ? ' — новий пароль діє' : ''));
     });
     // звіт за місяць і підсумок тижня — лише власниці й адміну: майстру ці перемикачі не показуємо
-    const fr = $('#f-role', main); if (fr) fr.addEventListener('change', () => $$('[data-boss-nt]', main).forEach((l) => (l.hidden = fr.value === 'master')));
+    const fr = $('#f-role', main); if (fr) fr.addEventListener('change', () => { $$('[data-boss-nt]', main).forEach((l) => (l.hidden = fr.value === 'master'));
+      const mw = $('#f-mw', main); if (mw) mw.hidden = fr.value !== 'admin'; });
     // попередження, якщо вийти з картки, не зберігши зміни
     const snap = () => $$('input,select,textarea', main).filter((x) => !['ms-q', 'f-lg', 'f-pw', 'ph-in'].includes(x.id)).map((x) => (x.type === 'checkbox' ? x.checked : x.value)).join('\u0001') + '|' + photo;
     const snap0 = snap();
@@ -723,12 +728,13 @@ const Admin = (() => {
         experience: $('#f-ex', main).value.trim() || null, bio: $('#f-bio', main).value.trim() || null, phone: phone ? normPhone(phone) : null,
         telegram: $('#f-tg', main).value.trim().replace(/^@/, '') || null, email: $('#f-em', main).value.trim() || null, photo_url: photo, notify };
       if (boss) Object.assign(row, { start_date: $('#f-sd', main).value || null, is_bookable: $('#f-bk', main).checked });
-      if (boss && !self) Object.assign(row, { role: $('#f-role', main).value, is_active: $('#f-ac', main).checked });
+      if (roleOk) Object.assign(row, { role: $('#f-role', main).value, is_active: $('#f-ac', main).checked });
+      if ($('#f-mon', main) && S().staff.some((x) => 'see_money' in x)) row.see_money = $('#f-mon', main).checked;
       let r = isNew ? await sb.from('staff').insert({ id: p.id, ...row }) : await sb.from('staff').update(row).eq('id', p.id);
       if (r.error) return toast(errMsg(r.error), 'bad');
       if (boss) {
-        const pv = Math.min(100, Math.max(0, +$('#f-pct', main).value || 0));
-        r = await sb.from('staff_pay').upsert({ staff_id: p.id, commission_pct: pv }); if (r.error) return toast(errMsg(r.error), 'bad');
+        if (money$() && $('#f-pct', main)) { const pv = Math.min(100, Math.max(0, +$('#f-pct', main).value || 0));
+          r = await sb.from('staff_pay').upsert({ staff_id: p.id, commission_pct: pv }); if (r.error) return toast(errMsg(r.error), 'bad'); }
         const up = [], del = [];
         $$('[data-sv]', main).forEach((c) => { const sid = c.dataset.sv;
           if (c.checked) up.push({ staff_id: p.id, service_id: sid, dur: Math.max(5, +$(`[data-su="${sid}"]`, main).value || 60), price: Math.max(0, +$(`[data-sp="${sid}"]`, main).value || 0), is_active: true });
@@ -747,6 +753,30 @@ const Admin = (() => {
   }
 
   /* ================= НАЛАШТУВАННЯ ================= */
+  // журнал змін (лише власниці): audit_feed — послуги, персонал, налаштування, оплати, витрати + важливі дії із записами
+  function auditSheet() {
+    const AREAS = ['Записи', 'Послуги', 'Персонал', 'Оплати', 'Витрати', 'Налаштування', 'Клієнти'];
+    const PER = [['1', 'Сьогодні'], ['7', '7 днів'], ['30', '30 днів'], ['90', '90 днів']];
+    let days = '7', area = '', q = '', rows = null;
+    const s = sheet({ title: '📜 Журнал змін', wide: true, body: `<div class="chips mb" id="au-p">${PER.map(([v, t]) => `<button class="chip ${v === days ? 'on' : ''}" data-p="${v}">${t}</button>`).join('')}</div>
+      <div class="chips scroll mb" id="au-a"><button class="chip on" data-a="">Усе</button>${AREAS.map((a) => `<button class="chip" data-a="${a}">${a}</button>`).join('')}</div>
+      <input class="inp mb" id="au-q" placeholder="Пошук: імʼя, послуга, клієнт…" autocomplete="off"><div id="au-l"><div class="spin"></div></div>` });
+    const kt = (iso) => new Intl.DateTimeFormat('uk-UA', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Kyiv' }).format(new Date(iso));
+    const draw = () => { const el = $('#au-l', s.el); if (!rows) return;
+      const ql = q.toLowerCase(), l = rows.filter((r) => (!area || r.area === area) && (!ql || [r.who, r.label, r.what].join(' ').toLowerCase().includes(ql)));
+      if (!l.length) { el.innerHTML = '<div class="empty">За цей період змін немає</div>'; return; }
+      let last = ''; el.innerHTML = l.map((r) => { const d = dayOf(r.at), h = d !== last ? `<div class="au-d">${esc(relDay(d))}</div>` : ''; last = d;
+        return h + `<div class="au-r"><div class="au-t">${kt(r.at)}</div><div class="grow"><div><b>${esc(r.who || '—')}</b> <span class="pill g">${esc(r.area)}</span> <span class="b">${esc(r.label || '')}</span></div>
+          <div class="sm au-w">${esc(r.what)}</div></div></div>`; }).join('') + (l.length >= 2000 ? '<div class="hint">Показано останні 2000 змін — оберіть коротший період.</div>' : ''); };
+    const load = async () => { rows = null; $('#au-l', s.el).innerHTML = '<div class="spin"></div>';
+      const { data, error } = await sb.rpc('audit_feed', { p_from: addDays(today(), 1 - +days), p_to: today() });
+      if (error) { $('#au-l', s.el).innerHTML = `<div class="empty">${/audit_feed|PGRST202/.test(error.message) ? 'Спершу потрібне оновлення бази 21' : esc(errMsg(error))}</div>`; return; }
+      rows = data || []; draw(); };
+    $$('[data-p]', s.el).forEach((b) => (b.onclick = () => { days = b.dataset.p; $$('[data-p]', s.el).forEach((x) => x.classList.toggle('on', x === b)); load(); }));
+    $$('[data-a]', s.el).forEach((b) => (b.onclick = () => { area = b.dataset.a; $$('[data-a]', s.el).forEach((x) => x.classList.toggle('on', x === b)); draw(); }));
+    $('#au-q', s.el).oninput = (e) => { q = e.target.value.trim(); draw(); };
+    load();
+  }
   async function settings(main) {
     const s = S().settings;
     const { data: tl } = await sb.rpc('team_link');
@@ -786,6 +816,9 @@ const Admin = (() => {
         <div class="row mt"><input class="inp" id="s-pmn" placeholder="Новий спосіб, напр. Термінал"><button class="btn" id="s-pma" title="Додати спосіб оплати">${IC.plus}</button></div>
         <label class="lb" for="s-pl">Посилання для оплати за QR</label><input class="inp" id="s-pl" value="${esc(s.pay_link || '')}" placeholder="напр. посилання на банку Monobank">
         <div class="hint">Коли майстер обирає оплату «QR», на екрані зʼявиться QR-код з цим посиланням.</div></div>
+      ${Staff.isOwner() ? `<div class="card"><h3>Журнал змін</h3>
+        <div class="hint" style="margin-top:-4px">Хто й коли змінював ціни, послуги, персонал і ролі, налаштування, оплати й витрати, скасовував записи чи давав знижки. Бачать лише власниці.</div>
+        <button class="btn wide mt" id="s-audit" title="Відкрити журнал змін за період">📜 Відкрити журнал</button></div>` : ''}
       </div>
       <div class="scol">
       <div class="card"><h3>Посилання на запис</h3><div class="hint mb">Вставте ці посилання в Instagram (у шапку профілю й кнопку «Записатися») і в профіль Google Maps (поле «Сайт» / «Запис»). Тоді на дашборді в плитці «Записи» буде видно, скільки записів прийшло звідки.</div>
@@ -801,10 +834,10 @@ const Admin = (() => {
           <option value="" ${s.close_hour == null ? 'selected' : ''}>не питати</option>${[17, 18, 19, 20, 21, 22, 23].map((h) => `<option value="${h}" ${+s.close_hour === h && s.close_hour != null ? 'selected' : ''}>${h}:00</option>`).join('')}</select></div>
           <div><label class="lb">&nbsp;</label><button class="btn" id="s-cln" title="Надіслати перевірку за сьогодні зараз — тим, у кого сьогодні були записи">${IC.tg.replace('<svg', '<svg width="16" height="16"')} Надіслати зараз</button></div></div>
           <div class="hint">Після кнопки «Так, усе закрила» бот перевіряє, чи всі записи за день «Завершено» або «Не прийшла». Якщо ні — пише, які саме, і просить натиснути «Готово» ще раз.</div></div></details>` : ''}
-        ${'report_on' in s ? `<details class="tg-it" data-tg="report"><summary><div class="grow"><b>Щомісячний звіт</b>${tgLast('report')}</div><span class="tg-v" data-tgv></span></summary><div class="tg-b"><div class="two"><div><label class="lb" for="s-ro">Щомісячний звіт у Telegram</label><select class="inp" id="s-ro" title="1 числа о 10:00 власниці й адміну приходить Excel з клієнтками за минулий місяць і цифри (виторг, візити, нові клієнти)">
+        ${'report_on' in s && money$() ? `<details class="tg-it" data-tg="report"><summary><div class="grow"><b>Щомісячний звіт</b>${tgLast('report')}</div><span class="tg-v" data-tgv></span></summary><div class="tg-b"><div class="two"><div><label class="lb" for="s-ro">Щомісячний звіт у Telegram</label><select class="inp" id="s-ro" title="1 числа о 10:00 власниці й адміну приходить Excel з клієнтками за минулий місяць і цифри (виторг, візити, нові клієнти)">
           <option value="1" ${s.report_on ? 'selected' : ''}>1 числа о 10:00</option><option value="0" ${s.report_on ? '' : 'selected'}>не надсилати</option></select></div>
           <div><label class="lb">&nbsp;</label><button class="btn" id="s-rn" title="Надіслати звіт за цей місяць (з 1 числа по сьогодні) собі в Telegram зараз">${IC.tg.replace('<svg', '<svg width="16" height="16"')} Звіт зараз</button></div></div></div></details>` : ''}
-        ${'weekly_on' in s ? `<details class="tg-it" data-tg="weekly"><summary><div class="grow"><b>Підсумок тижня</b>${tgLast('weekly')}</div><span class="tg-v" data-tgv></span></summary><div class="tg-b"><div class="two"><div><label class="lb" for="s-wo">Підсумок тижня в Telegram</label><select class="inp" id="s-wo" title="Щопонеділка о 10:00 власниці й адміну — виторг, візити, нові клієнти, скасування й найкраща майстриня за минулий тиждень, з порівнянням">
+        ${'weekly_on' in s && money$() ? `<details class="tg-it" data-tg="weekly"><summary><div class="grow"><b>Підсумок тижня</b>${tgLast('weekly')}</div><span class="tg-v" data-tgv></span></summary><div class="tg-b"><div class="two"><div><label class="lb" for="s-wo">Підсумок тижня в Telegram</label><select class="inp" id="s-wo" title="Щопонеділка о 10:00 власниці й адміну — виторг, візити, нові клієнти, скасування й найкраща майстриня за минулий тиждень, з порівнянням">
           <option value="1" ${s.weekly_on ? 'selected' : ''}>щопонеділка о 10:00</option><option value="0" ${s.weekly_on ? '' : 'selected'}>не надсилати</option></select></div>
           <div><label class="lb">&nbsp;</label><button class="btn" id="s-wn" title="Надіслати підсумок минулого тижня собі в Telegram зараз">${IC.tg.replace('<svg', '<svg width="16" height="16"')} Тиждень зараз</button></div></div></div></details>` : ''}
         ${'nudge_pct' in s ? `<details class="tg-it" data-tg="nudge"><summary><div class="grow"><b>Повторні візити</b>${tgLast('nudge')}</div><span class="tg-v" data-tgv></span></summary><div class="tg-b"><div class="two">
@@ -851,6 +884,7 @@ const Admin = (() => {
       const upd = () => { const [t, off] = f(); v.textContent = t; v.classList.toggle('off', off); d.classList.toggle('off', off); };
       upd(); d.addEventListener('input', upd); d.addEventListener('change', upd); });
     const tgNow = (key) => { const l = $(`.tg-it[data-tg="${key}"] .tg-l`, main); if (l) l.outerHTML = tgLast(key, today()); };
+    const au = $('#s-audit', main); if (au) au.onclick = () => auditSheet();
     $('#s-tl', main).onclick = async () => { const { error } = await sb.rpc('team_link', { p_regen: false, p_enabled: !tl.enabled }); if (error) return toast(errMsg(error), 'bad'); toast(tl.enabled ? 'Швидкий вхід вимкнено' : 'Швидкий вхід увімкнено'); settings(main); };
     $('#s-tr', main).onclick = async () => { if (!(await confirmBox('Створити нове посилання?', { ok: 'Створити', sub: 'Старе посилання перестане працювати.' }))) return;
       const { error } = await sb.rpc('team_link', { p_regen: true }); if (error) return toast(errMsg(error), 'bad'); toast('Нове посилання створено'); settings(main); };
