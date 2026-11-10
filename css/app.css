@@ -627,3 +627,4 @@ body.cal-full .st-tabs,body.cal-full .cal-bar #c-new{display:none!important}
 .promo-bar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;background:var(--yels);border:1.5px solid var(--yelb);border-radius:var(--r3);padding:9px 12px;margin-bottom:12px;font-size:13.5px}
 .promo-bar .btn{margin-left:auto}
 .promo-tag{margin-top:12px;background:var(--yel);color:#1E1E1C;border-radius:999px;padding:7px 14px;font-weight:700;font-size:13.5px;display:inline-block}
+label.check{display:flex;align-items:center;gap:8px;font-size:14px;cursor:pointer} label.check input{width:18px;height:18px;accent-color:var(--gr)}

@@ -1,6 +1,7 @@
 // Telegram-бот NaNa studio: сповіщення персоналу, нагадування клієнтам.
 // Токен бота — секрет TELEGRAM_BOT_TOKEN (або TG_BOT_TOKEN) у Supabase (у репозиторій не додавати).
 import { createClient } from 'npm:@supabase/supabase-js@2.45.4';
+import * as XLSX from 'npm:xlsx@0.18.5';
 
 const TOKEN = (Deno.env.get('TG_BOT_TOKEN') || Deno.env.get('TELEGRAM_BOT_TOKEN') || '').trim().replace(/^bot/i, '').replace(/^['"]|['"]$/g, '');
 const SB_URL = 'https://arkwtpihdaqnwhdcjpqf.supabase.co';
@@ -135,6 +136,70 @@ async function onCallback(cq: any) {
   const lines = open.map((a) => `• ${hm(a.starts_at)} — ${esc(a.clients?.name)}, ${esc(a.services?.name)}`).join('\n');
   return send(chat, `😬 Упс, ти не закрила ${open.length} ${plural(open.length, 'запис', 'записи', 'записів')}:\n${lines}\n\nЗакрий ${open.length > 1 ? 'їх' : 'його'} у програмі, повтори спробу й натисни «Готово».`,
     [[{ text: '✅ Готово', callback_data: 'cl:' + d }], calBtn(st, d)]);
+}
+
+// ---------- щомісячний звіт власниці: Excel з клієнтками за місяць (від найранішої дати) + коротко цифри ----------
+async function pageAll(make: () => any) {
+  let out: any[] = [], i = 0;
+  for (;;) { const { data, error } = await make().range(i, i + 999); if (error) throw error; out = out.concat(data ?? []); if ((data ?? []).length < 1000) break; i += 1000; }
+  return out;
+}
+const xd = (iso: string) => {   // дата-час за Києвом → число Excel
+  const p = new Intl.DateTimeFormat('en-CA', { timeZone: TZ, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).formatToParts(new Date(iso));
+  const g = (t: string) => +(p.find((x) => x.type === t)?.value ?? 0);
+  return Date.UTC(g('year'), g('month') - 1, g('day'), g('hour'), g('minute')) / 864e5 + 25569;
+};
+const phoneFmt = (p: string) => { const d = String(p || '').replace(/\D/g, ''); return /^380\d{9}$/.test(d) ? `+380 ${d.slice(3, 5)} ${d.slice(5, 8)} ${d.slice(8, 10)} ${d.slice(10)}` : (p || ''); };
+const MONTHS_GEN = ['січень', 'лютий', 'березень', 'квітень', 'травень', 'червень', 'липень', 'серпень', 'вересень', 'жовтень', 'листопад', 'грудень'];
+async function monthlyReport(from: string, to: string, chats: number[]) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(from) || !/^\d{4}-\d{2}-\d{2}$/.test(to) || !chats.length) return { skip: 'bad args' };
+  const [fa] = kRange(from), [, ta] = kRange(to);
+  const ap = await pageAll(() => db.from('appointments').select('client_id, starts_at, services(name), staff(first_name), clients(name, phone, instagram), payments(amount)')
+    .eq('status', 'done').eq('demo', false).gte('starts_at', fa).lt('starts_at', ta).order('starts_at'));
+  const ids = [...new Set(ap.map((a: any) => a.client_id))];
+  const last: Record<string, string> = {}, cnt: Record<string, number> = {};
+  for (let i = 0; i < ids.length; i += 200) {
+    const h = await pageAll(() => db.from('appointments').select('client_id, starts_at').eq('status', 'done').in('client_id', ids.slice(i, i + 200)));
+    h.forEach((x: any) => { if (!last[x.client_id] || x.starts_at > last[x.client_id]) last[x.client_id] = x.starts_at; });
+    const days = new Set(h.map((x: any) => x.client_id + '|' + kDay(new Date(x.starts_at)))); days.forEach((k) => { const c = String(k).split('|')[0]; cnt[c] = (cnt[c] || 0) + 1; });
+  }
+  const G = new Map<string, any>();
+  for (const a of ap as any[]) {
+    const k = a.client_id + '|' + kDay(new Date(a.starts_at));
+    if (!G.has(k)) G.set(k, { a, sv: [] as string[], ms: new Set<string>(), sum: 0 });
+    const g = G.get(k); g.sv.push(a.services?.name ?? ''); if (a.staff?.first_name) g.ms.add(a.staff.first_name);
+    g.sum += +(Array.isArray(a.payments) ? a.payments[0]?.amount : a.payments?.amount) || 0;
+  }
+  const head = ['Дата візиту', 'ПІБ', 'Телефон', 'Instagram', 'Послуги', 'Майстер', 'Сума, ₴', 'Останній візит', 'Візитів усього'];
+  const rows = [...G.values()].map((g) => { const c = g.a.clients ?? {}, nick = String(c.instagram || '').replace(/^@/, '');
+    return [null, c.name ?? '', phoneFmt(c.phone), nick ? 'https://instagram.com/' + nick : '', g.sv.join(', '), [...g.ms].join(', '), g.sum, null, cnt[g.a.client_id] || 0]; });
+  const ws = XLSX.utils.aoa_to_sheet([head, ...rows]);
+  [...G.values()].forEach((g, i) => {
+    ws[XLSX.utils.encode_cell({ r: i + 1, c: 0 })] = { t: 'n', v: xd(g.a.starts_at), z: 'dd.mm.yyyy hh:mm' };
+    const l = last[g.a.client_id]; if (l) ws[XLSX.utils.encode_cell({ r: i + 1, c: 7 })] = { t: 'n', v: xd(l), z: 'dd.mm.yyyy' };
+    const ic = ws[XLSX.utils.encode_cell({ r: i + 1, c: 3 })]; if (ic?.v) ic.l = { Target: ic.v };
+  });
+  ws['!cols'] = [17, 26, 18, 34, 44, 16, 10, 14, 12].map((w) => ({ wch: w }));
+  ws['!autofilter'] = { ref: XLSX.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: Math.max(rows.length, 1), c: head.length - 1 } }) };
+  const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, 'Клієнти');
+  const file = XLSX.write(wb, { type: 'array', bookType: 'xlsx' });
+  // цифри для підпису
+  const { data: pays } = await db.from('payments').select('amount, appointments!inner(demo)').eq('appointments.demo', false).gte('paid_at', fa).lt('paid_at', ta);
+  const rev = (pays ?? []).reduce((t: number, x: any) => t + +x.amount, 0);
+  const { count: newCl } = await db.from('clients').select('id', { count: 'exact', head: true }).eq('demo', false).gte('created_at', fa).lt('created_at', ta);
+  const whole = from.slice(8) === '01' && kDay(new Date(Date.parse(ta) - 1)).slice(0, 7) === from.slice(0, 7) && +to.slice(8) >= 28;
+  const label = whole ? `${MONTHS_GEN[+from.slice(5, 7) - 1]} ${from.slice(0, 4)}` : `${from.split('-').reverse().join('.')}–${to.split('-').reverse().join('.')}`;
+  const caption = `📊 Звіт NaNa studio за ${label}\n💰 Виторг: ${money(rev)}\n✅ Візитів: ${G.size}\n👩 Клієнток: ${ids.length}\n🆕 Нових клієнтів: ${newCl ?? 0}\n\nУ файлі — хто був у салоні, від найранішої дати.`;
+  const name = `NaNa клієнти ${from.split('-').reverse().join('.')}–${to.split('-').reverse().join('.')}.xlsx`;
+  let sent = 0;
+  for (const chat of chats) {
+    const fd = new FormData();
+    fd.append('chat_id', String(chat)); fd.append('caption', caption);
+    fd.append('document', new Blob([file], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }), name);
+    const r = await (await fetch(`${API}/sendDocument`, { method: 'POST', body: fd })).json();
+    if (r.ok) sent++;
+  }
+  return { sent, rows: rows.length };
 }
 
 // ---------- повідомлення від людей ----------
@@ -324,6 +389,7 @@ Deno.serve(async (req) => {
         const kb = Array.isArray(body.buttons) ? body.buttons.map((r: any) => (Array.isArray(r) ? r : []).filter((x: any) => x?.text && /^https:\/\//.test(String(x.url ?? ''))).map((x: any) => ({ text: String(x.text).slice(0, 60), url: String(x.url) }))).filter((r: any[]) => r.length) : undefined;
         return json(await send(Number(body.chat_id), String(body.text ?? ''), kb?.length ? kb : undefined));
       }
+      case 'monthly_report': return json(await monthlyReport(String(body.from ?? ''), String(body.to ?? ''), (Array.isArray(body.chats) ? body.chats : []).map(Number).filter(Boolean)));
       case 'month_ask': return json(await monthAsk(String(body.staff_id), String(body.month ?? ''), !!body.first));
       case 'close_ask': return json(await closeAsk(String(body.staff_id), String(body.day ?? kDay())));
       default: return json({ error: 'unknown action' }, 400);
