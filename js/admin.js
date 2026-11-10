@@ -535,6 +535,9 @@ const Admin = (() => {
       top.addEventListener('input', () => { $$(`[data-${k}]`, el).forEach((f) => { if (f.value === prev || f.value === '') { f.value = top.value; f.classList.add('synced'); setTimeout(() => f.classList.remove('synced'), 700); } }); prev = top.value; }); });
     $('#sv-all', el).onclick = () => { $$('[data-p]', el).forEach((c) => { if (c.checked) { $(`[data-pu="${c.dataset.p}"]`, el).value = $('#sv-u', el).value; $(`[data-pp="${c.dataset.p}"]`, el).value = $('#sv-p', el).value; } }); };
     $('[data-x2]', el).onclick = s.close;
+    const oneSync = () => { const on = $$('[data-p]', el).filter((c) => c.checked); if (on.length !== 1) return; const pid = on[0].dataset.p;
+      const u = $(`[data-pu="${pid}"]`, el).value, p = $(`[data-pp="${pid}"]`, el).value; if (u) $('#sv-u', el).value = u; if (p !== '') $('#sv-p', el).value = p; };
+    $$('[data-pu],[data-pp],[data-p]', el).forEach((f) => f.addEventListener(f.matches('[data-p]') ? 'change' : 'input', oneSync));
     $('#sv-ok', el).onclick = (e) => busy(e.currentTarget, async () => {
       const name = $('#sv-n', el).value.trim(), dur = +$('#sv-u', el).value, price = +$('#sv-p', el).value;
       if (!name) { $('#sv-n', el).classList.add('err'); return toast('Вкажіть назву', 'bad'); }
@@ -545,12 +548,14 @@ const Admin = (() => {
       const row = { category, name, descr: $('#sv-d', el).value.trim() || null, dur, price, sort: +$('#sv-o', el).value || 100, is_active: $('#sv-a', el).checked, photos };
       if ($('#sv-f', el)) row.price_from = $('#sv-f', el).checked;
       if ($('#sv-g', el)) { row.subgroup = $('#sv-g', el).value.trim() || null; row.is_addon = $('#sv-ad', el).checked; }
-      const r1 = id ? await sb.from('services').update(row).eq('id', id) : await sb.from('services').insert({ id: sid, ...row });
-      if (r1.error) return toast(errMsg(r1.error), 'bad');
       const up = [], del = [];
       $$('[data-p]', el).forEach((c) => { const pid = c.dataset.p;
         if (c.checked) { const u = +$(`[data-pu="${pid}"]`, el).value, p = +$(`[data-pp="${pid}"]`, el).value; up.push({ staff_id: pid, service_id: sid, dur: u >= 5 ? u : dur, price: p >= 0 ? p : price, is_active: true, ...(hasMsFrom() ? { price_from: !!$(`[data-pf="${pid}"]`, el)?.checked } : {}) }); }
         else if (S().ms.some((m) => m.staff_id === pid && m.service_id === sid)) del.push(pid); });
+      // послугу виконує одна майстриня — її тривалість і ціна стають і загальними (щоб у списку й звітах не було розбіжностей)
+      if (up.length === 1) { row.dur = up[0].dur; row.price = up[0].price; if ('price_from' in up[0] && 'price_from' in row) row.price_from = up[0].price_from; }
+      const r1 = id ? await sb.from('services').update(row).eq('id', id) : await sb.from('services').insert({ id: sid, ...row });
+      if (r1.error) return toast(errMsg(r1.error), 'bad');
       if (up.length) { const { error } = await sb.from('master_services').upsert(up); if (error) return toast(errMsg(error), 'bad'); }
       if (del.length) { const { error } = await sb.from('master_services').delete().eq('service_id', sid).in('staff_id', del); if (error) return toast(errMsg(error), 'bad'); }
       await Staff.reload(); s.close(); toast('Послугу збережено'); done();
