@@ -283,7 +283,7 @@ const Staff = (() => {
         <button class="btn pri" id="c-new" title="Створити новий запис клієнта">${IC.plus} Запис</button></div>
       <div class="chips scroll mb">${ms.length > 1 ? `<button class="chip ${S.calSel === 'all' ? 'on' : ''}" data-sel="all" title="Показати всіх майстрів">Усі майстри</button>` : ''}${ms.map((m) => `<button class="chip ${S.calSel === m.id ? 'on' : ''}" data-sel="${m.id}" title="Лише записи майстра ${esc(m.first_name)}">${esc(m.first_name)}</button>`).join('')}
         <label class="chip" title="Показувати також скасовані записи" style="gap:8px"><input type="checkbox" id="c-cn" ${S.showCancel ? 'checked' : ''} style="accent-color:var(--gr)"> скасовані</label></div>
-      <div class="sm mut mb">${act.length} ${plural(act.length, 'запис', 'записи', 'записів')}${act.length ? ` · завершено ${act.filter((a) => a.status === 'done').length}` : ''}${isBoss() && act.length ? ` · оплачено ${money(paid)} з ${money(plan)}` : ''}</div>
+      <div class="sm mut mb">${act.length} ${plural(act.length, 'запис', 'записи', 'записів')}${act.length ? ` · завершено ${act.filter((a) => a.status === 'done').length}` : ''}${act.some(isDue) ? ` · <b class="due-n" title="Записи, які вже минули, але не закриті">не закрито ${act.filter(isDue).length}</b>` : ''}${isBoss() && act.length ? ` · оплачено ${money(paid)} з ${money(plan)}` : ''}</div>
       <div id="c-body"></div>`;
     const body = $('#c-body');
     if (!shown.length) body.innerHTML = '<div class="card empty"><div class="big">👩‍🎨</div>Немає майстрів, які приймають записи. Додайте їх у розділі «Персонал».</div>';
@@ -306,6 +306,10 @@ const Staff = (() => {
   // картку майстра з календаря відкривають власниця/адмін (будь-яку) і майстер (лише свою)
   const canCard = (m) => isBoss() || m.id === S.me.id;
   // візит: послуги одного клієнта в одного майстра підряд (без розриву) показуються одним блоком
+  // запис уже закінчився, а його не закрили (не «Завершено» / «Не прийшла») — підсвічуємо, щоб закрили до вечірньої перевірки
+  const isDue = (a) => a.status === 'booked' && Date.parse(a.ends_at) < nowMs();
+  const gDue = (g) => g.items.some(isDue);
+  const DUE_T = '⏰ Не закрито: візит уже минув — відкрийте й позначте «Завершено» або «Не прийшла». ';
   function visitGroups(list) {
     const out = [];
     list.forEach((a) => { const last = out[out.length - 1];
@@ -332,8 +336,9 @@ const Staff = (() => {
         return `<div class="blk" data-blk="${b.id}" style="top:${y(Math.max(a, s0))}px;height:${Math.max(18, (Math.min(e, s1) - Math.max(a, s0)) * PX)}px" title="Закритий час: ${esc(b.reason)}. Натисніть, щоб відкрити">${IC.lock} ${esc(b.reason)}</div>`; }).join('');
       const ap = visitGroups(appts.filter((a) => a.staff_id === m.id)).map((g) => { const a = g.items[0], z = g.items[g.items.length - 1]; G[a.id] = g;
         const st = kParts(a.starts_at).min, en = dayOf(z.ends_at) === S.day ? kParts(z.ends_at).min : 1440, box = `style="top:${y(st)}px;height:${Math.max(24, (en - st) * PX - 2)}px"`;
-        if (g.items.length === 1) return `<div class="ap ${a.status}" data-ap="${a.id}" ${box} title="${esc(STATUS[a.status])}: ${esc(a.clients?.name)} — ${esc(svcById(a.service_id)?.name)}">${apHtml(a)}</div>`;
-        return `<div class="ap grp ${g.status}" data-ap="${a.id}" ${box} title="Візит: ${g.items.length} ${plural(g.items.length, 'послуга', 'послуги', 'послуг')} — ${esc(a.clients?.name)}"><span class="t">${fmtT(a.starts_at)}–${fmtT(z.ends_at)}${a.visits?.source === 'online' ? ' 🌐' : ''}${a.visits?.confirmed_at && g.status === 'booked' ? ' ✅' : ''} · ${g.items.length} ${plural(g.items.length, 'послуга', 'послуги', 'послуг')}</span><b>${esc(a.clients?.name || '')}</b>`
+        const due = gDue(g) ? ' due' : '', dt0 = due ? DUE_T : '';
+        if (g.items.length === 1) return `<div class="ap ${a.status}${due}" data-ap="${a.id}" ${box} title="${dt0}${esc(STATUS[a.status])}: ${esc(a.clients?.name)} — ${esc(svcById(a.service_id)?.name)}">${apHtml(a)}</div>`;
+        return `<div class="ap grp ${g.status}${due}" data-ap="${a.id}" ${box} title="${dt0}Візит: ${g.items.length} ${plural(g.items.length, 'послуга', 'послуги', 'послуг')} — ${esc(a.clients?.name)}"><span class="t">${fmtT(a.starts_at)}–${fmtT(z.ends_at)}${a.visits?.source === 'online' ? ' 🌐' : ''}${a.visits?.confirmed_at && g.status === 'booked' ? ' ✅' : ''} · ${g.items.length} ${plural(g.items.length, 'послуга', 'послуги', 'послуг')}</span><b>${esc(a.clients?.name || '')}</b>`
           + g.items.map((x) => `<div class="ap-ln ${x.status}" data-ap="${x.id}" title="Відкрити: ${esc(svcById(x.service_id)?.name)}">${fmtT(x.starts_at)} ${esc(svcById(x.service_id)?.name || '')}</div>`).join('') + `</div>`; }).join('');
       return `<div class="cal-col" data-col="${m.id}" style="height:${H}px" title="Натисніть на вільне місце, щоб записати клієнта">${lines}${off}${bl}${ap}</div>`;
     }).join('');
@@ -480,10 +485,11 @@ const Staff = (() => {
       return `<h4>${canCard(m) ? `<a class="m-lnk" href="#/staff/team/${m.id}" title="Відкрити картку: ${esc(fullName(m))}">${avatar(m, 's')} ${esc(fullName(m))}</a>` : `${avatar(m, 's')} ${esc(fullName(m))}`} <span class="mut sm" style="font-weight:600">${hh ? toHM(hh[0]) + '–' + toHM(hh[1]) : 'вихідний'} · ${list.length} ${plural(list.length, 'запис', 'записи', 'записів')}</span></h4>` +
         bl.map((b) => `<div class="ap-row noshow" data-blk="${b.id}" title="Закритий час. Натисніть, щоб відкрити"><div class="tm">${fmtT(b.starts_at)}<small>${fmtT(b.ends_at)}</small></div><div class="grow">${IC.lock} <b>${esc(b.reason)}</b></div></div>`).join('') +
         (visitGroups(list).map((g) => { const a = g.items[0], z = g.items[g.items.length - 1], many = g.items.length > 1;
-          return `<div class="ap-row ${g.status}" data-ap="${a.id}" title="Відкрити запис"><div class="tm">${fmtT(a.starts_at)}<small>${fmtT(z.ends_at)}</small></div>
+          const due = gDue(g);
+          return `<div class="ap-row ${g.status}${due ? ' due' : ''}" data-ap="${a.id}" title="${due ? DUE_T : ''}Відкрити запис"><div class="tm">${fmtT(a.starts_at)}<small>${fmtT(z.ends_at)}</small></div>
           <div class="grow"><div class="b ell">${esc(a.clients?.name || '')}${a.visits?.source === 'online' ? ' <span class="pill i" title="Клієнт записався онлайн">онлайн</span>' : ''}</div>`
           + (many ? g.items.map((x) => `<div class="sm mut ell ap-ln" data-ap="${x.id}" title="Відкрити: ${esc(svcById(x.service_id)?.name)}">${fmtT(x.starts_at)} · ${esc(svcById(x.service_id)?.name || '')}</div>`).join('') : `<div class="sm mut ell">${esc(svcById(a.service_id)?.name || '')}</div>`) + `</div>
-          <div style="text-align:right"><span class="pill ${g.status}">${STATUS[g.status]}</span><div class="sm b" style="margin-top:4px">${money(g.items.reduce((t, x) => t + +(x.payments?.amount ?? x.price), 0))}</div></div></div>`; }).join('') ||
+          <div style="text-align:right"><span class="pill ${due ? 'due' : g.status}">${due ? '⏰ Не закрито' : STATUS[g.status]}</span><div class="sm b" style="margin-top:4px">${money(g.items.reduce((t, x) => t + +(x.payments?.amount ?? x.price), 0))}</div></div></div>`; }).join('') ||
           (hh ? `<div class="ap-row" style="border-left-color:var(--line2);cursor:pointer" data-new="${m.id}" title="Створити запис до ${esc(m.first_name)}"><div class="grow mut">Записів немає — ${IC.plus} записати</div></div>` : ''));
     }).join('')}</div>`;
     $$('[data-new]', body).forEach((r) => (r.onclick = () => newAppt({ mid: r.dataset.new, day: S.day })));
