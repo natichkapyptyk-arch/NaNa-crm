@@ -45,6 +45,17 @@ const Admin = (() => {
     return { html, bind };
   }
   const tsRange = (from, to) => [kDate(from, 0).toISOString(), kDate(addDays(to, 1), 0).toISOString()];
+  // знижки при оплаті за період (update-20): сума знижки = ціна послуги − оплачено; null — якщо база ще без знижок
+  async function discLoad(from, to) {
+    const [f, t] = tsRange(from, to);
+    try {
+      const l = await qAll(() => sb.from('payments').select('amount,discount_pct,discount_note,paid_at,staff_id,appointments(price,service_id,client_id,clients(name))')
+        .not('discount_pct', 'is', null).eq('demo', false).gte('paid_at', f).lt('paid_at', t).order('paid_at', { ascending: false }));
+      return l.map((p) => { const a = one(p.appointments) || {};
+        return { amount: +p.amount, pct: +p.discount_pct, note: p.discount_note, paid_at: p.paid_at, staff_id: p.staff_id, service_id: a.service_id, client_id: a.client_id,
+          client: one(a.clients)?.name, off: Math.max(0, Math.round((+a.price || 0) - +p.amount)) }; });
+    } catch (e) { return null; }
+  }
   /* ---------- повторні / повернуті клієнти ---------- */
   const BACK_DAYS = 90;   // «повернутий» — перерва понад 3 місяці
   // { client_id: [дні візитів по порядку] } із завершених записів (кілька послуг в один день — один візит)
@@ -206,6 +217,7 @@ const Admin = (() => {
         <div class="kpi click" data-k="cancel" role="button" tabindex="0" title="Список скасованих записів і неявок за період"><div class="l">Скасовано / не прийшли</div><div class="v">${cancel} / ${noshow}</div><div class="d mut">${pct(cancel + noshow, ap.length)}% від усіх записів</div></div>
         <div class="kpi click" data-k="rep" role="button" tabindex="0" title="Клієнти, які вже були раніше й прийшли знову в цьому періоді (перерва до ${BACK_DAYS} днів) — відкрити список"><div class="l">Повторні клієнти</div><div class="v">${ret.rep.length}</div>${delta(ret.rep.length, prevRet.rep.length) || `<div class="d mut">${pct(ret.rep.length, seenCl)}% клієнтів періоду</div>`}</div>
         <div class="kpi click" data-k="back" role="button" tabindex="0" title="Клієнти, які не були понад 3 місяці (${BACK_DAYS}+ днів) і повернулись у цьому періоді — відкрити список"><div class="l">Повернуті клієнти</div><div class="v" style="color:var(--ok)">${ret.back.length}</div><div class="d mut">не були 3+ міс. і прийшли</div></div>
+        <div class="kpi click hide" data-k="disc" id="k-disc" role="button" tabindex="0" title="Знижки при оплаті за період: скільки, на яку суму, хто і за що — відкрити список"><div class="l">Знижки</div><div class="v" id="k-disc-v" style="color:var(--warn)">—</div><div class="d mut" id="k-disc-d"></div></div>
         <div class="kpi click hide" data-k="nudge" id="k-nudge" role="button" tabindex="0" title="Повідомлення з бота «час оновити» / «знижка» за період і скільки клієнток після них записались (протягом 30 днів) — відкрити список"><div class="l">Повернення через бота</div><div class="v" id="k-nudge-v">—</div><div class="d mut" id="k-nudge-d"></div></div>
         <a class="kpi click" href="#/staff/clients/stale" title="Клієнти, які не були понад ${S().settings.stale_days} днів і не мають запису — відкрити список" style="text-decoration:none"><div class="l">Застарілі клієнти</div><div class="v" style="color:var(--warn)">${stale}</div><div class="d mut">не були ${S().settings.stale_days}+ днів →</div></a>
       </div>
@@ -346,6 +358,17 @@ const Admin = (() => {
         return { title: `Нові клієнти: ${nc.length}`, html: nc.map((c) => `<div class="m-row click" data-cl="${c.id}" title="Відкрити картку клієнта"><span class="ava s y">${esc(c.name[0] || '?')}</span><div class="grow"><div class="b sm ell">${esc(c.name)}</div>
           <div class="xs mut ell">${esc(fmtPhone(c.phone))} · додано ${dt(c.created_at)}</div></div><div class="r sm">${c.visits} ${plural(c.visits, 'візит', 'візити', 'візитів')}</div></div>`).join('') || '<div class="empty">Нових клієнтів за цей період немає</div>' }; } }),
       rep: () => retSheet('rep'), back: () => retSheet('back'), recs: () => recSheet(),
+      disc: () => perSheet({ load: async (from, to) => {
+          const l = await discLoad(from, to); if (!l) throw new Error('Спершу потрібне оновлення бази 20');
+          const sum = l.reduce((t, x) => t + x.off, 0), per = {};
+          l.forEach((x) => { const m = (per[x.staff_id] ||= { n: 0, off: 0 }); m.n++; m.off += x.off; });
+          return { title: `Знижки: ${money(sum)} · ${l.length} ${plural(l.length, 'оплата', 'оплати', 'оплат')}`,
+            html: (l.length ? `<div class="hint mb">${Object.entries(per).sort((a, b) => b[1].off - a[1].off).map(([id, m]) => `${esc(Staff.byId(id)?.first_name || '—')}: ${m.n} · ${money(m.off)}`).join(' · ')}</div>` : '')
+              + (l.map((x) => `<div class="m-row click" data-cl="${x.client_id || ''}" title="Відкрити картку клієнта"><span class="ava s y" style="font-size:10.5px;letter-spacing:-.02em">−${x.pct}%</span>
+                <div class="grow"><div class="b ell">${esc(x.client || '—')} · ${esc(Staff.svcById(x.service_id)?.name || '')}</div>
+                <div class="xs mut ell">${dt(x.paid_at)} · ${esc(Staff.byId(x.staff_id)?.first_name || '')} · ${esc(x.note || 'без коментаря')}</div></div>
+                <div class="r sm"><div class="b">−${money(x.off)}</div><div class="xs mut">оплачено ${money(x.amount)}</div></div></div>`).join('') || '<div class="empty">За цей період знижок не було</div>') };
+        }, after: (s) => $$('[data-cl]', s.el).forEach((x) => (x.onclick = () => x.dataset.cl && Staff.clientSheet(x.dataset.cl))) }),
       nudge: () => perSheet({ load: async (from, to) => {
           const { data: r, error } = await sb.rpc('nudge_stats', { p_from: from, p_to: to }); if (error) throw error;
           const KN = { renew: '✨ час оновити', promo: '🎁 знижка', back: '💛 скучили' };
@@ -364,6 +387,11 @@ const Admin = (() => {
         after: (s) => { $('#pf-exp', s.el).onclick = () => { s.close(); expenseSheet(() => dash(main)); }; } }),
     };
     $$('[data-ctg]', body).forEach((el) => (el.onclick = () => catSheet(doneTitle, ['done'], el.dataset.ctg)));
+    discLoad(st.from, st.to).then((l) => {   // update-20; до оновлення бази плитки немає
+      const k = $('#k-disc', body); if (!l || !k) return; k.classList.remove('hide');
+      const sum = l.reduce((t, x) => t + x.off, 0);
+      $('#k-disc-v', body).textContent = money(sum);
+      $('#k-disc-d', body).textContent = l.length ? `${l.length} ${plural(l.length, 'оплата', 'оплати', 'оплат')} · у середньому −${Math.round(l.reduce((t, x) => t + x.pct, 0) / l.length)}%` : 'знижок за період не було'; });
     sb.rpc('nudge_stats', { p_from: st.from, p_to: st.to }).then(({ data: r, error }) => {   // update-17; до оновлення бази плитки немає
       const k = $('#k-nudge', body); if (error || !r || !k) return; k.classList.remove('hide');
       $('#k-nudge-v', body).textContent = r.sent ? `${r.booked} з ${r.sent}` : '0';
