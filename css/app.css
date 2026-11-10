@@ -667,3 +667,9 @@ label.check{display:flex;align-items:center;gap:8px;font-size:14px;cursor:pointe
 .due-n{color:var(--duec)}
 @keyframes duePulse{50%{box-shadow:0 0 0 1.5px var(--duec),0 0 4px transparent}}
 @media (prefers-reduced-motion:reduce){.cal-col .ap.due{animation:none}}
+
+/* онлайн-запис: жовті рамки карток майстрів, послуг і блоків */
+.m-card,.s-row,.cl-wrap .card{border-color:var(--kpib)}
+.m-card:hover,.s-row:hover{border-color:var(--kpih)}
+.s-row.inCart{border-color:var(--yel2)}
+.dchip:hover{border-color:var(--kpih)}
