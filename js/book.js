@@ -134,7 +134,7 @@ const Client = (() => {
   /* ---------- кроки ---------- */
   function vMasters() {
     const ms = C.masters.filter((m) => masterServices(m.id).some((x) => !st.cat || C.svc.get(x.service_id).category === st.cat));
-    const cats = `<div class="chips scroll mb"><button class="chip ${!st.cat ? 'on' : ''}" data-cat="" title="Показати всіх майстрів">Усі</button>${C.cats.map((c) =>
+    const cats = `<div class="chips scroll mb cat-ch"><button class="chip ${!st.cat ? 'on' : ''}" data-cat="" title="Показати всіх майстрів">Усі</button>${C.cats.map((c) =>
       `<button class="chip ${st.cat === c ? 'on' : ''}" data-cat="${esc(c)}" title="Майстри, які роблять: ${esc(c.toLowerCase())}">${esc(c)}</button>`).join('')}</div>`;
     const cards = ms.map((m) => {
       const list = masterServices(m.id).filter((x) => !st.cat || C.svc.get(x.service_id).category === st.cat);

@@ -672,4 +672,10 @@ label.check{display:flex;align-items:center;gap:8px;font-size:14px;cursor:pointe
 .m-card,.s-row,.cl-wrap .card{border-color:var(--kpib)}
 .m-card:hover,.s-row:hover{border-color:var(--kpih)}
 .s-row.inCart{border-color:var(--yel2)}
-.dchip:hover{border-color:var(--kpih)}
+.m-card .dchip{border-color:var(--kpib)}   /* дні в картках майстрів — жовта рамка */
+.dchip:hover,.m-card .dchip:hover{border-color:var(--kpih)}
+.m-card .dchip.visit{border-color:var(--yel2)}
+/* онлайн-запис: категорії — тонка жовта рамка, обрана залита жовтим */
+.cat-ch .chip{border-color:var(--kpib)}
+.cat-ch .chip:hover{border-color:var(--kpih)}
+.cat-ch .chip.on{background:var(--yel);border-color:var(--yel);color:#20201E}
