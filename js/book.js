@@ -247,7 +247,7 @@ const Client = (() => {
       <p class="mut" style="margin:6px 0 14px">Чекаємо вас у ${esc(C.settings.salon_name)} 💛</p>
       <div style="text-align:left">${d.items.map((x) => `<div class="cart-item"><div class="grow"><div class="b">${esc(x.service)}</div><div class="sm mut">${esc(fmtDay(dayOf(x.s), { weekday: 'long', day: 'numeric', month: 'long' }))}, ${fmtT(x.s)}–${fmtT(x.e)} · ${esc(x.master)}</div></div><div class="b">${money(x.price)}</div></div>`).join('')}
       <div class="cart-tot"><span>Разом</span><span>${money(d.total)}</span></div></div>
-      ${tg ? `<div class="tg-step mt"><b>Останній крок 👇</b><div class="sm">${d.tgOpened ? 'Ми відкрили Telegram — натисніть там <b>«Почати»</b> (Start). Якщо не відкрилось, натисніть кнопку нижче.' : 'Підтвердіть запис у Telegram: бот нагадає про візит за добу і за 2 години, а ви одним натиском підтвердите, що прийдете.'}</div>
+      ${tg ? `<div class="tg-step mt"><b>Останній крок 👇</b><div class="sm">${d.tgOpened ? 'Ми відкрили Telegram — натисніть там <b>«Почати»</b> (Start). Якщо не відкрилось, натисніть кнопку нижче.' : 'Підтвердіть запис у Telegram: бот нагадає про візит за добу, а ви одним натиском підтвердите, що прийдете.'}</div>
         <a class="btn pri lg wide mt" href="https://t.me/${esc(tg)}?start=v_${d.token}" target="_blank" rel="noopener" title="Відкрити нашого бота в Telegram і натиснути «Почати»">${IC.tg} Підтвердити запис у Telegram</a></div>` : ''}
       <div class="col mt">
         <button class="btn lg" id="ics" title="Завантажити подію для календаря телефону">${IC.cal} Додати в календар</button>
