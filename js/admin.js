@@ -846,7 +846,7 @@ const Admin = (() => {
       open: () => { const [t, o] = tgSel('#s-od', 'вимкнено'); return [o ? t : 'з ' + t, o]; },
     };
     $$('.tg-it', main).forEach((d) => { const v = $('[data-tgv]', d), f = TGV[d.dataset.tg];
-      const upd = () => { const [t, off] = f(); v.textContent = t; v.classList.toggle('off', off); };
+      const upd = () => { const [t, off] = f(); v.textContent = t; v.classList.toggle('off', off); d.classList.toggle('off', off); };
       upd(); d.addEventListener('input', upd); d.addEventListener('change', upd); });
     const tgNow = (key) => { const l = $(`.tg-it[data-tg="${key}"] .tg-l`, main); if (l) l.outerHTML = tgLast(key, today()); };
     $('#s-tl', main).onclick = async () => { const { error } = await sb.rpc('team_link', { p_regen: false, p_enabled: !tl.enabled }); if (error) return toast(errMsg(error), 'bad'); toast(tl.enabled ? 'Швидкий вхід вимкнено' : 'Швидкий вхід увімкнено'); settings(main); };
