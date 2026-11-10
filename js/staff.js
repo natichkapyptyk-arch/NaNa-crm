@@ -232,7 +232,7 @@ const Staff = (() => {
   async function dayData(day, mids) {
     const from = kDate(day, 0).toISOString(), to = kDate(addDays(day, 1), 0).toISOString();
     const [a, b, o] = await Promise.all([
-      sb.from('appointments').select('*, clients(*), visits(*), payments(amount,method,commission)').gte('starts_at', from).lt('starts_at', to).order('starts_at'),
+      sb.from('appointments').select('*, clients(*), visits(*), payments(*)').gte('starts_at', from).lt('starts_at', to).order('starts_at'),
       sb.from('blocks').select('*').lt('starts_at', to).gt('ends_at', from),
       sb.from('day_overrides').select('*').eq('day', day)]);
     for (const x of [a, b, o]) if (x.error) throw x.error;
@@ -528,7 +528,7 @@ const Staff = (() => {
       <dl class="kv"><dt>Коли</dt><dd>${esc(fmtDay(dayOf(a.starts_at), { weekday: 'long', day: 'numeric', month: 'long' }))}, ${fmtT(a.starts_at)}–${fmtT(a.ends_at)}</dd>
         <dt>Майстер</dt><dd>${esc(fullName(m || {}))}</dd><dt>Ціна</dt><dd>${money(a.price)}</dd>
         ${who ? `<dt>Записав(ла)</dt><dd>${esc(who)}${a.created_at ? ` · ${esc(relDay(dayOf(a.created_at)))}, ${fmtT(a.created_at)}` : ''}</dd>` : ''}
-        ${pay ? `<dt>Оплачено</dt><dd>${money(pay.amount)} · ${esc(pay.method)}</dd>` : ''}
+        ${pay ? `<dt>Оплачено</dt><dd>${money(pay.amount)} · ${esc(pay.method)}${+pay.discount_pct ? ` · <span class="disc-tag" title="Знижка при оплаті">−${+pay.discount_pct}%${pay.discount_note ? ' — ' + esc(pay.discount_note) : ''}</span>` : ''}</dd>` : ''}
         ${a.cancel_reason ? `<dt>Причина</dt><dd>${esc(a.cancel_reason)}</dd>` : ''}${a.cancelled_by ? `<dt>Скасував(ла)</dt><dd>${a.cancelled_by === 'client' ? 'клієнт онлайн' : 'салон'}</dd>` : ''}
         ${a.visits?.comment ? `<dt>Коментар</dt><dd>${esc(a.visits.comment)}</dd>` : ''}</dl><div id="a-visit"></div><div id="a-log"></div>
       ${mine && ['booked', 'done'].includes(a.status) ? `<div class="row wrap mt" style="gap:8px">
@@ -585,9 +585,30 @@ const Staff = (() => {
     }));
   }
   // «Завершити й оплатити»: якщо у візиті кілька незавершених послуг — закриваємо всі разом (кожна — своя оплата)
+  // знижка при оплаті: готові відсотки або свій, і обовʼязковий коментар «за що»
+  const DISC = [5, 10, 15, 20];
+  const discHtml = (p0 = 0, n0 = '') => `<label class="lb">Знижка</label>
+      <div class="disc"><div class="chips">${[0, ...DISC].map((p) => `<button class="chip ${p === p0 || (!p && !p0) ? 'on' : ''}" data-dp="${p}" title="${p ? 'Знижка ' + p + '%' : 'Без знижки'}">${p ? '−' + p + '%' : 'Без знижки'}</button>`).join('')}</div>
+        <label class="disc-own" title="Свій відсоток знижки"><input class="inp" id="d-pct" type="number" inputmode="decimal" min="0" max="100" step="1" placeholder="свій" value="${p0 && !DISC.includes(p0) ? p0 : ''}"><span>%</span></label></div>
+      <div id="d-nw" class="${p0 ? '' : 'hide'}"><input class="inp mt" id="d-note" maxlength="200" placeholder="За що знижка? (обовʼязково)" value="${esc(n0)}"></div>
+      <div class="hint" id="d-h"></div>`;
+  function discWire(s, onPct) {   // повертає { pct(), note(), set(p, note) }
+    let pct = 0; const own = $('#d-pct', s.el), nw = $('#d-nw', s.el), note = $('#d-note', s.el);
+    const mark = () => { $$('[data-dp]', s.el).forEach((b) => b.classList.toggle('on', +b.dataset.dp === pct || (!pct && b.dataset.dp === '0'))); nw.classList.toggle('hide', !pct); };
+    const set = (p, n) => { pct = Math.max(0, Math.min(100, Math.round((+p || 0) * 100) / 100)); own.value = pct && !DISC.includes(pct) ? pct : ''; if (n != null) { note.value = n; note.classList.remove('err'); } mark(); onPct(pct); if (pct && !note.value.trim()) note.focus(); };
+    $$('[data-dp]', s.el).forEach((b) => (b.onclick = () => set(+b.dataset.dp)));
+    own.oninput = () => { pct = Math.max(0, Math.min(100, +own.value || 0)); mark(); onPct(pct); };
+    note.oninput = () => note.classList.remove('err');
+    pct = +own.value || +($('[data-dp].on', s.el)?.dataset.dp || 0); mark();
+    return { pct: () => pct, note: () => note.value.trim(), set, bad: () => { note.classList.add('err'); note.focus(); } };
+  }
+  const saveDisc = async (ids, pct, note) => {   // після оплати; до оновлення бази 20 — тихо пропускаємо
+    for (const id of ids) { const { error } = await sb.rpc('payment_discount', { p_appt: id, p_pct: pct, p_note: note || null });
+      if (error && !/payment_discount|PGRST202|function/i.test(error.message)) { toast('Знижку не збережено: ' + errMsg(error), 'bad', 5000); return; } }
+  };
   // знижка з бота (update-16): активна, якщо діє на день візиту
   const promoOf = (c, day) => (c?.promo_pct && c.promo_until && c.promo_until >= day ? +c.promo_pct : 0);
-  const promoBar = (p, until) => `<div class="promo-bar">🎁 У клієнтки знижка <b>${p}%</b> із запрошення в боті (до ${esc(fmtDay(until, { day: 'numeric', month: 'short' }))}) <button class="btn sm" id="p-promo" title="Зменшити суму на ${p}%">Застосувати −${p}%</button></div>`;
+  const promoBar = (p, until) => `<div class="promo-bar">🎁 У клієнтки знижка <b>${p}%</b> із запрошення в боті (до ${esc(fmtDay(until, { day: 'numeric', month: 'short' }))}) <button class="btn sm" id="p-promo" title="Поставити знижку ${p}% з коментарем «знижка із запрошення в боті»">Застосувати −${p}%</button></div>`;
   const promoUsed = (cid) => sb.from('clients').update({ promo_pct: null, promo_until: null }).eq('id', cid);
   async function paySheet(a, done) {
     if (a.status === 'booked' && a.visit_id) {
@@ -606,6 +627,7 @@ const Staff = (() => {
       <div id="pv-l">${items.map((x) => `<label class="pv-row"><input type="checkbox" data-pv="${x.id}" checked title="Завершити й оплатити цю послугу">
         <div class="grow"><div class="b ell">${esc(svcById(x.service_id)?.name || '')}</div><div class="xs mut">${fmtT(x.starts_at)} · ${esc(byId(x.staff_id)?.first_name || '')} · ціна ${money(x.price)}</div></div>
         <input class="inp" type="number" inputmode="decimal" min="0" step="1" data-pa="${x.id}" value="${+x.price}" title="Сума за цю послугу, ₴"></label>`).join('')}</div>
+      ${discHtml()}
       <div class="pv-tot"><span>Разом</span><b id="pv-sum"></b></div>
       <div class="hint">Суму кожної послуги можна змінити, якщо була знижка чи доплата.${others.length ? ` Послуги інших майстрів (${others.map((x) => esc(svcById(x.service_id)?.name || '')).join(', ')}) завершують вони.` : ''}</div>
       <label class="lb">Спосіб оплати</label><div class="chips" id="p-m">${methods.map((x) => `<button class="chip ${x === method ? 'on y' : ''}" data-m="${esc(x)}" title="Оплата: ${esc(x)}">${esc(x)}</button>`).join('')}</div>
@@ -625,17 +647,20 @@ const Staff = (() => {
     $$('[data-pv],[data-pa]', s.el).forEach((x) => (x.oninput = x.onchange = upd)); upd();
     $$('[data-m]', s.el).forEach((b) => (b.onclick = () => { method = b.dataset.m; $$('[data-m]', s.el).forEach((x) => { x.classList.toggle('on', x === b); x.classList.toggle('y', x === b); }); upd(); }));
     $('[data-x2]', s.el).onclick = s.close;
-    const pb = $('#p-promo', s.el); if (pb) pb.onclick = () => { if (pUsed) return;
-      items.forEach((x) => { const i = $(`[data-pa="${x.id}"]`, s.el); i.value = Math.round((+i.value || 0) * (100 - pp) / 100); });
-      pUsed = true; pb.disabled = true; pb.textContent = `✓ −${pp}% застосовано`; upd(); };
+    const dsc = discWire(s, (p) => { items.forEach((x) => { $(`[data-pa="${x.id}"]`, s.el).value = Math.round((+x.price || 0) * (100 - p) / 100); }); pUsed = !!pp && p === pp;
+      const full = sel().reduce((t, r) => t + (+r.x.price || 0), 0), now = sel().reduce((t, r) => t + (+r.v || 0), 0);
+      $('#d-h', s.el).textContent = p ? `Ціна ${money(full)} − ${p}% = ${money(now)} (знижка ${money(full - now)}) — на всі позначені послуги` : ''; upd(); });
+    const pb = $('#p-promo', s.el); if (pb) pb.onclick = () => dsc.set(pp, 'Знижка із запрошення в Telegram-боті');
     s.el.addEventListener('keydown', (e) => { if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') $('#p-ok', s.el).click(); });
     $('#p-ok', s.el).onclick = (e) => busy(e.currentTarget, async () => {
       const l = sel(); if (!l.length) return toast('Позначте хоча б одну послугу', 'bad');
+      if (dsc.pct() && !dsc.note()) { dsc.bad(); return toast('Напишіть, за що знижка', 'bad'); }
       const bad = l.filter((r) => r.v === '' || !(+r.v >= 0)); if (bad.length) { bad.forEach((r) => $(`[data-pa="${r.x.id}"]`, s.el).classList.add('err')); return toast('Перевірте суми', 'bad'); }
       let ok = 0, sum = 0;
       for (const r of l) { const { error } = await sb.rpc('appt_status', { p_appt: r.x.id, p_status: 'done', p_amount: +r.v, p_method: method });
         if (error) { toast(`${svcById(r.x.service_id)?.name}: ${errMsg(error)}`, 'bad', 6000); break; } ok++; sum += +r.v; }
       if (!ok) return;
+      if (dsc.pct()) await saveDisc(l.slice(0, ok).map((r) => r.x.id), dsc.pct(), dsc.note());
       if (pUsed && a.client_id) await promoUsed(a.client_id);
       s.close(); toast(`Оплату збережено · ${ok} ${plural(ok, 'послуга', 'послуги', 'послуг')} · ${money(sum)}`); done();
     });
@@ -645,13 +670,16 @@ const Staff = (() => {
     let method = a.payments?.method || methods[0];
     const pp = a.status === 'booked' ? promoOf(a.clients, dayOf(a.starts_at)) : 0; let pUsed = false;
     const s = sheet({ title: 'Оплата', body: `<div class="sm mut mb">${esc(svcById(a.service_id)?.name)} · ${esc(a.clients?.name || '')}</div>${pp ? promoBar(pp, a.clients.promo_until) : ''}
+      ${discHtml(+(a.payments?.discount_pct || 0), a.payments?.discount_note || '')}
       <label class="lb" for="p-am">Сума, ₴</label><input class="inp" id="p-am" type="number" inputmode="decimal" min="0" step="1" value="${+(a.payments?.amount ?? a.price)}" style="font-size:22px;font-weight:800">
-      <div class="hint">Ціна послуги: ${money(a.price)}. Змініть, якщо була знижка чи доплата.</div>
+      <div class="hint">Ціна послуги: ${money(a.price)}. Суму можна змінити й вручну (доплата, округлення).</div>
       <label class="lb">Спосіб оплати</label><div class="chips" id="p-m">${methods.map((x) => `<button class="chip ${x === method ? 'on y' : ''}" data-m="${esc(x)}" title="Оплата: ${esc(x)}">${esc(x)}</button>`).join('')}</div>
       <div id="p-qr" class="mt"></div>
       <div class="hint mt">Майстру: ${payPct(a.staff_id)}% = <b id="p-co"></b></div>`,
       foot: `<button class="btn" data-x2 title="Закрити без змін">Скасувати</button><button class="btn pri" id="p-ok" title="Зберегти оплату й завершити запис (Ctrl/⌘+Enter)">✓ Зберегти</button>` });
     const am = $('#p-am', s.el);
+    const dsc = discWire(s, (p) => { am.value = Math.round((+a.price || 0) * (100 - p) / 100); pUsed = !!pp && p === pp;
+      $('#d-h', s.el).textContent = p ? `Ціна ${money(a.price)} − ${p}% = ${money(+am.value)} (знижка ${money((+a.price || 0) - +am.value)})` : ''; upd(); });
     const upd = async () => {
       $('#p-co', s.el).textContent = money(Math.round((+am.value || 0) * payPct(a.staff_id)) / 100);
       const box = $('#p-qr', s.el);
@@ -662,12 +690,13 @@ const Staff = (() => {
     $$('[data-m]', s.el).forEach((b) => (b.onclick = () => { method = b.dataset.m; $$('[data-m]', s.el).forEach((x) => { x.classList.toggle('on', x === b); x.classList.toggle('y', x === b); }); upd(); }));
     $('[data-x2]', s.el).onclick = s.close;
     s.el.addEventListener('keydown', (e) => { if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') $('#p-ok', s.el).click(); });
-    const pb = $('#p-promo', s.el); if (pb) pb.onclick = () => { if (pUsed) return;
-      am.value = Math.round((+am.value || 0) * (100 - pp) / 100); pUsed = true; pb.disabled = true; pb.textContent = `✓ −${pp}% застосовано`; upd(); };
+    const pb = $('#p-promo', s.el); if (pb) pb.onclick = () => dsc.set(pp, 'Знижка із запрошення в Telegram-боті');
     $('#p-ok', s.el).onclick = (e) => busy(e.currentTarget, async () => {
       const v = +am.value; if (!(v >= 0) || am.value === '') { am.classList.add('err'); return; }
+      if (dsc.pct() && !dsc.note()) { dsc.bad(); return toast('Напишіть, за що знижка', 'bad'); }
       const { error } = await sb.rpc('appt_status', { p_appt: a.id, p_status: 'done', p_amount: v, p_method: method });
       if (error) return toast(errMsg(error), 'bad', 5000);
+      if (dsc.pct() || +(a.payments?.discount_pct || 0)) await saveDisc([a.id], dsc.pct(), dsc.note());
       if (pUsed && a.client_id) await promoUsed(a.client_id);
       s.close(); toast('Оплату збережено · ' + money(v)); done();
     });
