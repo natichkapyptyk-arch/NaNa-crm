@@ -346,7 +346,7 @@ const Staff = (() => {
         <div class="cal-hx"><div class="cal-hg" style="grid-template-columns:${cols_t}">${shown.map((m) => canCard(m) ? `<a class="cal-head lnk" href="#/staff/team/${m.id}" title="Відкрити картку: ${esc(fullName(m))}">${avatar(m, 's')}<span class="ell">${esc(m.first_name)}</span></a>` : `<div class="cal-head">${avatar(m, 's')}<span class="ell">${esc(m.first_name)}</span></div>`).join('')}</div></div></div>
       <div class="cal-bd"><div class="cal-times" style="height:${H}px">${times}</div>
         <div class="cal-xs"><div class="cal-grid" style="grid-template-columns:${cols_t}">${cols}</div></div></div></div>`;
-    if (S.day === today()) { const nm = kParts(new Date(nowMs())).min; if (nm >= s0 && nm <= s1) $$('.cal-col', body).forEach((c) => c.insertAdjacentHTML('beforeend', `<div class="cal-now" style="top:${y(nm)}px"></div>`)); }
+    if (S.day === today()) { const nm = kParts(new Date(nowMs())).min; if (nm >= s0 && nm <= s1) $$('.cal-col', body).forEach((c, i) => c.insertAdjacentHTML('beforeend', `<div class="cal-now" style="top:${y(nm)}px" title="Зараз">${i ? '' : `<span>${toHM(nm)}</span>`}</div>`)); }
     const wrap = $('.cal-wrap', body), xs = $('.cal-xs', body), hx = $('.cal-hx', body);
     // шапка з іменами їде вбік разом зі стовпчиками (і навпаки — можна гортати за шапку)
     const sync = (from, to) => () => { if (Math.abs(to.scrollLeft - from.scrollLeft) > 0.5) to.scrollLeft = from.scrollLeft; };
