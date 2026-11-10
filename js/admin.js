@@ -617,7 +617,7 @@ const Admin = (() => {
               + '<div class="empty" id="ms-none" hidden>Послуг не знайдено</div>'; })()}
           <div class="hint">Колонки: тривалість (хв) і ціна (₴) саме в цього майстра.</div></div>
         <div class="card"><h3>Сповіщення</h3>
-          <div class="col">${[['new', 'Нові записи'], ['cancel', 'Скасування'], ['move', 'Перенесення'], ['confirm', 'Клієнт підтвердив візит (✅ у боті)'], ['daily', 'Розклад на день зранку (у Telegram)'], ['close', 'Ввечері: «чи закрила записи?» (у Telegram)'], ['open', 'З 22-го: «відкрий графік на наступний місяць» (у Telegram)'], ['report', '1 числа: звіт за місяць з Excel (лише власниця / адмін)']].map(([k, n]) => `<label class="sw" title="Отримувати сповіщення: ${n.toLowerCase()}"><input type="checkbox" data-nt="${k}" ${nt[k] !== false ? 'checked' : ''} ${can ? '' : 'disabled'}><i></i><span>${n}</span></label>`).join('')}
+          <div class="col">${[['new', 'Нові записи'], ['cancel', 'Скасування'], ['move', 'Перенесення'], ['confirm', 'Клієнт підтвердив візит (✅ у боті)'], ['daily', 'Розклад на день зранку (у Telegram)'], ['close', 'Ввечері: «чи закрила записи?» (у Telegram)'], ['open', 'З 22-го: «відкрий графік на наступний місяць» (у Telegram)'], ['report', '1 числа: звіт за місяць з Excel (лише власниця / адмін)'], ['weekly', 'Понеділок: підсумок тижня (лише власниця / адмін)']].map(([k, n]) => `<label class="sw" title="Отримувати сповіщення: ${n.toLowerCase()}"><input type="checkbox" data-nt="${k}" ${nt[k] !== false ? 'checked' : ''} ${can ? '' : 'disabled'}><i></i><span>${n}</span></label>`).join('')}
           <label class="sw" title="Дублювати сповіщення в Telegram"><input type="checkbox" data-nt="tg" ${nt.tg !== false ? 'checked' : ''} ${can ? '' : 'disabled'}><i></i><span>Надсилати в Telegram</span></label></div>
           <div class="hint">${p.role === 'master' ? 'Майстер отримує сповіщення лише про свої записи, а зранку — розклад лише своїх записів.' : 'Власниця й адмін отримують сповіщення про всі записи, а зранку — розклад усього салону.'}</div>
           ${!isNew && bot ? `<div class="sect"><h3>${IC.tg.replace('<svg', '<svg width="18" height="18"')} Telegram ${p.tg_chat_id ? '<span class="pill done">підключено</span>' : '<span class="pill g">не підключено</span>'}</h3>
@@ -748,6 +748,9 @@ const Admin = (() => {
         ${'report_on' in s ? `<div class="two"><div><label class="lb" for="s-ro">Щомісячний звіт у Telegram</label><select class="inp" id="s-ro" title="1 числа о 10:00 власниці й адміну приходить Excel з клієнтками за минулий місяць і цифри (виторг, візити, нові клієнти)">
           <option value="1" ${s.report_on ? 'selected' : ''}>1 числа о 10:00</option><option value="0" ${s.report_on ? '' : 'selected'}>не надсилати</option></select></div>
           <div><label class="lb">&nbsp;</label><button class="btn" id="s-rn" title="Надіслати звіт за цей місяць (з 1 числа по сьогодні) собі в Telegram зараз">${IC.tg.replace('<svg', '<svg width="16" height="16"')} Звіт зараз</button></div></div>` : ''}
+        ${'weekly_on' in s ? `<div class="two"><div><label class="lb" for="s-wo">Підсумок тижня в Telegram</label><select class="inp" id="s-wo" title="Щопонеділка о 10:00 власниці й адміну — виторг, візити, нові клієнти, скасування й найкраща майстриня за минулий тиждень, з порівнянням">
+          <option value="1" ${s.weekly_on ? 'selected' : ''}>щопонеділка о 10:00</option><option value="0" ${s.weekly_on ? '' : 'selected'}>не надсилати</option></select></div>
+          <div><label class="lb">&nbsp;</label><button class="btn" id="s-wn" title="Надіслати підсумок минулого тижня собі в Telegram зараз">${IC.tg.replace('<svg', '<svg width="16" height="16"')} Тиждень зараз</button></div></div>` : ''}
         ${'nudge_pct' in s ? `<label class="lb" style="margin-top:14px">Повторні візити через бота</label><div class="two">
           <div><label class="lb" for="s-n1">«Час оновити» через, днів</label><input class="inp" id="s-n1" type="number" min="7" max="180" value="${s.nudge1_days ?? ''}" placeholder="не надсилати" title="Через скільки днів після останнього візиту бот пише «найкращий час оновити манікюр / брівки / вії» з кнопкою «Записатися»"></div>
           <div><label class="lb" for="s-n2">«Знижка, давно не були» через, днів</label><input class="inp" id="s-n2" type="number" min="14" max="365" value="${s.nudge2_days ?? ''}" placeholder="не надсилати" title="Через скільки днів бот пропонує знижку тим, хто не повернувся"></div></div>
@@ -792,6 +795,9 @@ const Admin = (() => {
       const { data, error } = await sb.rpc('daily_send_now'); if (error) return toast(errMsg(error), 'bad', 5000);
       toast(data ? `Надіслано: ${data} ${plural(data, 'повідомлення', 'повідомлення', 'повідомлень')}` : 'Сьогодні ні в кого немає записів (або ніхто не підключив бота)', data ? 'ok' : '', 5000);
     });
+    const wn = $('#s-wn', main); if (wn) wn.onclick = (e) => busy(e.currentTarget, async () => {
+      const { error } = await sb.rpc('weekly_send_now'); if (error) return toast(errMsg(error), 'bad', 6000);
+      toast('Підсумок минулого тижня прийде у ваш Telegram за кілька секунд', 'ok', 4500); });
     const rn = $('#s-rn', main); if (rn) rn.onclick = (e) => busy(e.currentTarget, async () => {
       const { error } = await sb.rpc('report_send_now'); if (error) return toast(errMsg(error), 'bad', 6000);
       toast('Звіт за цей місяць прийде у ваш Telegram за кілька секунд', 'ok', 4500); });
@@ -818,6 +824,7 @@ const Admin = (() => {
         pay_methods: methods, pay_link: $('#s-pl', main).value.trim() || null, updated_at: new Date().toISOString() };
       if ($('#s-dh', main)) row.daily_hour = $('#s-dh', main).value === '' ? null : +$('#s-dh', main).value;
       if ($('#s-ro', main)) row.report_on = $('#s-ro', main).value === '1';
+      if ($('#s-wo', main)) row.weekly_on = $('#s-wo', main).value === '1';
       if ($('#s-n1', main)) { const n1 = $('#s-n1', main).value, n2 = $('#s-n2', main).value;
         row.nudge1_days = n1 === '' ? null : Math.min(180, Math.max(7, +n1)); row.nudge2_days = n2 === '' ? null : Math.min(365, Math.max(14, +n2));
         row.nudge_pct = Math.min(50, Math.max(1, +$('#s-np', main).value || 10)); }

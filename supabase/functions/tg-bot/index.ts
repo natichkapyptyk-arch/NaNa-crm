@@ -150,6 +150,29 @@ const xd = (iso: string) => {   // дата-час за Києвом → чис�
   return Date.UTC(g('year'), g('month') - 1, g('day'), g('hour'), g('minute')) / 864e5 + 25569;
 };
 const phoneFmt = (p: string) => { const d = String(p || '').replace(/\D/g, ''); return /^380\d{9}$/.test(d) ? `+380 ${d.slice(3, 5)} ${d.slice(5, 8)} ${d.slice(8, 10)} ${d.slice(10)}` : (p || ''); };
+// цифри за період [fa, ta): виторг, візити (клієнтка × день), клієнтки, нові клієнти, скасування / неявки, по майстрах
+async function periodStats(fa: string, ta: string) {
+  const pays = await pageAll(() => db.from('payments').select('amount, commission, staff_id').eq('demo', false).gte('paid_at', fa).lt('paid_at', ta));
+  const ap = await pageAll(() => db.from('appointments').select('client_id, staff_id, starts_at, status').eq('demo', false).in('status', ['done', 'cancel', 'noshow']).gte('starts_at', fa).lt('starts_at', ta));
+  const { count: newCl } = await db.from('clients').select('id', { count: 'exact', head: true }).eq('demo', false).gte('created_at', fa).lt('created_at', ta);
+  const done = ap.filter((a: any) => a.status === 'done');
+  const per: Record<string, { rev: number; com: number; vis: Set<string> }> = {};
+  pays.forEach((x: any) => { const m = (per[x.staff_id] ||= { rev: 0, com: 0, vis: new Set() }); m.rev += +x.amount; m.com += +x.commission; });
+  done.forEach((a: any) => { (per[a.staff_id] ||= { rev: 0, com: 0, vis: new Set() }).vis.add(a.client_id + '|' + kDay(new Date(a.starts_at))); });
+  return {
+    rev: pays.reduce((t: number, x: any) => t + +x.amount, 0),
+    visits: new Set(done.map((a: any) => a.client_id + '|' + kDay(new Date(a.starts_at)))).size,
+    clients: new Set(done.map((a: any) => a.client_id)).size,
+    newCl: newCl ?? 0,
+    cancels: ap.filter((a: any) => a.status === 'cancel').length, noshows: ap.filter((a: any) => a.status === 'noshow').length,
+    per,
+  };
+}
+const cmp = (a: number, b: number, what: string) => {   // «(+12% до жовтня)»
+  if (!b) return a ? ` (було 0 ${what})` : '';
+  const p = Math.round(((a - b) / b) * 100); return ` (${p > 0 ? '+' : ''}${p}% ${what})`;
+};
+const dif = (a: number, b: number, what: string) => (a === b ? '' : ` (${a > b ? '+' : ''}${a - b} ${what})`);
 const MONTHS_GEN = ['січень', 'лютий', 'березень', 'квітень', 'травень', 'червень', 'липень', 'серпень', 'вересень', 'жовтень', 'листопад', 'грудень'];
 async function monthlyReport(from: string, to: string, chats: number[]) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(from) || !/^\d{4}-\d{2}-\d{2}$/.test(to) || !chats.length) return { skip: 'bad args' };
@@ -181,15 +204,26 @@ async function monthlyReport(from: string, to: string, chats: number[]) {
   });
   ws['!cols'] = [17, 26, 18, 34, 44, 16, 10, 14, 12].map((w) => ({ wch: w }));
   ws['!autofilter'] = { ref: XLSX.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: Math.max(rows.length, 1), c: head.length - 1 } }) };
-  const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, 'Клієнти');
+  // цифри: цей період і такий самий попереднього місяця (повний місяць → повний; 1–10 листопада → 1–10 жовтня)
+  const whole = from.slice(8) === '01' && +to.slice(8) >= 28 && to.slice(0, 7) === from.slice(0, 7);
+  const pmFrom = (() => { const [y, m] = from.split('-').map(Number); return new Date(Date.UTC(y, m - 2, 1)).toISOString().slice(0, 10); })();
+  const pmLast = (() => { const [y, m] = from.split('-').map(Number); return new Date(Date.UTC(y, m - 1, 0)).toISOString().slice(0, 10); })();
+  const pmTo = whole ? pmLast : (() => { const d = pmFrom.slice(0, 8) + to.slice(8); return d > pmLast ? pmLast : d; })();
+  const [S1, S0] = await Promise.all([periodStats(fa, ta), periodStats(kRange(pmFrom)[0], kRange(pmTo)[1])]);
+  const pmName = MONTHS_GEN[+pmFrom.slice(5, 7) - 1], vs = whole ? `до ${pmName.replace(/ень$/, 'ня').replace(/ий$/, 'ого').replace(/ад$/, 'ада')}` : `до тих самих днів ${pmName.replace(/ень$/, 'ня').replace(/ий$/, 'ого').replace(/ад$/, 'ада')}`;
+  // аркуш «Майстри»
+  const { data: staffRows } = await db.from('staff').select('id, first_name, last_name, sort').order('sort');
+  const mHead = ['Майстер', 'Виторг, ₴', 'Візитів', 'Середній чек, ₴', 'Заробіток майстра, ₴'];
+  const mRows = (staffRows ?? []).map((m: any) => { const p = S1.per[m.id]; if (!p || (!p.rev && !p.vis.size)) return null;
+    return [[m.first_name, m.last_name].filter(Boolean).join(' '), Math.round(p.rev), p.vis.size, p.vis.size ? Math.round(p.rev / p.vis.size) : 0, Math.round(p.com)]; })
+    .filter(Boolean).sort((a: any, b: any) => b[1] - a[1]) as any[];
+  mRows.push(['Разом', Math.round(S1.rev), S1.visits, S1.visits ? Math.round(S1.rev / S1.visits) : 0, Math.round(Object.values(S1.per).reduce((t, p) => t + p.com, 0))]);
+  const ws2 = XLSX.utils.aoa_to_sheet([mHead, ...mRows]); ws2['!cols'] = [24, 14, 10, 16, 20].map((w) => ({ wch: w }));
+  const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, 'Клієнти'); XLSX.utils.book_append_sheet(wb, ws2, 'Майстри');
   const file = XLSX.write(wb, { type: 'array', bookType: 'xlsx' });
-  // цифри для підпису
-  const { data: pays } = await db.from('payments').select('amount, appointments!inner(demo)').eq('appointments.demo', false).gte('paid_at', fa).lt('paid_at', ta);
-  const rev = (pays ?? []).reduce((t: number, x: any) => t + +x.amount, 0);
-  const { count: newCl } = await db.from('clients').select('id', { count: 'exact', head: true }).eq('demo', false).gte('created_at', fa).lt('created_at', ta);
-  const whole = from.slice(8) === '01' && kDay(new Date(Date.parse(ta) - 1)).slice(0, 7) === from.slice(0, 7) && +to.slice(8) >= 28;
   const label = whole ? `${MONTHS_GEN[+from.slice(5, 7) - 1]} ${from.slice(0, 4)}` : `${from.split('-').reverse().join('.')}–${to.split('-').reverse().join('.')}`;
-  const caption = `📊 Звіт NaNa studio за ${label}\n💰 Виторг: ${money(rev)}\n✅ Візитів: ${G.size}\n👩 Клієнток: ${ids.length}\n🆕 Нових клієнтів: ${newCl ?? 0}\n\nУ файлі — хто був у салоні, від найранішої дати.`;
+  const caption = `📊 Звіт NaNa studio за ${label}\n💰 Виторг: ${money(S1.rev)}${cmp(S1.rev, S0.rev, vs)}\n✅ Візитів: ${S1.visits}${dif(S1.visits, S0.visits, vs)}\n👩 Клієнток: ${S1.clients}\n🆕 Нових клієнтів: ${S1.newCl}${dif(S1.newCl, S0.newCl, vs)}`
+    + `\n\nУ файлі: «Клієнти» — хто був у салоні, від найранішої дати; «Майстри» — виторг, візити, середній чек.`;
   const name = `NaNa клієнти ${from.split('-').reverse().join('.')}–${to.split('-').reverse().join('.')}.xlsx`;
   let sent = 0;
   for (const chat of chats) {
@@ -200,6 +234,24 @@ async function monthlyReport(from: string, to: string, chats: number[]) {
     if (r.ok) sent++;
   }
   return { sent, rows: rows.length };
+}
+
+// ---------- тижневий підсумок (понеділок зранку): цифри за минулий тиждень і порівняння з попереднім ----------
+async function weeklySummary(from: string, to: string, chats: number[]) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(from) || !/^\d{4}-\d{2}-\d{2}$/.test(to) || !chats.length) return { skip: 'bad args' };
+  const sh = (d: string, n: number) => { const [y, m, dd] = d.split('-').map(Number); return new Date(Date.UTC(y, m - 1, dd + n)).toISOString().slice(0, 10); };
+  const [S1, S0] = await Promise.all([periodStats(kRange(from)[0], kRange(to)[1]), periodStats(kRange(sh(from, -7))[0], kRange(sh(to, -7))[1])]);
+  const { data: staffRows } = await db.from('staff').select('id, first_name');
+  const top = Object.entries(S1.per).sort((a, b) => b[1].rev - a[1].rev)[0];
+  const topName = top && top[1].rev ? (staffRows ?? []).find((m: any) => m.id === top[0])?.first_name : '';
+  const dm = (d: string) => new Intl.DateTimeFormat('uk-UA', { day: 'numeric', month: 'long', timeZone: 'UTC' }).format(new Date(d + 'T12:00:00Z'));
+  const vs = 'до минулого тижня';
+  const range = from.slice(0, 7) === to.slice(0, 7) ? `${+from.slice(8)}–${dm(to)}` : `${dm(from)} – ${dm(to)}`;
+  const text = `📅 Підсумок тижня ${range}\n💰 Виторг: ${money(S1.rev)}${cmp(S1.rev, S0.rev, vs)}\n✅ Візитів: ${S1.visits}${dif(S1.visits, S0.visits, vs)}`
+    + `\n🆕 Нових клієнтів: ${S1.newCl}${dif(S1.newCl, S0.newCl, vs)}\n❌ Скасовано / не прийшли: ${S1.cancels} / ${S1.noshows}`
+    + (topName ? `\n🏆 Найбільший виторг: ${esc(topName)} — ${money(top![1].rev)}` : '');
+  let sent = 0; for (const c of chats) { const r = await send(c, text); if (r.ok) sent++; }
+  return { sent };
 }
 
 // ---------- повідомлення від людей ----------
@@ -389,6 +441,7 @@ Deno.serve(async (req) => {
         const kb = Array.isArray(body.buttons) ? body.buttons.map((r: any) => (Array.isArray(r) ? r : []).filter((x: any) => x?.text && /^https:\/\//.test(String(x.url ?? ''))).map((x: any) => ({ text: String(x.text).slice(0, 60), url: String(x.url) }))).filter((r: any[]) => r.length) : undefined;
         return json(await send(Number(body.chat_id), String(body.text ?? ''), kb?.length ? kb : undefined));
       }
+      case 'weekly_summary': return json(await weeklySummary(String(body.from ?? ''), String(body.to ?? ''), (Array.isArray(body.chats) ? body.chats : []).map(Number).filter(Boolean)));
       case 'monthly_report': return json(await monthlyReport(String(body.from ?? ''), String(body.to ?? ''), (Array.isArray(body.chats) ? body.chats : []).map(Number).filter(Boolean)));
       case 'month_ask': return json(await monthAsk(String(body.staff_id), String(body.month ?? ''), !!body.first));
       case 'close_ask': return json(await closeAsk(String(body.staff_id), String(body.day ?? kDay())));
