@@ -206,6 +206,7 @@ const Admin = (() => {
         <div class="kpi click" data-k="cancel" role="button" tabindex="0" title="Список скасованих записів і неявок за період"><div class="l">Скасовано / не прийшли</div><div class="v">${cancel} / ${noshow}</div><div class="d mut">${pct(cancel + noshow, ap.length)}% від усіх записів</div></div>
         <div class="kpi click" data-k="rep" role="button" tabindex="0" title="Клієнти, які вже були раніше й прийшли знову в цьому періоді (перерва до ${BACK_DAYS} днів) — відкрити список"><div class="l">Повторні клієнти</div><div class="v">${ret.rep.length}</div>${delta(ret.rep.length, prevRet.rep.length) || `<div class="d mut">${pct(ret.rep.length, seenCl)}% клієнтів періоду</div>`}</div>
         <div class="kpi click" data-k="back" role="button" tabindex="0" title="Клієнти, які не були понад 3 місяці (${BACK_DAYS}+ днів) і повернулись у цьому періоді — відкрити список"><div class="l">Повернуті клієнти</div><div class="v" style="color:var(--ok)">${ret.back.length}</div><div class="d mut">не були 3+ міс. і прийшли</div></div>
+        <div class="kpi click hide" data-k="nudge" id="k-nudge" role="button" tabindex="0" title="Повідомлення з бота «час оновити» / «знижка» за період і скільки клієнток після них записались (протягом 30 днів) — відкрити список"><div class="l">Повернення через бота</div><div class="v" id="k-nudge-v">—</div><div class="d mut" id="k-nudge-d"></div></div>
         <a class="kpi click" href="#/staff/clients/stale" title="Клієнти, які не були понад ${S().settings.stale_days} днів і не мають запису — відкрити список" style="text-decoration:none"><div class="l">Застарілі клієнти</div><div class="v" style="color:var(--warn)">${stale}</div><div class="d mut">не були ${S().settings.stale_days}+ днів →</div></a>
       </div>
       <div class="dgrid">
@@ -345,6 +346,15 @@ const Admin = (() => {
         return { title: `Нові клієнти: ${nc.length}`, html: nc.map((c) => `<div class="m-row click" data-cl="${c.id}" title="Відкрити картку клієнта"><span class="ava s y">${esc(c.name[0] || '?')}</span><div class="grow"><div class="b sm ell">${esc(c.name)}</div>
           <div class="xs mut ell">${esc(fmtPhone(c.phone))} · додано ${dt(c.created_at)}</div></div><div class="r sm">${c.visits} ${plural(c.visits, 'візит', 'візити', 'візитів')}</div></div>`).join('') || '<div class="empty">Нових клієнтів за цей період немає</div>' }; } }),
       rep: () => retSheet('rep'), back: () => retSheet('back'), recs: () => recSheet(),
+      nudge: () => perSheet({ load: async (from, to) => {
+          const { data: r, error } = await sb.rpc('nudge_stats', { p_from: from, p_to: to }); if (error) throw error;
+          const KN = { renew: '✨ час оновити', promo: '🎁 знижка', back: '💛 скучили' };
+          return { title: `Повідомлення з бота: ${r.sent} · записались ${r.booked}`,
+            html: `<div class="hint mb">«Час оновити»: ${r.renew} · зі знижкою: ${r.promo} · «скучили» (без знижки): ${r.back}. Записалась — якщо протягом 30 днів після повідомлення зʼявився новий запис.</div>`
+              + (r.list.map((x) => `<div class="m-row click" data-cl="${x.client_id}" title="Відкрити картку клієнта"><span class="ava s ${x.booked_at ? 'y' : ''}">${esc((x.name || '?')[0])}</span>
+                <div class="grow"><div class="b ell">${esc(x.name)}</div><div class="xs mut ell">${KN[x.kind] || x.kind} · ${dt(x.sent_at)}</div></div>
+                <div class="r sm">${x.booked_at ? `<span style="color:var(--ok)">✓ записалась ${dt(x.booked_at)}</span>` : '<span class="mut">ще ні</span>'}</div></div>`).join('') || '<div class="empty">За цей період повідомлень не було</div>') };
+        }, after: (s) => $$('[data-cl]', s.el).forEach((x) => (x.onclick = () => Staff.clientSheet(x.dataset.cl))) }),
       profit: () => perSheet({ foot: `<button class="btn pri" id="pf-exp" title="Додати витрату (оренда, матеріали…)">${IC.plus} Витрата</button>`,
         load: async (from, to) => { const [f, t] = tsRange(from, to);
           const [pp, ee] = await Promise.all([qAll(() => sb.from('payments').select('amount,commission').gte('paid_at', f).lt('paid_at', t)), qAll(() => sb.from('expenses').select('*').gte('day', from).lte('day', to).order('day', { ascending: false }))]);
@@ -354,6 +364,10 @@ const Admin = (() => {
         after: (s) => { $('#pf-exp', s.el).onclick = () => { s.close(); expenseSheet(() => dash(main)); }; } }),
     };
     $$('[data-ctg]', body).forEach((el) => (el.onclick = () => catSheet(doneTitle, ['done'], el.dataset.ctg)));
+    sb.rpc('nudge_stats', { p_from: st.from, p_to: st.to }).then(({ data: r, error }) => {   // update-17; до оновлення бази плитки немає
+      const k = $('#k-nudge', body); if (error || !r || !k) return; k.classList.remove('hide');
+      $('#k-nudge-v', body).textContent = r.sent ? `${r.booked} з ${r.sent}` : '0';
+      $('#k-nudge-d', body).textContent = r.sent ? `записались після повідомлення · ${pct(r.booked, r.sent)}%` : 'повідомлень за період не було'; });
     $$('[data-k]', body).forEach((el) => { el.onclick = (e) => { const sp = e.target.closest('[data-src]'); if (sp && el.dataset.k === 'recs') return recSheet(sp.dataset.src); K[el.dataset.k](); }; el.onkeydown = (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); K[el.dataset.k](); } }; });
   }
   function expenseSheet(done) {
@@ -734,8 +748,9 @@ const Admin = (() => {
         ${'nudge_pct' in s ? `<label class="lb" style="margin-top:14px">Повторні візити через бота</label><div class="two">
           <div><label class="lb" for="s-n1">«Час оновити» через, днів</label><input class="inp" id="s-n1" type="number" min="7" max="180" value="${s.nudge1_days ?? ''}" placeholder="не надсилати" title="Через скільки днів після останнього візиту бот пише «найкращий час оновити манікюр / брівки / вії» з кнопкою «Записатися»"></div>
           <div><label class="lb" for="s-n2">«Знижка, давно не були» через, днів</label><input class="inp" id="s-n2" type="number" min="14" max="365" value="${s.nudge2_days ?? ''}" placeholder="не надсилати" title="Через скільки днів бот пропонує знижку тим, хто не повернувся"></div></div>
-          <div class="two"><div><label class="lb" for="s-np">Знижка, %</label><input class="inp" id="s-np" type="number" min="1" max="50" value="${s.nudge_pct ?? 10}" title="Знижка діє 30 днів; під час оплати майстриня бачить кнопку «Застосувати −%»"></div><div></div></div>
-          <div class="hint">Лише клієнткам з підключеним ботом і без майбутнього запису, щодня об 11:00. Порожнє поле — не надсилати.</div>` : ''}
+          <div class="two"><div><label class="lb" for="s-np">Знижка, %</label><input class="inp" id="s-np" type="number" min="1" max="50" value="${s.nudge_pct ?? 10}" title="Знижка діє 30 днів; під час оплати майстриня бачить кнопку «Застосувати −%»"></div>
+          <div><label class="lb">&nbsp;</label><button class="btn" id="s-nt" title="Надіслати всі три повідомлення (час оновити, знижка, «скучили») собі в Telegram — подивитись, як їх бачать клієнтки">${IC.tg.replace('<svg', '<svg width="16" height="16"')} Тест собі в бот</button></div></div>
+          <div class="hint">Лише клієнткам з підключеним ботом і без майбутнього запису, щодня об 11:00. Хто часто скасовує (3+) чи не приходить (2+) — отримує «скучили за вами» без знижки. Порожнє поле — не надсилати.</div>` : ''}
         ${'open_day' in s ? `<div class="two"><div><label class="lb" for="s-od">Нагадувати відкрити графік з</label><select class="inp" id="s-od" title="З цього числа щодня о 12:00 бот нагадує майстриням відкрити графік на наступний місяць, доки не відкриють. Тобі — з +3 днів, хто ще не відкрив">
           <option value="" ${s.open_day == null ? 'selected' : ''}>не нагадувати</option>${[15, 18, 20, 22, 25].map((d) => `<option value="${d}" ${+s.open_day === d && s.open_day != null ? 'selected' : ''}>${d} числа</option>`).join('')}</select></div>
           <div><label class="lb">&nbsp;</label><button class="btn" id="s-odn" title="Надіслати нагадування про графік на наступний місяць зараз — тим, хто ще не відкрив">${IC.tg.replace('<svg', '<svg width="16" height="16"')} Надіслати зараз</button></div></div>
@@ -774,6 +789,9 @@ const Admin = (() => {
       const { data, error } = await sb.rpc('daily_send_now'); if (error) return toast(errMsg(error), 'bad', 5000);
       toast(data ? `Надіслано: ${data} ${plural(data, 'повідомлення', 'повідомлення', 'повідомлень')}` : 'Сьогодні ні в кого немає записів (або ніхто не підключив бота)', data ? 'ok' : '', 5000);
     });
+    const nt = $('#s-nt', main); if (nt) nt.onclick = (e) => busy(e.currentTarget, async () => {
+      const { error } = await sb.rpc('nudge_test'); if (error) return toast(errMsg(error), 'bad', 6000);
+      toast('Надіслано 3 повідомлення у ваш Telegram-бот', 'ok', 4000); });
     const odn = $('#s-odn', main); if (odn) odn.onclick = (e) => busy(e.currentTarget, async () => {
       if (!(await confirmBox('Надіслати нагадування про графік зараз?', { ok: 'Надіслати', sub: 'Майстрині, які ще не відкрили графік на наступний місяць, отримають нагадування з кнопкою «Готово», а ти — список, хто ще не відкрив. Автоматично сьогодні вже не надсилатиметься.' }))) return;
       const { data, error } = await sb.rpc('open_send_now'); if (error) return toast(errMsg(error), 'bad', 5000);
