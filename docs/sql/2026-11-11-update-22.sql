@@ -1,5 +1,5 @@
 -- 2026-11-11 update-22: захист посилань Telegram співробітників, ліміти онлайн-запису, пароль від 8 символів,
--- обмеження фото, прибирання старих тестових таблиць і демо-даних. Запускати ПІСЛЯ update-21. Можна запускати повторно.
+-- обмеження фото, закрито публічне читання старих old_-таблиць. Демо-дані НЕ чіпає (сайт ще в тесті). Запускати ПІСЛЯ update-21. Можна запускати повторно.
 
 -- ===== Захист (update-22): посилання Telegram співробітників, ліміти онлайн-запису =====
 -- посилання «підключити Telegram» (tg_link) не читається через API: його видає staff_tg_link() — собі, власниці,
@@ -153,14 +153,5 @@ do $$ begin
     revoke all on old_services from anon;
   end if;
 end $$;
-
--- демо-дані: те саме, що кнопка «Прибрати демо-дані» (демо-майстер «Візажист (приклад)» вимикається)
-delete from notifications where appointment_id in (select id from appointments where demo);
-delete from payments where demo or appointment_id in (select id from appointments where demo);
-delete from appointments where demo;
-delete from visits where demo and not exists (select 1 from appointments a where a.visit_id = visits.id);
-delete from expenses where demo;
-delete from clients where demo and not exists (select 1 from appointments a where a.client_id = clients.id);
-update staff set is_active = false, is_bookable = false where demo;
 
 notify pgrst, 'reload schema';
