@@ -827,7 +827,7 @@ const Staff = (() => {
         return;
       }
       c.innerHTML = `<div class="search">${IC.search}<input class="inp" id="na-q" placeholder="Пошук: імʼя, телефон або Instagram" autocomplete="off" autofocus></div><div id="na-sg"></div>
-        <div id="na-newc" class="hide"><div class="two mt"><input class="inp" id="na-cn" placeholder="Імʼя клієнта"><input class="inp" id="na-cp" type="tel" placeholder="+380…"></div><div id="na-dup"></div>
+        <div id="na-newc" class="hide"><div class="two mt"><input class="inp" id="na-cn" placeholder="Імʼя *" autocomplete="off"><input class="inp" id="na-cl" placeholder="Прізвище *" autocomplete="off"></div><div class="two mt"><input class="inp" id="na-cp" type="tel" placeholder="+380…"><div></div></div><div id="na-dup"></div>
         <div class="chips mt" id="na-cc">${Object.entries(CONTACTS).map(([k, [n]]) => `<button type="button" class="chip ${k === st.contact ? 'on' : ''}" data-cc="${k}" title="Клієнту зручно: ${n}">${n}</button>`).join('')}</div></div>`;
       const q = $('#na-q', c), sg = $('#na-sg', c);
       let tmr;
@@ -842,7 +842,7 @@ const Staff = (() => {
         sg.innerHTML = `<div class="sugg">${(data || []).map((x) => `<div data-cid="${x.id}" title="Обрати цього клієнта"><b>${esc(x.name)}</b> <span class="mut sm">${esc(fmtPhone(x.phone))}${x.instagram ? ' · @' + esc(x.instagram) : ''}</span></div>`).join('')}
           <div data-newc title="Створити нового клієнта">${IC.plus} <b>Новий клієнт</b>${digits.length >= 9 ? ' ' + esc(v) : ''}</div></div>`;
         $$('[data-cid]', sg).forEach((d) => (d.onclick = () => { st.client = data.find((x) => x.id === d.dataset.cid); drawClient(); }));
-        $('[data-newc]', sg).onclick = () => { sg.innerHTML = ''; $('#na-newc', c).classList.remove('hide'); if (digits.length >= 9) $('#na-cp', c).value = v; else $('#na-cn', c).value = v; ($('#na-cn', c).value ? $('#na-cp', c) : $('#na-cn', c)).focus(); };
+        $('[data-newc]', sg).onclick = () => { sg.innerHTML = ''; $('#na-newc', c).classList.remove('hide'); if (digits.length >= 9) $('#na-cp', c).value = v; else { const [f0, l0] = splitName(v); $('#na-cn', c).value = f0; $('#na-cl', c).value = l0; } (!$('#na-cn', c).value ? $('#na-cn', c) : !$('#na-cl', c).value ? $('#na-cl', c) : $('#na-cp', c)).focus(); };
       }, 220); };
       $$('[data-cc]', c).forEach((b) => (b.onclick = () => { st.contact = b.dataset.cc; $$('[data-cc]', c).forEach((x) => x.classList.toggle('on', x === b)); }));
       phoneDupWatch($('#na-cp', c), $('#na-dup', c), { label: 'Обрати цього клієнта', onPick: (x) => { st.client = x; drawClient(); } });
@@ -882,7 +882,9 @@ const Staff = (() => {
     $('#na-ok', el).onclick = (e) => busy(e.currentTarget, async () => {
       const bad = [];
       let cl = st.client, name = null, phone = null;
-      if (!cl) { name = ($('#na-cn', el)?.value || '').trim(); phone = normPhone($('#na-cp', el)?.value); if (name.length < 2 || !phone) bad.push('клієнта (імʼя і телефон)'); }
+      if (!cl) { const f0 = ($('#na-cn', el)?.value || '').trim(), l0 = ($('#na-cl', el)?.value || '').trim(); name = joinName(f0, l0); phone = normPhone($('#na-cp', el)?.value);
+        $('#na-cn', el)?.classList.toggle('err', f0.length < 2); $('#na-cl', el)?.classList.toggle('err', l0.length < 2);
+        if (f0.length < 2 || l0.length < 2 || !phone) bad.push('клієнта (імʼя, прізвище і телефон)'); }
       if (!st.mid) bad.push('майстра'); if (!st.sid) bad.push('послугу'); if (st.min == null) bad.push('час');
       if (bad.length) return toast('Оберіть ' + bad.join(', '), 'bad');
       const r = await withForce((force) => sb.rpc('staff_book', { p_client: cl?.id || null, p_name: name, p_phone: phone, p_contact: st.contact, p_staff: st.mid, p_service: st.sid,
@@ -1224,14 +1226,15 @@ const Staff = (() => {
       ${!next && last && daysBetween(dayOf(last.starts_at), today()) >= S.settings.stale_days ? `<div class="hint row wrap" style="gap:8px">⏳ Не було ${daysBetween(dayOf(last.starts_at), today())} днів і немає запису<button class="btn sm" id="c-inv" title="Готовий текст запрошення для Viber, Telegram або SMS">${IC.bell} Нагадати</button></div>` : ''}
       ${next ? `<div class="hint row wrap" style="gap:8px">📅 Наступний запис: <b>${esc(relDay(dayOf(next.starts_at)))}, ${fmtT(next.starts_at)}</b><button class="btn sm" id="c-rem" title="Готовий текст нагадування для Viber, Telegram або SMS">${IC.bell} Нагадати</button></div>` : ''}
       <div class="sect"><h3>Дані клієнта</h3>
-        <div class="two"><div><label class="lb" for="c-n">Імʼя</label><input class="inp" id="c-n" value="${esc(c.name)}"></div><div><label class="lb" for="c-p">Телефон</label><input class="inp" id="c-p" type="tel" value="${esc(c.phone)}"></div></div><div id="c-dup"></div>
+        <div class="two"><div><label class="lb" for="c-n">Імʼя <span class="req">*</span></label><input class="inp" id="c-n" value="${esc(splitName(c.name)[0])}" autocomplete="off"></div><div><label class="lb" for="c-ln">Прізвище <span class="req">*</span></label><input class="inp" id="c-ln" value="${esc(splitName(c.name)[1])}" autocomplete="off"></div></div>
+        <div class="two"><div><label class="lb" for="c-p">Телефон</label><input class="inp" id="c-p" type="tel" value="${esc(c.phone)}"></div><div></div></div><div id="c-dup"></div>
         <label class="lb">Зручний звʼязок</label><div class="chips" id="c-c">${Object.entries(CONTACTS).map(([k, [n]]) => `<button class="chip ${c.contact === k ? 'on' : ''}" data-cc="${k}" title="Клієнту зручно: ${n}">${n}</button>`).join('')}</div>
         <div class="two"><div id="c-igw" class="${c.contact === 'instagram' || c.instagram ? '' : 'hide'}"><label class="lb" for="c-ig">Посилання на Instagram</label><div class="row" style="gap:8px;flex-wrap:nowrap">
           <input class="inp" id="c-ig" value="${esc(igUrl(c.instagram).slice(8))}" placeholder="Вставте посилання або @нікнейм" autocomplete="off">
           <a class="btn nw" id="c-igo" target="_blank" rel="noopener" href="${esc(igUrl(c.instagram) || '#')}" title="Відкрити профіль клієнта в Instagram" style="${igUrl(c.instagram) ? '' : 'opacity:.4;pointer-events:none'}">${IC.ig}<span>Відкрити</span></a></div>
           <div class="hint" id="c-igh"></div></div><div><label class="lb" for="c-b">День народження</label><input class="inp" id="c-b" type="date" value="${c.birthday || ''}"></div></div>
         <label class="lb" for="c-no">Нотатки</label><textarea class="inp" id="c-no" rows="2" placeholder="Вподобання">${esc(c.note || '')}</textarea>
-        <button class="btn mt" id="c-save" title="Зберегти дані клієнта">Зберегти</button></div>
+        <button class="btn pri mt" id="c-save" title="Зберегти дані клієнта">Зберегти</button></div>
       <div class="sect"><h3>Історія (${hist.length})</h3>${hist.map((x) => `<div class="list-row" style="cursor:default"><div class="grow"><div class="nm sm">${esc(svcById(x.service_id)?.name || '')} <span class="pill ${x.status}">${STATUS[x.status]}</span></div>
         <div class="sub">${esc(fmtDay(dayOf(x.starts_at), { day: 'numeric', month: 'short', year: 'numeric' }))}, ${fmtT(x.starts_at)} · ${esc(byId(x.staff_id)?.first_name || '')}${x.note ? ' · ' + esc(x.note) : ''}</div></div>
         <div class="b sm nw">${x.payments ? money(x.payments.amount) : x.status === 'booked' ? money(x.price) : ''}</div></div>`).join('') || '<div class="mut">Ще не було записів</div>'}</div>`;
@@ -1246,14 +1249,20 @@ const Staff = (() => {
     const igSync = () => { const v = igIn.value.trim(), u = igUrl(v); igGo.href = u || '#'; igGo.style.opacity = u ? '' : '.4'; igGo.style.pointerEvents = u ? '' : 'none';
       igH.textContent = v && !u ? 'Не схоже на посилання Instagram' : u && u.slice(8) !== v.replace(/^https?:\/\/(www\.)?/i, '') ? '→ ' + u.slice(8) : ''; };
     igIn.oninput = igSync; igIn.onblur = () => { const u = igUrl(igIn.value); if (u) igIn.value = u.slice(8); igSync(); };
-    $('#c-save', s.el).onclick = (e) => busy(e.currentTarget, async () => {
-      const phone = normPhone($('#c-p', s.el).value), name = $('#c-n', s.el).value.trim();
-      if (!phone || name.length < 2) return toast('Перевірте імʼя і телефон', 'bad');
+    // є незбережені зміни → кнопка «Зберегти зміни» пульсує, щоб її не шукати
+    const csb = $('#c-save', s.el), dirty = (on) => { csb.classList.toggle('dirty', on); csb.textContent = on ? '💾 Зберегти зміни' : 'Зберегти'; };
+    ['#c-n', '#c-ln', '#c-p', '#c-ig', '#c-b', '#c-no'].forEach((q) => { const el = $(q, s.el); if (el) el.addEventListener('input', () => dirty(true)); });
+    $$('[data-cc]', s.el).forEach((b) => b.addEventListener('click', () => dirty(true)));
+    csb.onclick = async (e) => { if (await busy(e.currentTarget, async () => {
+      const fn = $('#c-n', s.el).value.trim(), ln = $('#c-ln', s.el).value.trim(), phone = normPhone($('#c-p', s.el).value), name = joinName(fn, ln);
+      $('#c-n', s.el).classList.toggle('err', fn.length < 2); $('#c-ln', s.el).classList.toggle('err', ln.length < 2);
+      if (fn.length < 2 || ln.length < 2) return toast('Вкажіть імʼя і прізвище клієнта', 'bad');
+      if (!phone) return toast('Перевірте телефон', 'bad');
       if ($('#c-ig', s.el).value.trim() && !igNick($('#c-ig', s.el).value)) return toast('Перевірте посилання на Instagram', 'bad');
       const { error } = await sb.from('clients').update({ name, phone, contact, instagram: igNick($('#c-ig', s.el).value) || null, birthday: $('#c-b', s.el).value || null, note: $('#c-no', s.el).value.trim() || null }).eq('id', id);
       if (error) return toast(/duplicate|unique/i.test(error.message) ? 'Клієнт з таким телефоном уже є' : errMsg(error), 'bad');
-      toast('Збережено'); S.clientsCache = null; $('.sh-h h2', s.el).textContent = name;
-    });
+      toast('Збережено'); S.clientsCache = null; $('.sh-h h2', s.el).textContent = name; return true;
+    })) dirty(false); };
     $('#c-book', s.el).onclick = () => { s.close(); newAppt({ client: c, mid: isBoss() ? null : S.me.id }); };
     const rb = $('#c-rem', s.el); if (rb) rb.onclick = () => remindSheet(next.id, c);
     const ib = $('#c-inv', s.el); if (ib) ib.onclick = () => inviteSheet({ ...c, last_visit: last.starts_at });

@@ -232,7 +232,8 @@ const Client = (() => {
     const opts = Object.entries(CONTACTS).map(([k, [n, ic]]) => `<button type="button" class="cm ${me.contact === k ? 'on' : ''}" data-cm="${k}" title="Звʼязатися зі мною через ${n}">${ic}${n}</button>`).join('');
     return `${stepsBar()}<div class="st-title"><button class="btn ghost ico" data-back="cart" title="Назад — до візиту">${IC.back}</button><h2>Ваші контакти</h2></div>
       <form class="card" id="cf" novalidate>
-        <label class="lb" for="f-n">Імʼя <span class="req">*</span></label><input class="inp" id="f-n" autocomplete="given-name" value="${esc(me.name || '')}" placeholder="Як до вас звертатись" maxlength="60">
+        <div class="two"><div><label class="lb" for="f-n">Імʼя <span class="req">*</span></label><input class="inp" id="f-n" autocomplete="given-name" value="${esc(splitName(me.name)[0])}" placeholder="Імʼя" maxlength="40"></div>
+          <div><label class="lb" for="f-ln">Прізвище <span class="req">*</span></label><input class="inp" id="f-ln" autocomplete="family-name" value="${esc(splitName(me.name)[1])}" placeholder="Прізвище" maxlength="40"></div></div>
         <label class="lb" for="f-p">Номер телефону <span class="req">*</span></label><input class="inp" id="f-p" type="tel" inputmode="tel" autocomplete="tel" value="${esc(me.phone || '')}" placeholder="+380 __ ___ __ __" maxlength="20">
         <label class="lb">Як з вами звʼязатись <span class="req">*</span></label><div class="cm-opts" id="f-c">${opts}</div>
         <div id="f-ig-w" class="${me.contact === 'instagram' ? '' : 'hide'}"><label class="lb" for="f-ig">Ваш Instagram</label><input class="inp" id="f-ig" value="${esc(me.instagram || '')}" placeholder="@нікнейм або посилання на профіль" maxlength="120" autocomplete="off"><div class="hint" id="f-igh"></div></div>
@@ -339,9 +340,10 @@ const Client = (() => {
     f.addEventListener('keydown', (e) => { if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); $('#f-go', f).click(); } });
     f.onsubmit = async (e) => {
       e.preventDefault();
-      const name = $('#f-n', f).value.trim(), phone = normPhone(ph.value), ig = igNick($('#f-ig', f).value), cmt = $('#f-cm', f).value.trim();
+      const fn = $('#f-n', f).value.trim(), ln = $('#f-ln', f).value.trim(), name = joinName(fn, ln), phone = normPhone(ph.value), ig = igNick($('#f-ig', f).value), cmt = $('#f-cm', f).value.trim();
       const err = $('#f-err', f); const bad = [];
-      $('#f-n', f).classList.toggle('err', name.length < 2); if (name.length < 2) bad.push('вкажіть імʼя');
+      $('#f-n', f).classList.toggle('err', fn.length < 2); if (fn.length < 2) bad.push('вкажіть імʼя');
+      $('#f-ln', f).classList.toggle('err', ln.length < 2); if (ln.length < 2) bad.push('вкажіть прізвище');
       ph.classList.toggle('err', !phone); if (!phone) bad.push('вкажіть правильний номер телефону');
       if (!cm) bad.push('оберіть, як з вами звʼязатись');
       if (cm === 'instagram') { const okIg = !!igNick(igIn.value); igIn.classList.toggle('err', !okIg); if (!okIg) bad.push('вкажіть правильний нікнейм Instagram'); }

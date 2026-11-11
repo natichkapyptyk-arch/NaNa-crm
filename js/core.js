@@ -173,6 +173,9 @@ function igNick(v) {
   let s = String(v || '').trim(); const m = s.match(/instagram\.com\/(?:_u\/)?([A-Za-z0-9._]+)/i); if (m) s = m[1];
   s = s.replace(/^@/, '').replace(/[/?#].*$/, ''); return /^[A-Za-z0-9._]{1,30}$/.test(s) && !/^(p|reel|reels|stories|explore)$/i.test(s) ? s : '';
 }
+// імʼя й прізвище клієнта зберігаються разом у clients.name: «Софія Сова» → ['Софія', 'Сова']
+const splitName = (v) => { const p = String(v || '').trim().split(/\s+/).filter(Boolean); return [p[0] || '', p.slice(1).join(' ')]; };
+const joinName = (f, l) => [String(f || '').trim(), String(l || '').trim()].filter(Boolean).join(' ');
 const igUrl = (v) => { const n = igNick(v); return n ? 'https://instagram.com/' + n : ''; };
 const igDm = (v) => { const n = igNick(v); return n ? 'https://ig.me/m/' + n : ''; };   // одразу відкрити директ
 // маленьке посилання-іконка на профіль (у списках, картках)

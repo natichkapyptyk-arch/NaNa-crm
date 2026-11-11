@@ -687,3 +687,7 @@ label.check{display:flex;align-items:center;gap:8px;font-size:14px;cursor:pointe
 .au-r{display:flex;gap:12px;padding:9px 0;border-bottom:1px solid var(--sep)}
 .au-t{flex:none;width:44px;font-weight:700;color:var(--mut);font-size:13px;padding-top:1px}
 .au-w{color:var(--ink2);margin-top:2px;word-break:break-word}
+/* кнопка «Зберегти зміни», коли є незбережене */
+.btn.pri.dirty{animation:saveP 1.6s ease-in-out infinite}
+@keyframes saveP{50%{box-shadow:0 0 0 4px rgba(228,234,32,.35),0 0 18px rgba(228,234,32,.45)}}
+@media (prefers-reduced-motion:reduce){.btn.pri.dirty{animation:none}}
