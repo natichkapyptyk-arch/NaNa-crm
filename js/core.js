@@ -268,6 +268,18 @@ function confirmBox(text, { ok = 'Так', cancel = 'Скасувати', danger
     $('[data-o]', s.el).onclick = () => { done = true; s.close(); res(true); };
   });
 }
+// незбережені зміни: кнопка збереження стає «💾 Зберегти зміни» й пульсує (.dirty); reset() — після збереження
+function watchDirty(root, btn, { label = '💾 Зберегти зміни', skip = [] } = {}) {
+  if (!root || !btn) return { reset() {}, upd() {} };
+  const base = btn.textContent;
+  const snap = () => $$('input,select,textarea', root).filter((x) => !skip.includes(x.id) && x.type !== 'file')
+      .map((x) => (x.type === 'checkbox' || x.type === 'radio' ? x.checked : x.value)).join('\u0001')
+    + '|' + $$('.chip', root).map((c) => (c.classList.contains('on') ? '1' : '0') + c.textContent.trim()).join(',');
+  let s0 = snap();
+  const upd = () => { if (!btn.isConnected || btn.disabled) return; const d = snap() !== s0; btn.classList.toggle('dirty', d); btn.textContent = d ? label : base; };
+  root.addEventListener('input', upd); root.addEventListener('change', upd); root.addEventListener('click', () => setTimeout(upd, 0));
+  return { reset: () => { s0 = snap(); btn.classList.remove('dirty'); btn.textContent = base; }, upd };
+}
 async function busy(btn, fn) {   // кнопка «крутиться», поки йде запит
   if (btn && btn.disabled) return; const h = btn ? btn.innerHTML : '';
   if (btn) { btn.disabled = true; btn.innerHTML = '<span style="opacity:.7">Зачекайте…</span>'; }
