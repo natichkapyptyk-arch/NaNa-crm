@@ -695,7 +695,7 @@ begin
   end if;
   if v_login = '' then raise exception 'Вкажіть логін або пошту'; end if;
   if v_login !~ '^[a-z0-9._@+-]+$' then raise exception 'Логін — латинські літери, цифри, крапка, дефіс'; end if;
-  if p_password is not null and length(p_password) < 8 then raise exception 'Пароль — щонайменше 8 символів'; end if;
+  if p_password is not null and length(p_password) < 4 then raise exception 'Пароль — щонайменше 4 символи'; end if;
   if s.user_id is null and p_password is null then raise exception 'Вкажіть пароль'; end if;
   v_email := case when v_login like '%@%' then v_login else v_login || '@nana.local' end;
   if exists (select 1 from auth.users where lower(email) = v_email and id is distinct from s.user_id) then

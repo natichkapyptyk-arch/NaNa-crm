@@ -664,7 +664,7 @@ const Admin = (() => {
               ${boss && p.tg_chat_id ? '<button class="btn sm red" id="tg-off" title="Відʼєднати Telegram від цієї картки">Відʼєднати</button>' : ''}</div>` : ''}</div>` : ''}</div>
         <div class="card"><h3>${IC.lock} Вхід у програму</h3>
           ${can ? `<label class="lb" for="f-lg">Логін або пошта</label><input class="inp" id="f-lg" value="${esc(p.login || '')}" autocapitalize="off" spellcheck="false" placeholder="напр. polina" ${self || boss ? '' : 'disabled'}>
-          <label class="lb" for="f-pw">${p.user_id ? 'Новий пароль' : 'Пароль'}</label><input class="inp" id="f-pw" type="text" autocomplete="new-password" placeholder="${p.user_id ? 'залиште порожнім, щоб не міняти' : 'щонайменше 8 символів'}">
+          <label class="lb" for="f-pw">${p.user_id ? 'Новий пароль' : 'Пароль'}</label><input class="inp" id="f-pw" type="text" autocomplete="new-password" placeholder="${p.user_id ? 'залиште порожнім, щоб не міняти' : 'щонайменше 4 символи'}">
           <button class="btn mt" id="f-login" title="Зберегти логін і пароль">${p.user_id ? 'Змінити вхід' : 'Створити вхід'}</button>
           <div class="hint">Без пошти: логін на кшталт <b>polina</b>. Персонал може входити й за спільним посиланням швидкого входу (Налаштування).</div>` : ''}</div>
       </div>
@@ -714,7 +714,6 @@ const Admin = (() => {
     const lg = $('#f-login', main); if (lg) lg.onclick = () => busy(lg, async () => {
       if (isNew) return toast('Спершу створіть співробітника', 'bad');
       const login = $('#f-lg', main).value.trim(), pw = $('#f-pw', main).value;
-      if (pw && pw.length < 8) { $('#f-pw', main).classList.add('err'); return toast('Пароль — щонайменше 8 символів', 'bad'); }
       const { error } = await sb.rpc('staff_set_login', { p_staff: p.id, p_login: login, p_password: pw || null });
       if (error) return toast(errMsg(error), 'bad', 5000);
       await Staff.reload(); $('#f-pw', main).value = ''; toast('Вхід збережено' + (pw ? ' — новий пароль діє' : ''));
