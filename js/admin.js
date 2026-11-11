@@ -406,7 +406,7 @@ const Admin = (() => {
       <label class="lb" for="e-n">Коментар</label><input class="inp" id="e-n">`,
       foot: `<button class="btn" data-x2 title="Закрити без збереження">Скасувати</button><button class="btn pri" id="e-ok" title="Зберегти витрату">Зберегти</button>` });
     $('[data-x2]', s.el).onclick = s.close;
-    watchDirty(s.el, $('#e-ok', s.el));
+    watchDirty(s.el, $('#e-ok', s.el), { sheet: s });
     $('#e-ok', s.el).onclick = (e) => busy(e.currentTarget, async () => {
       const amount = +$('#e-a', s.el).value, category = $('#e-c', s.el).value.trim();
       if (!(amount > 0) || !category) return toast('Вкажіть суму і категорію', 'bad');
@@ -540,7 +540,7 @@ const Admin = (() => {
     const oneSync = () => { const on = $$('[data-p]', el).filter((c) => c.checked); if (on.length !== 1) return; const pid = on[0].dataset.p;
       const u = $(`[data-pu="${pid}"]`, el).value, p = $(`[data-pp="${pid}"]`, el).value; if (u) $('#sv-u', el).value = u; if (p !== '') $('#sv-p', el).value = p; };
     $$('[data-pu],[data-pp],[data-p]', el).forEach((f) => f.addEventListener(f.matches('[data-p]') ? 'change' : 'input', oneSync));
-    watchDirty(el, $('#sv-ok', el));
+    watchDirty(el, $('#sv-ok', el), { sheet: s });
     $('#sv-ok', el).onclick = (e) => busy(e.currentTarget, async () => {
       const name = $('#sv-n', el).value.trim(), dur = +$('#sv-u', el).value, price = +$('#sv-p', el).value;
       if (!name) { $('#sv-n', el).classList.add('err'); return toast('Вкажіть назву', 'bad'); }
@@ -870,7 +870,7 @@ const Admin = (() => {
       </div>
       ${demoN ? `<div class="card full"><h3>Демо-дані</h3><p class="mut sm" style="margin:0 0 10px">У програмі ${demoN} демо-записів і приклади клієнтів — щоб подивитись, як усе працює. Коли почнете працювати по-справжньому, приберіть їх.</p>
         <button class="btn red" id="s-demo" title="Видалити всі демо-записи, демо-клієнтів і приклад-майстра">Прибрати демо-дані</button></div>` : ''}
-    </div><div class="row mt2" style="justify-content:flex-end"><button class="btn pri lg" id="s-save" title="Зберегти налаштування">Зберегти налаштування</button></div>`;
+    </div><div class="row mt2" style="justify-content:flex-end;align-items:center;gap:12px"><span class="sm mut" id="s-auto" title="Зміни в налаштуваннях зберігаються самі через пару секунд">Зміни зберігаються автоматично</span><button class="btn pri lg" id="s-save" title="Зберегти налаштування">Зберегти налаштування</button></div>`;
     const drawPm = () => { $('#s-pm', main).innerHTML = methods.map((m, i) => `<span class="chip on">${esc(m)} <button class="btn ghost ico sm" data-rm="${i}" title="Прибрати «${esc(m)}»" style="width:22px;min-height:22px;color:#fff;border:0">${IC.x.replace('width="20" height="20"', 'width="14" height="14"')}</button></span>`).join('');
       $$('[data-rm]', main).forEach((b) => (b.onclick = () => { if (methods.length < 2) return toast('Має лишитись хоча б один спосіб', 'bad'); methods.splice(+b.dataset.rm, 1); drawPm(); })); };
     drawPm();
@@ -924,8 +924,9 @@ const Admin = (() => {
       const { data, error } = await sb.rpc('close_send_now'); if (error) return toast(errMsg(error), 'bad', 5000); tgNow('close');
       toast(data ? `Надіслано: ${data} ${plural(data, 'майстрині', 'майстриням', 'майстриням')}` : 'Сьогодні ні в кого з підключеним ботом не було записів', data ? 'ok' : '', 5000);
     });
-    const sDirty = watchDirty(main, $('#s-save', main), { skip: ['s-pmn', 'au-q'] });
-    $('#s-save', main).onclick = async (e) => { if (await busy(e.currentTarget, async () => {
+    let autoT = null, silent = false;
+    const sDirty = watchDirty(main, $('#s-save', main), { skip: ['s-pmn', 'au-q'], onChange: (d) => { clearTimeout(autoT); if (d) autoT = setTimeout(() => { if ($('#s-save', main)?.isConnected) { silent = true; $('#s-save', main).click(); } }, 1500); } });
+    $('#s-save', main).onclick = async (e) => { const quiet = silent; silent = false; clearTimeout(autoT); if (await busy(e.currentTarget, async () => {
       const rh = $('#s-rh', main).value.split(/[,\s]+/).map(Number).filter((x) => x > 0 && x <= 168);
       const row = { salon_name: $('#s-n', main).value.trim() || 'NaNa studio', address: $('#s-a', main).value.trim() || null, phone: $('#s-p', main).value.trim() ? normPhone($('#s-p', main).value) : null,
         instagram: $('#s-i', main).value.trim().replace(/^@/, '') || null, site_url: $('#s-u', main).value.trim() || null,
@@ -943,8 +944,8 @@ const Admin = (() => {
       if ($('#s-clh', main)) row.close_hour = $('#s-clh', main).value === '' ? null : +$('#s-clh', main).value;
       if (toMin(row.close_time) <= toMin(row.open_time)) return toast('Час закриття має бути пізніше за відкриття', 'bad');
       const { error } = await sb.from('settings').update(row).eq('id', 1); if (error) return toast(errMsg(error), 'bad');
-      await Staff.reload(); toast('Налаштування збережено'); return true;
-    })) sDirty.reset(); };
+      await Staff.reload(); if (!quiet) toast('Налаштування збережено'); return true;
+    })) { sDirty.reset(); const st = $('#s-auto', main); if (st) st.textContent = (quiet ? '✓ Збережено автоматично о ' : '✓ Збережено о ') + new Intl.DateTimeFormat('uk-UA', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Kyiv' }).format(new Date()); } };
   }
 
   return { dash, earn, services, team, settings };

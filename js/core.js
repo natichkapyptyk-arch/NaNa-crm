@@ -247,17 +247,30 @@ function sheet({ title = '', body = '', foot = '', wide = false, onClose = null 
     <div class="sh-h"><h2>${title}</h2><button class="btn ghost ico sm" data-x title="Закрити вікно (Esc)">${IC.x}</button></div>
     <div class="sh-b">${body}</div>${foot ? `<div class="sh-f">${foot}</div>` : ''}</div>`;
   document.body.appendChild(ov); document.body.style.overflow = 'hidden';
-  const api = { el: ov.firstElementChild, ov, close() {
+  const api = { el: ov.firstElementChild, ov, guard: null, close() {
     if (!ov.isConnected) return; ov.remove(); sheets.splice(sheets.indexOf(api), 1);
-    if (!sheets.length) document.body.style.overflow = ''; hideTip(); onClose && onClose(); } };
+    if (!sheets.length) document.body.style.overflow = ''; hideTip(); onClose && onClose(); },
+    async tryClose() { if (api._asking) return; if (api.guard) { api._asking = true; const ok = await api.guard().finally(() => (api._asking = false)); if (!ok) return; } api.close(); } };
   ov.addEventListener('mousedown', (e) => { if (e.target === ov) api._down = true; });
-  ov.addEventListener('click', (e) => { if (e.target === ov && api._down) api.close(); api._down = false; });
-  $('[data-x]', ov).onclick = api.close;
+  ov.addEventListener('click', (e) => { if (e.target === ov && api._down) api.tryClose(); api._down = false; });
+  $('[data-x]', ov).onclick = () => api.tryClose();
   sheets.push(api);
   setTimeout(() => { const f = $('.sh-b [autofocus]', ov); if (f && matchMedia('(min-width:760px)').matches) f.focus(); }, 60);
   return api;
 }
-document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && sheets.length) sheets[sheets.length - 1].close(); });
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && sheets.length) sheets[sheets.length - 1].tryClose(); });
+// «Є незбережені зміни»: 'save' | 'discard' | null (лишитись)
+function saveAsk() {
+  return new Promise((res) => {
+    let done = null;
+    const s = sheet({ title: 'Зберегти зміни?', body: '<p class="mut" style="margin:0">У вікні є незбережені зміни.</p>',
+      foot: `<button class="btn" data-c title="Повернутися до вікна">Скасувати</button><button class="btn red" data-d title="Закрити й забути зміни">Не зберігати</button><button class="btn pri" data-s title="Зберегти й закрити">💾 Зберегти</button>`,
+      onClose: () => res(done) });
+    $('[data-c]', s.el).onclick = () => s.close();
+    $('[data-d]', s.el).onclick = () => { done = 'discard'; s.close(); };
+    $('[data-s]', s.el).onclick = () => { done = 'save'; s.close(); };
+  });
+}
 function confirmBox(text, { ok = 'Так', cancel = 'Скасувати', danger = false, sub = '' } = {}) {
   return new Promise((res) => {
     let done = false;
@@ -269,16 +282,26 @@ function confirmBox(text, { ok = 'Так', cancel = 'Скасувати', danger
   });
 }
 // незбережені зміни: кнопка збереження стає «💾 Зберегти зміни» й пульсує (.dirty); reset() — після збереження
-function watchDirty(root, btn, { label = '💾 Зберегти зміни', skip = [] } = {}) {
-  if (!root || !btn) return { reset() {}, upd() {} };
+function watchDirty(root, btn, { label = '💾 Зберегти зміни', skip = [], sheet: sh = null, onChange = null } = {}) {
+  if (!root || !btn) return { reset() {}, upd() {}, isDirty: () => false };
   const base = btn.textContent;
   const snap = () => $$('input,select,textarea', root).filter((x) => !skip.includes(x.id) && x.type !== 'file')
       .map((x) => (x.type === 'checkbox' || x.type === 'radio' ? x.checked : x.value)).join('\u0001')
     + '|' + $$('.chip', root).map((c) => (c.classList.contains('on') ? '1' : '0') + c.textContent.trim()).join(',');
   let s0 = snap();
-  const upd = () => { if (!btn.isConnected || btn.disabled) return; const d = snap() !== s0; btn.classList.toggle('dirty', d); btn.textContent = d ? label : base; };
+  let last = s0;
+  const upd = () => { if (!btn.isConnected || btn.disabled) return; const now = snap(), d = now !== s0; btn.classList.toggle('dirty', d); btn.textContent = d ? label : base;
+    if (onChange && now !== last) { last = now; onChange(d); } };
   root.addEventListener('input', upd); root.addEventListener('change', upd); root.addEventListener('click', () => setTimeout(upd, 0));
-  return { reset: () => { s0 = snap(); btn.classList.remove('dirty'); btn.textContent = base; }, upd };
+  const isDirty = () => btn.isConnected && snap() !== s0;
+  if (sh) sh.guard = async () => {   // закриття вікна з незбереженим → «Зберегти / Не зберігати / Скасувати»
+    if (!isDirty()) return true;
+    const a = await saveAsk(); if (a === 'discard') return true; if (a !== 'save') return false;
+    btn.click(); await new Promise((r) => setTimeout(r, 50));
+    for (let i = 0; i < 300 && btn.isConnected && btn.disabled; i++) await new Promise((r) => setTimeout(r, 100));
+    return !isDirty();   // збереглося → закрити (якщо вікно ще відкрите); помилка → лишитись
+  };
+  return { reset: () => { s0 = last = snap(); btn.classList.remove('dirty'); btn.textContent = base; }, upd, isDirty };
 }
 async function busy(btn, fn) {   // кнопка «крутиться», поки йде запит
   if (btn && btn.disabled) return; const h = btn ? btn.innerHTML : '';

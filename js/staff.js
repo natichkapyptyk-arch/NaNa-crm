@@ -1033,7 +1033,7 @@ const Staff = (() => {
     const lastDays = (c) => (c.last_visit ? daysBetween(dayOf(c.last_visit), t) : null);
     const isStale = (c) => c.last_visit && !c.next_visit && lastDays(c) >= stale;
     const F = { all: ['Усі', () => true], stale: [`Застарілі (${stale}+ днів)`, isStale], next: ['Мають запис', (c) => !!c.next_visit],
-      fresh: ['Нові за 30 днів', (c) => daysBetween(dayOf(c.created_at), t) <= 30], ig: ['Є Instagram', (c) => !!c.instagram],
+      fresh: ['Нові за 30 днів', (c) => daysBetween(dayOf(c.created_at), t) <= 30], ig: ['Є Instagram', (c) => !!c.instagram], nolast: ['Без прізвища', (c) => !splitName(c.name)[1]],
       ...(S.settings.tg_bot ? { nobot: ['Без бота', (c) => !c.tg], soon: ['Візит скоро, без бота', (c) => !c.tg && !!c.next_visit && daysBetween(t, dayOf(c.next_visit)) <= 7] } : {}), noshow: ['Не приходили', (c) => c.noshows > 0], never: ['Без візитів', (c) => !c.visits && !c.next_visit] };
     S.cf = arg && F[arg] ? arg : S.cf || 'all'; S.cq = S.cq || ''; S.csort = S.csort || 'last';
     main.innerHTML = `<div class="pg-h"><h1>Клієнти</h1>${isBoss() ? `<button class="btn" id="cl-exp" title="Завантажити клієнтів у таблицю Excel за тиждень, місяць або свій період">⬇ Експорт</button><button class="btn" id="cl-imp" title="Додати клієнтів з таблиці Excel (наприклад, експорт з EasyWeek)">⬆ Імпорт</button><button class="btn" id="cl-copy" title="Скопіювати телефони клієнтів зі списку нижче — для розсилки"><span class="lg-t">Скопіювати номери</span><span class="ph-t">📋 Номери</span></button><button class="btn" id="cl-copyig" title="Скопіювати нікнейми Instagram клієнтів зі списку нижче — для розсилки в директ"><span class="lg-t">Скопіювати нікнейми</span><span class="ph-t">📋 Нікнейми</span></button>` : ''}<button class="btn pri" id="cl-new" title="Записати клієнта">${IC.plus} Запис</button></div>
@@ -1250,9 +1250,7 @@ const Staff = (() => {
       igH.textContent = v && !u ? 'Не схоже на посилання Instagram' : u && u.slice(8) !== v.replace(/^https?:\/\/(www\.)?/i, '') ? '→ ' + u.slice(8) : ''; };
     igIn.oninput = igSync; igIn.onblur = () => { const u = igUrl(igIn.value); if (u) igIn.value = u.slice(8); igSync(); };
     // є незбережені зміни → кнопка «Зберегти зміни» пульсує, щоб її не шукати
-    const csb = $('#c-save', s.el), dirty = (on) => { csb.classList.toggle('dirty', on); csb.textContent = on ? '💾 Зберегти зміни' : 'Зберегти'; };
-    ['#c-n', '#c-ln', '#c-p', '#c-ig', '#c-b', '#c-no'].forEach((q) => { const el = $(q, s.el); if (el) el.addEventListener('input', () => dirty(true)); });
-    $$('[data-cc]', s.el).forEach((b) => b.addEventListener('click', () => dirty(true)));
+    const csb = $('#c-save', s.el), cw = watchDirty(csb.closest('.card') || s.el, csb, { sheet: s }), dirty = () => cw.reset();
     csb.onclick = async (e) => { if (await busy(e.currentTarget, async () => {
       const fn = $('#c-n', s.el).value.trim(), ln = $('#c-ln', s.el).value.trim(), phone = normPhone($('#c-p', s.el).value), name = joinName(fn, ln);
       $('#c-n', s.el).classList.toggle('err', fn.length < 2);
