@@ -827,7 +827,7 @@ const Staff = (() => {
         return;
       }
       c.innerHTML = `<div class="search">${IC.search}<input class="inp" id="na-q" placeholder="Пошук: імʼя, телефон або Instagram" autocomplete="off" autofocus></div><div id="na-sg"></div>
-        <div id="na-newc" class="hide"><div class="two mt"><input class="inp" id="na-cn" placeholder="Імʼя *" autocomplete="off"><input class="inp" id="na-cl" placeholder="Прізвище *" autocomplete="off"></div><div class="two mt"><input class="inp" id="na-cp" type="tel" placeholder="+380…"><div></div></div><div id="na-dup"></div>
+        <div id="na-newc" class="hide"><div class="two mt"><input class="inp" id="na-cn" placeholder="Імʼя *" autocomplete="off"><input class="inp" id="na-cl" placeholder="Прізвище" autocomplete="off"></div><div class="two mt"><input class="inp" id="na-cp" type="tel" placeholder="+380…"><div></div></div><div id="na-dup"></div>
         <div class="chips mt" id="na-cc">${Object.entries(CONTACTS).map(([k, [n]]) => `<button type="button" class="chip ${k === st.contact ? 'on' : ''}" data-cc="${k}" title="Клієнту зручно: ${n}">${n}</button>`).join('')}</div></div>`;
       const q = $('#na-q', c), sg = $('#na-sg', c);
       let tmr;
@@ -883,8 +883,8 @@ const Staff = (() => {
       const bad = [];
       let cl = st.client, name = null, phone = null;
       if (!cl) { const f0 = ($('#na-cn', el)?.value || '').trim(), l0 = ($('#na-cl', el)?.value || '').trim(); name = joinName(f0, l0); phone = normPhone($('#na-cp', el)?.value);
-        $('#na-cn', el)?.classList.toggle('err', f0.length < 2); $('#na-cl', el)?.classList.toggle('err', l0.length < 2);
-        if (f0.length < 2 || l0.length < 2 || !phone) bad.push('клієнта (імʼя, прізвище і телефон)'); }
+        $('#na-cn', el)?.classList.toggle('err', f0.length < 2);
+        if (f0.length < 2 || !phone) bad.push('клієнта (імʼя і телефон)'); }
       if (!st.mid) bad.push('майстра'); if (!st.sid) bad.push('послугу'); if (st.min == null) bad.push('час');
       if (bad.length) return toast('Оберіть ' + bad.join(', '), 'bad');
       const r = await withForce((force) => sb.rpc('staff_book', { p_client: cl?.id || null, p_name: name, p_phone: phone, p_contact: st.contact, p_staff: st.mid, p_service: st.sid,
@@ -1226,7 +1226,7 @@ const Staff = (() => {
       ${!next && last && daysBetween(dayOf(last.starts_at), today()) >= S.settings.stale_days ? `<div class="hint row wrap" style="gap:8px">⏳ Не було ${daysBetween(dayOf(last.starts_at), today())} днів і немає запису<button class="btn sm" id="c-inv" title="Готовий текст запрошення для Viber, Telegram або SMS">${IC.bell} Нагадати</button></div>` : ''}
       ${next ? `<div class="hint row wrap" style="gap:8px">📅 Наступний запис: <b>${esc(relDay(dayOf(next.starts_at)))}, ${fmtT(next.starts_at)}</b><button class="btn sm" id="c-rem" title="Готовий текст нагадування для Viber, Telegram або SMS">${IC.bell} Нагадати</button></div>` : ''}
       <div class="sect"><h3>Дані клієнта</h3>
-        <div class="two"><div><label class="lb" for="c-n">Імʼя <span class="req">*</span></label><input class="inp" id="c-n" value="${esc(splitName(c.name)[0])}" autocomplete="off"></div><div><label class="lb" for="c-ln">Прізвище <span class="req">*</span></label><input class="inp" id="c-ln" value="${esc(splitName(c.name)[1])}" autocomplete="off"></div></div>
+        <div class="two"><div><label class="lb" for="c-n">Імʼя <span class="req">*</span></label><input class="inp" id="c-n" value="${esc(splitName(c.name)[0])}" autocomplete="off"></div><div><label class="lb" for="c-ln">Прізвище</label><input class="inp" id="c-ln" value="${esc(splitName(c.name)[1])}" autocomplete="off"></div></div>
         <div class="two"><div><label class="lb" for="c-p">Телефон</label><input class="inp" id="c-p" type="tel" value="${esc(c.phone)}"></div><div></div></div><div id="c-dup"></div>
         <label class="lb">Зручний звʼязок</label><div class="chips" id="c-c">${Object.entries(CONTACTS).map(([k, [n]]) => `<button class="chip ${c.contact === k ? 'on' : ''}" data-cc="${k}" title="Клієнту зручно: ${n}">${n}</button>`).join('')}</div>
         <div class="two"><div id="c-igw" class="${c.contact === 'instagram' || c.instagram ? '' : 'hide'}"><label class="lb" for="c-ig">Посилання на Instagram</label><div class="row" style="gap:8px;flex-wrap:nowrap">
@@ -1255,8 +1255,8 @@ const Staff = (() => {
     $$('[data-cc]', s.el).forEach((b) => b.addEventListener('click', () => dirty(true)));
     csb.onclick = async (e) => { if (await busy(e.currentTarget, async () => {
       const fn = $('#c-n', s.el).value.trim(), ln = $('#c-ln', s.el).value.trim(), phone = normPhone($('#c-p', s.el).value), name = joinName(fn, ln);
-      $('#c-n', s.el).classList.toggle('err', fn.length < 2); $('#c-ln', s.el).classList.toggle('err', ln.length < 2);
-      if (fn.length < 2 || ln.length < 2) return toast('Вкажіть імʼя і прізвище клієнта', 'bad');
+      $('#c-n', s.el).classList.toggle('err', fn.length < 2);
+      if (fn.length < 2) return toast('Вкажіть імʼя клієнта', 'bad');
       if (!phone) return toast('Перевірте телефон', 'bad');
       if ($('#c-ig', s.el).value.trim() && !igNick($('#c-ig', s.el).value)) return toast('Перевірте посилання на Instagram', 'bad');
       const { error } = await sb.from('clients').update({ name, phone, contact, instagram: igNick($('#c-ig', s.el).value) || null, birthday: $('#c-b', s.el).value || null, note: $('#c-no', s.el).value.trim() || null }).eq('id', id);
