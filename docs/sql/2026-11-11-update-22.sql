@@ -139,9 +139,20 @@ begin
   update staff set user_id = v_uid, login = v_login, email = case when v_login like '%@%' then v_login else email end where id = p_staff;
 end $$;
 
--- старі тестові таблиці (Майстер 1, Стрижка жіноча…) — більше не потрібні й були доступні всім
-drop table if exists old_masters;
-drop table if exists old_services;
+-- старі таблиці першої версії (old_*): на них посилаються інші old_-таблиці, тому не видаляємо —
+-- лише прибираємо публічне читання old_masters і old_services (для персоналу все лишається як було)
+do $$ begin
+  if to_regclass('public.old_masters') is not null then
+    drop policy if exists p_masters_read on old_masters;
+    create policy p_masters_read on old_masters for select to authenticated using ((select is_staff()));
+    revoke all on old_masters from anon;
+  end if;
+  if to_regclass('public.old_services') is not null then
+    drop policy if exists p_services_read on old_services;
+    create policy p_services_read on old_services for select to authenticated using ((select is_staff()));
+    revoke all on old_services from anon;
+  end if;
+end $$;
 
 -- демо-дані: те саме, що кнопка «Прибрати демо-дані» (демо-майстер «Візажист (приклад)» вимикається)
 delete from notifications where appointment_id in (select id from appointments where demo);
