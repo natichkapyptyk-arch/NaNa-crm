@@ -15,9 +15,13 @@ const Staff = (() => {
     .sort((a, b) => a.svc.sort - b.svc.sort || a.svc.name.localeCompare(b.svc.name));
   const payPct = (id) => +(S.pay.find((p) => p.staff_id === id)?.commission_pct ?? 0);
 
+  // колонки співробітників, які видно через API (посилання Telegram tg_link — лише через staff_tg_link(), update-22)
+  const STAFF_COLS = 'id,user_id,role,last_name,first_name,middle_name,birth_date,experience,bio,photo_url,telegram,phone,email,login,start_date,is_active,is_bookable,sort,notify,tg_chat_id,demo,created_at,see_money';
+  const staffQ = async () => { const r = await sb.from('staff').select(STAFF_COLS).order('sort').order('first_name');
+    return r.error ? sb.from('staff').select('*').order('sort').order('first_name') : r; };   // до оновлення бази — як раніше
   async function loadAll() {
     const r = await Promise.all([
-      sb.from('staff').select('*').order('sort').order('first_name'),
+      staffQ(),
       sb.from('services').select('*').order('sort').order('name'),
       sb.from('master_services').select('*'),
       sb.from('work_hours').select('*'),

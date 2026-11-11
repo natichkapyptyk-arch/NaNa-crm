@@ -1,5 +1,6 @@
 // Швидкий вхід персоналу за спільним посиланням (#/team/<токен>): список людей → вхід без пароля.
 // Посилання вмикає/вимикає/змінює власниця в Налаштуваннях.
+// Безпека: за посиланням входять лише майстри; власниці й адмін — тільки з паролем (інакше посилання дає доступ до всього).
 // Також: одноразове посилання «встановити пароль» (pw_token, таблиця pw_links) → вхід і картка з полем пароля.
 import { createClient } from 'npm:@supabase/supabase-js@2.45.4';
 
@@ -33,12 +34,13 @@ Deno.serve(async (req) => {
     if (!sec || sec.team_token !== token) return json({ error: 'Посилання недійсне або застаріло. Попросіть нове у власниці.' }, 403);
     if (!sec.team_enabled) return json({ error: 'Вхід за посиланням вимкнено. Увійдіть з паролем.' }, 403);
     if (!staff_id) {
-      const { data } = await db.from('staff').select('id, first_name, last_name, role, photo_url').eq('is_active', true).not('user_id', 'is', null).order('sort').order('first_name');
+      const { data } = await db.from('staff').select('id, first_name, last_name, role, photo_url').eq('is_active', true).eq('role', 'master').not('user_id', 'is', null).order('sort').order('first_name');
       return json({ staff: data ?? [] });
     }
     if (!isUuid(staff_id)) return json({ error: 'Невірний запит' }, 400);
-    const { data: s } = await db.from('staff').select('user_id, is_active').eq('id', staff_id).maybeSingle();
+    const { data: s } = await db.from('staff').select('user_id, is_active, role').eq('id', staff_id).maybeSingle();
     if (!s?.user_id || !s.is_active) return json({ error: 'Співробітника не знайдено' }, 404);
+    if (s.role !== 'master') return json({ error: 'Власниця й адмін входять лише з паролем.' }, 403);
     const { data: u, error: ue } = await db.auth.admin.getUserById(s.user_id);
     if (ue || !u?.user?.email) return json({ error: 'Немає входу для цього співробітника' }, 404);
     const { data: link, error } = await db.auth.admin.generateLink({ type: 'magiclink', email: u.user.email });

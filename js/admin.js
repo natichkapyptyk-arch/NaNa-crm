@@ -658,13 +658,13 @@ const Admin = (() => {
           <label class="sw" title="Дублювати сповіщення в Telegram"><input type="checkbox" data-nt="tg" ${nt.tg !== false ? 'checked' : ''} ${can ? '' : 'disabled'}><i></i><span>Надсилати в Telegram</span></label></div>
           <div class="hint">${p.role === 'master' ? 'Майстер отримує сповіщення лише про свої записи, а зранку — розклад лише своїх записів.' : 'Власниця й адмін отримують сповіщення про всі записи, а зранку — розклад усього салону.'}</div>
           ${!isNew && bot ? `<div class="sect"><h3>${IC.tg.replace('<svg', '<svg width="18" height="18"')} Telegram ${p.tg_chat_id ? '<span class="pill done">підключено</span>' : '<span class="pill g">не підключено</span>'}</h3>
-            ${self || boss ? `<div class="row wrap"><a class="btn sm ${p.tg_chat_id ? '' : 'pri'}" href="https://t.me/${esc(bot)}?start=s_${p.tg_link}" target="_blank" rel="noopener" title="${self ? 'Відкрити бота і натиснути Start' : 'Посилання для цього співробітника — надішліть йому'}">${p.tg_chat_id ? 'Перепідключити' : 'Підключити'}</a>
+            ${self || Staff.isOwner() || (boss && p.role !== 'owner') ? `<div class="row wrap"><a class="btn sm ${p.tg_chat_id ? '' : 'pri'}" id="tg-open" href="https://t.me/${esc(bot)}" target="_blank" rel="noopener" title="${self ? 'Відкрити бота і натиснути Start' : 'Посилання для цього співробітника — надішліть йому'}">${p.tg_chat_id ? 'Перепідключити' : 'Підключити'}</a>
               ${boss && !self ? `<button class="btn sm" id="tg-copy" title="Скопіювати посилання, щоб надіслати співробітнику">Скопіювати посилання</button>` : ''}
               ${self && p.tg_chat_id ? '<button class="btn sm" id="tg-test" title="Надіслати перевірне повідомлення собі в Telegram">Надіслати тест</button>' : ''}
               ${boss && p.tg_chat_id ? '<button class="btn sm red" id="tg-off" title="Відʼєднати Telegram від цієї картки">Відʼєднати</button>' : ''}</div>` : ''}</div>` : ''}</div>
         <div class="card"><h3>${IC.lock} Вхід у програму</h3>
           ${can ? `<label class="lb" for="f-lg">Логін або пошта</label><input class="inp" id="f-lg" value="${esc(p.login || '')}" autocapitalize="off" spellcheck="false" placeholder="напр. polina" ${self || boss ? '' : 'disabled'}>
-          <label class="lb" for="f-pw">${p.user_id ? 'Новий пароль' : 'Пароль'}</label><input class="inp" id="f-pw" type="text" autocomplete="new-password" placeholder="${p.user_id ? 'залиште порожнім, щоб не міняти' : 'щонайменше 4 символи'}">
+          <label class="lb" for="f-pw">${p.user_id ? 'Новий пароль' : 'Пароль'}</label><input class="inp" id="f-pw" type="text" autocomplete="new-password" placeholder="${p.user_id ? 'залиште порожнім, щоб не міняти' : 'щонайменше 8 символів'}">
           <button class="btn mt" id="f-login" title="Зберегти логін і пароль">${p.user_id ? 'Змінити вхід' : 'Створити вхід'}</button>
           <div class="hint">Без пошти: логін на кшталт <b>polina</b>. Персонал може входити й за спільним посиланням швидкого входу (Налаштування).</div>` : ''}</div>
       </div>
@@ -698,7 +698,12 @@ const Admin = (() => {
         if (!isNew) { const { error: e2 } = await sb.from('staff').update({ photo_url: photo }).eq('id', p.id); if (e2) throw e2; await Staff.reload(); toast('Фото збережено'); }
       } catch (e) { toast(errMsg(e), 'bad'); }
     };
-    const tgc = $('#tg-copy', main); if (tgc) tgc.onclick = async () => { try { await navigator.clipboard.writeText(`https://t.me/${bot}?start=s_${p.tg_link}`); toast('Посилання скопійовано — надішліть його співробітнику'); } catch (e) { toast('Не вдалося скопіювати', 'bad'); } };
+    // посилання «підключити Telegram» — з бази (update-22: одноразове, видно лише собі, власниці, адміну — не для власниць)
+    let tgUrl = '';
+    const tgLoad = async () => { if (tgUrl) return tgUrl; const { data, error } = await sb.rpc('staff_tg_link', { p_staff: p.id });
+      const link = !error && data ? data : p.tg_link; if (!link) return ''; tgUrl = `https://t.me/${bot}?start=s_${link}`; const a = $('#tg-open', main); if (a) a.href = tgUrl; return tgUrl; };
+    if ($('#tg-open', main)) tgLoad();
+    const tgc = $('#tg-copy', main); if (tgc) tgc.onclick = async () => { try { const u = await tgLoad(); if (!u) throw 0; await navigator.clipboard.writeText(u); toast('Посилання скопійовано — надішліть його співробітнику'); } catch (e) { toast('Не вдалося скопіювати', 'bad'); } };
     const tgt = $('#tg-test', main); if (tgt) tgt.onclick = () => busy(tgt, async () => {
       const { data: { session } } = await sb.auth.getSession();
       const r = await fetch(SB_URL + '/functions/v1/tg-bot', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + session.access_token, apikey: SB_KEY }, body: JSON.stringify({ action: 'test' }) });
@@ -709,6 +714,7 @@ const Admin = (() => {
     const lg = $('#f-login', main); if (lg) lg.onclick = () => busy(lg, async () => {
       if (isNew) return toast('Спершу створіть співробітника', 'bad');
       const login = $('#f-lg', main).value.trim(), pw = $('#f-pw', main).value;
+      if (pw && pw.length < 8) { $('#f-pw', main).classList.add('err'); return toast('Пароль — щонайменше 8 символів', 'bad'); }
       const { error } = await sb.rpc('staff_set_login', { p_staff: p.id, p_login: login, p_password: pw || null });
       if (error) return toast(errMsg(error), 'bad', 5000);
       await Staff.reload(); $('#f-pw', main).value = ''; toast('Вхід збережено' + (pw ? ' — новий пароль діє' : ''));

@@ -266,9 +266,13 @@ async function onUpdate(up: any) {
   const p = text.match(/^\/start\s+(\S+)/)?.[1] ?? '';
 
   if (p.startsWith('s_') && isUuid(p.slice(2))) {
-    const { data: s } = await db.from('staff').select('id, first_name').eq('tg_link', p.slice(2)).eq('is_active', true).maybeSingle();
+    const { data: s } = await db.from('staff').select('id, first_name, tg_chat_id').eq('tg_link', p.slice(2)).eq('is_active', true).maybeSingle();
     if (!s) return send(chat, 'Посилання застаріло. Відкрийте свою картку в програмі й натисніть «Підключити Telegram» ще раз.');
-    await db.from('staff').update({ tg_chat_id: chat }).eq('id', s.id);
+    // посилання одноразове: після підключення — нове; якщо картку вже було підключено в іншому Telegram — попереджаємо той чат
+    await db.from('staff').update({ tg_chat_id: chat, tg_link: crypto.randomUUID() }).eq('id', s.id);
+    if (s.tg_chat_id && Number(s.tg_chat_id) !== chat) {
+      await send(Number(s.tg_chat_id), `⚠️ Сповіщення картки «${esc(s.first_name)}» тепер надходять в інший Telegram. Якщо це були не ви — відкрийте свою картку в програмі й підключіть Telegram знову, і скажіть власниці.`);
+    }
     await db.from('tg_chats').update({ staff_id: s.id }).eq('chat_id', chat);
     return send(chat, `Готово, ${esc(s.first_name)}! 🙌\nСюди приходитимуть сповіщення про нові записи, скасування й перенесення. Що саме надсилати — у вашій картці в програмі.`,
       [[{ text: 'Відкрити програму', url: site(st) + '#/staff' }]]);

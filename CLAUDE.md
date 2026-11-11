@@ -5,6 +5,7 @@
 - **Після змін у css/js онови `?v=` в `index.html`** (копія на vapors.app кешує js/css на тиждень).
 - База — `schema.sql` (уся база, можна запускати повторно). Edge Functions — `supabase/functions/` (`tg-bot` — Telegram-бот @NaNa_studiobot, `team-login` — вхід за посиланням). Токен бота — секрет `TELEGRAM_BOT_TOKEN` у Supabase.
 - Копія сайту — vapors.app/nana (репозиторій PachoErerra/crm, папка `public/nana/`): оновлювати лише на прохання, перед цим перевірити зміни.
+- Нова колонка в `staff` → додати її в `grant select (...) on staff` у `schema.sql` і в `STAFF_COLS` у `js/staff.js` (посилання `tg_link` навмисно не видно через API, лише через `staff_tg_link()`).
 - Час салону — Europe/Kyiv. Нічого з демо-даних не вважати справжнім (`demo = true`).
 - База — Supabase, проєкт `arkwtpihdaqnwhdcjpqf`. У `index.html` лише публічний anon key; секретний `service_role` ніколи не додавати в репозиторій.
 - Будь-який коміт у `main` → Cloudflare Pages (проєкт `nana-studio`, https://nana-studio.pages.dev) сам оновлює сайт за ~1 хвилину. Стара адреса на Netlify (marvelous-axolotl-ddd447.netlify.app) з 05.11.2026 не оновлюється — на безкоштовному тарифі закінчився ліміт.

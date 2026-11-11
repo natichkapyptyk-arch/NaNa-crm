@@ -255,6 +255,8 @@ create table if not exists tg_chats (                 -- хто писав бо�
   last_at timestamptz not null default now()
 );
 
+alter table visits add column if not exists booked_name text;   -- імʼя, яке ввела людина при онлайн-записі
+
 -- одноразові посилання «встановити пароль» (надсилаються в Telegram, діють 24 год)
 create table if not exists pw_links (
   token uuid primary key default gen_random_uuid(),
@@ -387,6 +389,21 @@ begin
   if length(trim(coalesce(p_name, ''))) < 2 then raise exception 'Вкажіть ваше ім’я'; end if;
   if v_phone is null then raise exception 'Вкажіть правильний номер телефону'; end if;
   if coalesce(p_contact, '') not in ('telegram','viber','call','instagram') then raise exception 'Оберіть, як з вами зв’язатись'; end if;
+  -- захист від спаму: на один номер — не більше 3 майбутніх онлайн-візитів і 3 нових за годину; на весь салон — 20 онлайн-записів за годину
+  select id into v_client from clients where phone = v_phone;
+  if v_client is not null then
+    if (select count(distinct a.visit_id) from appointments a join visits v on v.id = a.visit_id
+         where a.client_id = v_client and v.source = 'online' and a.status = 'booked' and a.starts_at > now()) >= 3 then
+      raise exception 'На цей номер уже є 3 майбутні записи. Щоб додати ще, зателефонуйте нам, будь ласка.';
+    end if;
+    if (select count(*) from visits where client_id = v_client and source = 'online' and created_at > now() - interval '1 hour') >= 3 then
+      raise exception 'Забагато записів з цього номера за годину. Спробуйте пізніше або зателефонуйте нам.';
+    end if;
+    v_client := null;
+  end if;
+  if (select count(*) from visits where source = 'online' and created_at > now() - interval '1 hour') >= 20 then
+    raise exception 'Зараз забагато онлайн-записів. Спробуйте за кілька хвилин або зателефонуйте нам.';
+  end if;
   n := jsonb_array_length(coalesce(p_items, '[]'::jsonb));
   if n < 1 or n > 8 then raise exception 'Оберіть від 1 до 8 послуг'; end if;
   -- щоб двоє не зайняли той самий час одночасно
@@ -418,10 +435,10 @@ begin
   if v_main = 0 then raise exception 'Додаткові послуги записуються разом з основною — оберіть, будь ласка, основну послугу'; end if;
 
   insert into clients (name, phone, contact, instagram) values (trim(p_name), v_phone, p_contact, nullif(trim(coalesce(p_instagram, '')), ''))
-    on conflict (phone) do update set contact = excluded.contact, instagram = coalesce(excluded.instagram, clients.instagram)
+    on conflict (phone) do update set contact = excluded.contact, instagram = coalesce(clients.instagram, excluded.instagram)   -- наявний Instagram не перезаписуємо
     returning id into v_client;
-  insert into visits (client_id, source, comment, created_by, ref)
-    values (v_client, 'online', nullif(trim(coalesce(p_comment, '')), ''), null, nullif(left(lower(regexp_replace(coalesce(p_ref, ''), '[^a-zA-Z0-9._-]', '', 'g')), 40), ''))
+  insert into visits (client_id, source, comment, created_by, ref, booked_name)
+    values (v_client, 'online', nullif(trim(coalesce(p_comment, '')), ''), null, nullif(left(lower(regexp_replace(coalesce(p_ref, ''), '[^a-zA-Z0-9._-]', '', 'g')), 40), ''), left(trim(p_name), 80))
     returning id, token into v_visit, v_token;
   for it in select * from jsonb_array_elements(p_items) loop
     v_staff := (it->>'staff')::uuid; v_service := (it->>'service')::uuid; v_start := (it->>'start')::timestamptz;
@@ -438,7 +455,7 @@ end $$;
 create or replace function client_visit(p_token uuid) returns jsonb language sql stable security definer set search_path = public as $$
   select jsonb_build_object(
     'token', v.token, 'created_at', v.created_at, 'comment', v.comment,
-    'client', jsonb_build_object('name', c.name, 'phone', c.phone, 'tg', c.tg_chat_id is not null),
+    'client', jsonb_build_object('name', coalesce(v.booked_name, c.name), 'phone', c.phone, 'tg', c.tg_chat_id is not null),
     'items', coalesce((select jsonb_agg(jsonb_build_object('id', a.id, 'staff_id', a.staff_id, 'service_id', a.service_id,
         'service', s.name, 'master', trim(m.first_name || ' ' || m.last_name), 'photo_url', m.photo_url,
         'starts_at', a.starts_at, 'ends_at', a.ends_at, 'price', a.price, 'status', a.status) order by a.starts_at)
@@ -678,7 +695,7 @@ begin
   end if;
   if v_login = '' then raise exception 'Вкажіть логін або пошту'; end if;
   if v_login !~ '^[a-z0-9._@+-]+$' then raise exception 'Логін — латинські літери, цифри, крапка, дефіс'; end if;
-  if p_password is not null and length(p_password) < 4 then raise exception 'Пароль — щонайменше 4 символи'; end if;
+  if p_password is not null and length(p_password) < 8 then raise exception 'Пароль — щонайменше 8 символів'; end if;
   if s.user_id is null and p_password is null then raise exception 'Вкажіть пароль'; end if;
   v_email := case when v_login like '%@%' then v_login else v_login || '@nana.local' end;
   if exists (select 1 from auth.users where lower(email) = v_email and id is distinct from s.user_id) then
@@ -1631,6 +1648,35 @@ end $$;
 
 -- ===== Фото персоналу =====
 insert into storage.buckets (id, name, public) values ('photos', 'photos', true) on conflict (id) do nothing;
+
+-- ===== Захист (update-22): посилання Telegram співробітників, ліміти онлайн-запису =====
+-- посилання «підключити Telegram» (tg_link) не читається через API: його видає staff_tg_link() — собі, власниці,
+-- адміну — лише для не-власниць. Після підключення бот міняє посилання (одноразове).
+revoke select on staff from anon, authenticated;
+grant select (id, user_id, role, last_name, first_name, middle_name, birth_date, experience, bio, photo_url, telegram, phone, email,
+  login, start_date, is_active, is_bookable, sort, notify, tg_chat_id, demo, created_at, see_money) on staff to authenticated;
+-- ⚠ нова колонка в staff → додати її в цей grant, інакше сайт її не побачить
+
+create or replace function staff_tg_link(p_staff uuid, p_regen boolean default false) returns uuid
+language plpgsql volatile security definer set search_path = public as $$
+declare s staff;
+begin
+  select * into s from staff where id = p_staff;
+  if s.id is null then raise exception 'Співробітника не знайдено'; end if;
+  if not (p_staff = me() or coalesce(my_role(), '') = 'owner' or (coalesce(is_boss(), false) and s.role <> 'owner')) then
+    raise exception 'Немає доступу';
+  end if;
+  if p_regen then update staff set tg_link = gen_random_uuid() where id = p_staff returning tg_link into s.tg_link; end if;
+  return s.tg_link;
+end $$;
+revoke execute on function staff_tg_link(uuid, boolean) from public, anon;
+grant execute on function staff_tg_link(uuid, boolean) to authenticated;
+
+
+-- фото: до 5 МБ і лише картинки
+update storage.buckets set file_size_limit = 5242880,
+  allowed_mime_types = array['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/heic', 'image/heif'] where id = 'photos';
+
 drop policy if exists p_photos_ins on storage.objects;
 create policy p_photos_ins on storage.objects for insert to authenticated with check (bucket_id = 'photos' and (select public.is_staff()));
 drop policy if exists p_photos_read on storage.objects;
