@@ -767,7 +767,7 @@ create trigger staff_guard before insert or update on staff for each row execute
 create or replace function trg_appt_notify() returns trigger language plpgsql security definer set search_path = public as $$
 declare k text; t text; ts text; b text; v_src text; v_old uuid; v_client boolean := false; v_actor text;
 begin
-  if new.demo then return new; end if;
+  -- демо-записи теж сповіщають (поки сайт у тесті), з позначкою «🧪»
   if tg_op = 'INSERT' then
     select source into v_src from visits where id = new.visit_id;
     k := 'new'; t := case when v_src = 'online' then 'Новий онлайн-запис' else 'Новий запис' end; ts := 'Ви записали';
@@ -780,6 +780,7 @@ begin
   else
     return new;
   end if;
+  if new.demo then t := '🧪 ' || t; ts := '🧪 ' || ts; end if;
   -- хто зробив зміну в панелі (для інших — «Запис перенесено — Поліна»)
   if not v_client and auth.uid() is not null then select first_name into v_actor from staff where user_id = auth.uid() limit 1; end if;
   select s.name || ' · ' || to_char(new.starts_at at time zone 'Europe/Kyiv', 'DD.MM HH24:MI') || '–'
@@ -851,7 +852,8 @@ create trigger appt_log after insert or update on appointments for each row exec
 create or replace function trg_notif_tg() returns trigger language plpgsql security definer set search_path = public as $$
 declare k uuid;
 begin
-  if new.read_at is not null then return new; end if;   -- «Ви записали…» (власна дія) — без Telegram
+  -- «Ви записали…» (власна дія) — у Telegram лише тим, хто увімкнув «Мої власні дії» (notify.self)
+  if new.read_at is not null and not exists (select 1 from staff where id = new.staff_id and coalesce((notify->>'self')::boolean, false)) then return new; end if;
   if exists (select 1 from staff where id = new.staff_id and tg_chat_id is not null and coalesce((notify->>'tg')::boolean, true)) then
     select hook_key into k from app_secrets where id = 1;
     perform net.http_post(
