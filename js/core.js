@@ -259,6 +259,17 @@ function sheet({ title = '', body = '', foot = '', wide = false, onClose = null 
   return api;
 }
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && sheets.length) sheets[sheets.length - 1].tryClose(); });
+// хрестик «очистити» в усіх полях пошуку (.search): з'являється, коли щось введено; один натиск — стерти все
+function srchSync(box) {
+  const i = box.querySelector('input'); if (!i) return;
+  let x = box.querySelector('.sx');
+  if (!x) { x = document.createElement('button'); x.type = 'button'; x.className = 'sx'; x.title = 'Стерти пошук'; x.setAttribute('aria-label', 'Стерти пошук'); x.textContent = '✕'; box.appendChild(x); box.dataset.sx = '1'; }
+  x.hidden = !i.value;
+}
+document.addEventListener('input', (e) => { const b = e.target.closest && e.target.closest('.search'); if (b) srchSync(b); }, true);
+document.addEventListener('click', (e) => { const x = e.target.closest && e.target.closest('.search .sx'); if (!x) return;
+  const i = x.parentElement.querySelector('input'); i.value = ''; i.dispatchEvent(new Event('input', { bubbles: true })); i.focus(); x.hidden = true; });
+new MutationObserver(() => document.querySelectorAll('.search:not([data-sx])').forEach(srchSync)).observe(document.documentElement, { childList: true, subtree: true });
 // «Є незбережені зміни»: 'save' | 'discard' | null (лишитись)
 function saveAsk() {
   return new Promise((res) => {
