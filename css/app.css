@@ -693,4 +693,5 @@ label.check{display:flex;align-items:center;gap:8px;font-size:14px;cursor:pointe
 @media (prefers-reduced-motion:reduce){.btn.pri.dirty{animation:none}}
 
 /* картка клієнта: на телефоні кнопка Instagram — лише іконка, поле посилання ширше */
-@media (max-width:560px){#c-igo span{display:none}#c-igo{padding:0 14px}}
+@media (max-width:560px){#c-igo span,#c-igp span{display:none}#c-igo,#c-igp{padding:0 12px}}
+.hint .ok-t{color:var(--ok);font-weight:700} .hint.bad-t{color:var(--bad)} .hint .warn-t{color:var(--warn);margin-top:4px;font-weight:600}

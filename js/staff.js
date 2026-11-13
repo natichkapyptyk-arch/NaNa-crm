@@ -1231,6 +1231,7 @@ const Staff = (() => {
         <label class="lb">Зручний звʼязок</label><div class="chips" id="c-c">${Object.entries(CONTACTS).map(([k, [n]]) => `<button class="chip ${c.contact === k ? 'on' : ''}" data-cc="${k}" title="Клієнту зручно: ${n}">${n}</button>`).join('')}</div>
         <div id="c-igw" class="${c.contact === 'instagram' || c.instagram ? '' : 'hide'}"><label class="lb" for="c-ig">Посилання на Instagram</label><div class="row" style="gap:8px;flex-wrap:nowrap">
           <input class="inp" id="c-ig" style="flex:1;min-width:0" value="${esc(igUrl(c.instagram).slice(8))}" placeholder="Вставте посилання або @нікнейм" autocomplete="off">
+          <button class="btn nw" id="c-igp" type="button" title="Вставити скопійоване посилання на Instagram">📋<span>Вставити</span></button>
           <a class="btn nw" id="c-igo" target="_blank" rel="noopener" href="${esc(igUrl(c.instagram) || '#')}" title="Відкрити профіль клієнта в Instagram" style="${igUrl(c.instagram) ? '' : 'opacity:.4;pointer-events:none'}">${IC.ig}<span>Відкрити</span></a></div>
           <div class="hint" id="c-igh"></div></div>
         <label class="lb" for="c-no">Нотатки</label><textarea class="inp" id="c-no" rows="2" placeholder="Вподобання">${esc(c.note || '')}</textarea>
@@ -1246,9 +1247,32 @@ const Staff = (() => {
       const show = contact === 'instagram' || !!$('#c-ig', s.el).value.trim(); $('#c-igw', s.el).classList.toggle('hide', !show);
       if (contact === 'instagram' && !$('#c-ig', s.el).value.trim()) $('#c-ig', s.el).focus(); }));
     const igIn = $('#c-ig', s.el), igGo = $('#c-igo', s.el), igH = $('#c-igh', s.el);
-    const igSync = () => { const v = igIn.value.trim(), u = igUrl(v); igGo.href = u || '#'; igGo.style.opacity = u ? '' : '.4'; igGo.style.pointerEvents = u ? '' : 'none';
-      igH.textContent = v && !u ? 'Не схоже на посилання Instagram' : u && u.slice(8) !== v.replace(/^https?:\/\/(www\.)?/i, '') ? '→ ' + u.slice(8) : ''; };
-    igIn.oninput = igSync; igIn.onblur = () => { const u = igUrl(igIn.value); if (u) igIn.value = u.slice(8); igSync(); };
+    // підказка під полем: нікнейм, що не так з посиланням, і чи не записано цей Instagram в іншої клієнтки
+    const igWhy = (v) => { const t = v.replace(/^https?:\/\/(www\.)?/i, '');
+      if (/instagram\.com\/(p|reel|reels|stories|explore)\//i.test(t)) return 'Це посилання на допис чи сторіз, а не на профіль. Відкрийте профіль клієнтки й скопіюйте його посилання.';
+      const n = (t.match(/instagram\.com\/(?:_u\/)?([^/?#]+)/i) || [, t])[1].replace(/^@/, '');
+      if (/\s/.test(n)) return 'У нікнеймі не буває пробілів.';
+      if (/[^A-Za-z0-9._]/.test(n)) return 'Нікнейм Instagram — лише латинські літери, цифри, крапка й «_».';
+      if (n.length > 30) return 'Задовгий нікнейм — у Instagram до 30 символів.';
+      return 'Не схоже на посилання Instagram.'; };
+    let igT = null;
+    const igSync = () => { const v = igIn.value.trim(), u = igUrl(v), nick = igNick(v); igGo.href = u || '#'; igGo.style.opacity = u ? '' : '.4'; igGo.style.pointerEvents = u ? '' : 'none';
+      igH.className = 'hint'; clearTimeout(igT);
+      if (!v) { igH.textContent = ''; return; }
+      if (!u) { igH.textContent = igWhy(v); igH.classList.add('bad-t'); return; }
+      igH.innerHTML = `<span class="ok-t">✓ @${esc(nick)}</span> — натисніть ${IC.ig.replace('<svg', '<svg width="13" height="13" style="vertical-align:-2px"')}, щоб перевірити профіль`;
+      igT = setTimeout(async () => {   // той самий Instagram в іншої клієнтки?
+        const { data } = await sb.from('clients').select('id, name').ilike('instagram', nick).neq('id', c.id).limit(1);
+        if (data?.[0] && igNick(igIn.value) === nick) igH.insertAdjacentHTML('beforeend', `<div class="warn-t">⚠️ Цей Instagram уже записаний у клієнтки «${esc(data[0].name)}» — можливо, це та сама людина (тоді «Обʼєднати з іншим клієнтом»).</div>`);
+      }, 500); };
+    const igNorm = () => { const u = igUrl(igIn.value); if (u) igIn.value = u.slice(8); igSync(); };
+    igIn.oninput = igSync; igIn.onblur = igNorm; igIn.addEventListener('paste', () => setTimeout(igNorm, 0));
+    igSync();
+    $('#c-igp', s.el).onclick = async () => {   // «Вставити»: з буфера обміну одним натиском (телефон може спитати дозвіл)
+      try { const t = (await navigator.clipboard.readText()).trim(); if (!t) throw 0;
+        igIn.value = t; igNorm(); igIn.dispatchEvent(new Event('input', { bubbles: true }));
+        if (!igUrl(t)) toast('У буфері не посилання на Instagram — скопіюйте посилання на профіль', 'bad', 4500);
+      } catch (e) { igIn.focus(); toast('Не вдалося вставити автоматично — натисніть на поле й утримуйте → «Вставити»', 'bad', 5000); } };
     // є незбережені зміни → кнопка «Зберегти зміни» пульсує, щоб її не шукати
     const csb = $('#c-save', s.el), cw = watchDirty(csb.closest('.card') || s.el, csb, { sheet: s }), dirty = () => cw.reset();
     csb.onclick = async (e) => { if (await busy(e.currentTarget, async () => {
