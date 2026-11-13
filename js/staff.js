@@ -1227,12 +1227,12 @@ const Staff = (() => {
       ${next ? `<div class="hint row wrap" style="gap:8px">📅 Наступний запис: <b>${esc(relDay(dayOf(next.starts_at)))}, ${fmtT(next.starts_at)}</b><button class="btn sm" id="c-rem" title="Готовий текст нагадування для Viber, Telegram або SMS">${IC.bell} Нагадати</button></div>` : ''}
       <div class="sect"><h3>Дані клієнта</h3>
         <div class="two"><div><label class="lb" for="c-n">Імʼя <span class="req">*</span></label><input class="inp" id="c-n" value="${esc(splitName(c.name)[0])}" autocomplete="off"></div><div><label class="lb" for="c-ln">Прізвище</label><input class="inp" id="c-ln" value="${esc(splitName(c.name)[1])}" autocomplete="off"></div></div>
-        <div class="two"><div><label class="lb" for="c-p">Телефон</label><input class="inp" id="c-p" type="tel" value="${esc(c.phone)}"></div><div></div></div><div id="c-dup"></div>
+        <div class="two"><div><label class="lb" for="c-p">Телефон</label><input class="inp" id="c-p" type="tel" value="${esc(c.phone)}"></div><div><label class="lb" for="c-b">День народження</label><input class="inp" id="c-b" type="date" value="${c.birthday || ''}"></div></div><div id="c-dup"></div>
         <label class="lb">Зручний звʼязок</label><div class="chips" id="c-c">${Object.entries(CONTACTS).map(([k, [n]]) => `<button class="chip ${c.contact === k ? 'on' : ''}" data-cc="${k}" title="Клієнту зручно: ${n}">${n}</button>`).join('')}</div>
-        <div class="two"><div id="c-igw" class="${c.contact === 'instagram' || c.instagram ? '' : 'hide'}"><label class="lb" for="c-ig">Посилання на Instagram</label><div class="row" style="gap:8px;flex-wrap:nowrap">
-          <input class="inp" id="c-ig" value="${esc(igUrl(c.instagram).slice(8))}" placeholder="Вставте посилання або @нікнейм" autocomplete="off">
+        <div id="c-igw" class="${c.contact === 'instagram' || c.instagram ? '' : 'hide'}"><label class="lb" for="c-ig">Посилання на Instagram</label><div class="row" style="gap:8px;flex-wrap:nowrap">
+          <input class="inp" id="c-ig" style="flex:1;min-width:0" value="${esc(igUrl(c.instagram).slice(8))}" placeholder="Вставте посилання або @нікнейм" autocomplete="off">
           <a class="btn nw" id="c-igo" target="_blank" rel="noopener" href="${esc(igUrl(c.instagram) || '#')}" title="Відкрити профіль клієнта в Instagram" style="${igUrl(c.instagram) ? '' : 'opacity:.4;pointer-events:none'}">${IC.ig}<span>Відкрити</span></a></div>
-          <div class="hint" id="c-igh"></div></div><div><label class="lb" for="c-b">День народження</label><input class="inp" id="c-b" type="date" value="${c.birthday || ''}"></div></div>
+          <div class="hint" id="c-igh"></div></div>
         <label class="lb" for="c-no">Нотатки</label><textarea class="inp" id="c-no" rows="2" placeholder="Вподобання">${esc(c.note || '')}</textarea>
         <button class="btn pri mt" id="c-save" title="Зберегти дані клієнта">Зберегти</button></div>
       <div class="sect"><h3>Історія (${hist.length})</h3>${hist.map((x) => `<div class="list-row" style="cursor:default"><div class="grow"><div class="nm sm">${esc(svcById(x.service_id)?.name || '')} <span class="pill ${x.status}">${STATUS[x.status]}</span></div>
