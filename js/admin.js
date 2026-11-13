@@ -656,7 +656,7 @@ const Admin = (() => {
               + '<div class="empty" id="ms-none" hidden>Послуг не знайдено</div>'; })()}
           <div class="hint">Колонки: тривалість (хв) і ціна (₴) саме в цього майстра.</div></div>
         <div class="card"><h3>Сповіщення</h3>
-          <div class="col">${[['new', 'Нові записи'], ['cancel', 'Скасування'], ['move', 'Перенесення'], ['confirm', 'Клієнт підтвердив візит (✅ у боті)'], ['daily', 'Розклад на день зранку (у Telegram)'], ['close', 'Ввечері: «чи закрила записи?» (у Telegram)'], ['open', 'З 22-го: «відкрий графік на наступний місяць» (у Telegram)'], ['report', '1 числа: звіт за місяць з Excel (лише власниця / адмін)'], ['weekly', 'Понеділок: підсумок тижня (лише власниця / адмін)'], ['self', 'Мої власні дії (записала, перенесла, скасувала) — теж у Telegram']].map(([k, n]) => `<label class="sw" ${k === 'report' || k === 'weekly' ? `data-boss-nt ${p.role === 'master' ? 'hidden' : ''}` : ''} title="Отримувати сповіщення: ${n.toLowerCase()}"><input type="checkbox" data-nt="${k}" ${(k === 'self' ? nt[k] === true : nt[k] !== false) ? 'checked' : ''} ${can ? '' : 'disabled'}><i></i><span>${n}</span></label>`).join('')}
+          <div class="col">${[['new', 'Нові записи'], ['cancel', 'Скасування'], ['move', 'Перенесення'], ['confirm', 'Клієнт підтвердив візит (✅ у боті)'], ['daily', 'Розклад на день зранку (у Telegram)'], ['close', 'Ввечері: «чи закрила записи?» (у Telegram)'], ['open', 'З 22-го: «відкрий графік на наступний місяць» (у Telegram)'], ['report', '1 числа: звіт за місяць з Excel (лише власниця / адмін)'], ['weekly', 'Понеділок: підсумок тижня (лише власниця / адмін)'], ['dsum', 'Ввечері: підсумок дня (лише власниця / адмін)'], ['self', 'Мої власні дії (записала, перенесла, скасувала) — теж у Telegram']].map(([k, n]) => `<label class="sw" ${k === 'report' || k === 'weekly' || k === 'dsum' ? `data-boss-nt ${p.role === 'master' ? 'hidden' : ''}` : ''} title="Отримувати сповіщення: ${n.toLowerCase()}"><input type="checkbox" data-nt="${k}" ${(k === 'self' ? nt[k] === true : nt[k] !== false) ? 'checked' : ''} ${can ? '' : 'disabled'}><i></i><span>${n}</span></label>`).join('')}
           <label class="sw" title="Дублювати сповіщення в Telegram"><input type="checkbox" data-nt="tg" ${nt.tg !== false ? 'checked' : ''} ${can ? '' : 'disabled'}><i></i><span>Надсилати в Telegram</span></label></div>
           <div class="hint">${p.role === 'master' ? 'Майстер отримує сповіщення лише про свої записи, а зранку — розклад лише своїх записів.' : 'Власниця й адмін отримують сповіщення про всі записи, а зранку — розклад усього салону.'}</div>
           ${!isNew && bot ? `<div class="sect"><h3>${IC.tg.replace('<svg', '<svg width="18" height="18"')} Telegram ${p.tg_chat_id ? '<span class="pill done">підключено</span>' : '<span class="pill g">не підключено</span>'}</h3>
@@ -792,7 +792,7 @@ const Admin = (() => {
     const { count: demoN } = await sb.from('appointments').select('id', { count: 'exact', head: true }).eq('demo', true);
     let methods = [...(s.pay_methods || [])];
     // коли бот востаннє надсилав (дати *_sent у settings); ⚠️ — якщо увімкнено, а надсилань давно не було
-    const TGL = { daily: ['daily_sent', 'daily_hour', 2, 'надіслано'], close: ['close_sent', 'close_hour', 2, 'надіслано'], report: ['report_sent', 'report_on', 32, 'автоматично'],
+    const TGL = { daily: ['daily_sent', 'daily_hour', 2, 'надіслано'], dsum: ['dsum_sent', 'dsum_hour', 2, 'надіслано'], close: ['close_sent', 'close_hour', 2, 'надіслано'], report: ['report_sent', 'report_on', 32, 'автоматично'],
       weekly: ['weekly_sent', 'weekly_on', 8, 'автоматично'], nudge: ['nudge_sent', 'nudge1_days', 2, 'перевірка'], open: ['open_sent', 'open_day', 0, 'нагадування'] };
     const tgLastTxt = (key, d) => { const [, on, warnD, w] = TGL[key];
       const enabled = key === 'nudge' ? (s.nudge1_days != null || s.nudge2_days != null) : (typeof s[on] === 'boolean' ? s[on] : s[on] != null);
@@ -842,6 +842,10 @@ const Admin = (() => {
           <option value="" ${s.close_hour == null ? 'selected' : ''}>не питати</option>${[17, 18, 19, 20, 21, 22, 23].map((h) => `<option value="${h}" ${+s.close_hour === h && s.close_hour != null ? 'selected' : ''}>${h}:00</option>`).join('')}</select></div>
           <div><label class="lb">&nbsp;</label><button class="btn" id="s-cln" title="Надіслати перевірку за сьогодні зараз — тим, у кого сьогодні були записи">${IC.tg.replace('<svg', '<svg width="16" height="16"')} Надіслати зараз</button></div></div>
           <div class="hint">Після кнопки «Так, усе закрила» бот перевіряє, чи всі записи за день «Завершено» або «Не прийшла». Якщо ні — пише, які саме, і просить натиснути «Готово» ще раз.</div></div></details>` : ''}
+        ${'dsum_hour' in s ? `<details class="tg-it" data-tg="dsum"><summary><div class="grow"><b>Підсумок дня</b>${tgLast('dsum')}</div><span class="tg-v" data-tgv></span></summary><div class="tg-b"><div class="two"><div><label class="lb" for="s-dsh">Підсумок дня в Telegram о</label><select class="inp" id="s-dsh" title="Увечері власниці й адміну — одним повідомленням: скільки сьогодні завершено візитів, нових записів, перенесень і скасувань, по майстрах">
+          <option value="" ${s.dsum_hour == null ? 'selected' : ''}>не надсилати</option>${[18, 19, 20, 21, 22, 23].map((h) => `<option value="${h}" ${+s.dsum_hour === h && s.dsum_hour != null ? 'selected' : ''}>${h}:00</option>`).join('')}</select></div>
+          <div><label class="lb">&nbsp;</label><button class="btn" id="s-dsn" title="Надіслати підсумок за сьогодні собі в Telegram зараз">${IC.tg.replace('<svg', '<svg width="16" height="16"')} Підсумок зараз</button></div></div>
+          <div class="hint">Завершені візити${money$() ? ' і виторг' : ''}, нові записи (скільки онлайн), перенесення, скасування (скільки клієнтом), неявки й незакриті записи — і коротко по кожній майстрині. Поки увімкнені тестові сповіщення, окремим рядком — демо-записи 🧪.</div></div></details>` : ''}
         ${'report_on' in s && money$() ? `<details class="tg-it" data-tg="report"><summary><div class="grow"><b>Щомісячний звіт</b>${tgLast('report')}</div><span class="tg-v" data-tgv></span></summary><div class="tg-b"><div class="two"><div><label class="lb" for="s-ro">Щомісячний звіт у Telegram</label><select class="inp" id="s-ro" title="1 числа о 10:00 власниці й адміну приходить Excel з клієнтками за минулий місяць і цифри (виторг, візити, нові клієнти)">
           <option value="1" ${s.report_on ? 'selected' : ''}>1 числа о 10:00</option><option value="0" ${s.report_on ? '' : 'selected'}>не надсилати</option></select></div>
           <div><label class="lb">&nbsp;</label><button class="btn" id="s-rn" title="Надіслати звіт за цей місяць (з 1 числа по сьогодні) собі в Telegram зараз">${IC.tg.replace('<svg', '<svg width="16" height="16"')} Звіт зараз</button></div></div></div></details>` : ''}
@@ -869,7 +873,8 @@ const Admin = (() => {
         ${s.tg_bot ? `<label class="lb">Telegram-бот</label><a class="btn sm" href="https://t.me/${esc(s.tg_bot)}" target="_blank" rel="noopener" title="Відкрити бота салону">${IC.tg.replace('<svg', '<svg width="16" height="16"')} @${esc(s.tg_bot)}</a>` : ''}</div>
       </div>
       ${demoN ? `<div class="card full"><h3>Демо-дані</h3><p class="mut sm" style="margin:0 0 10px">У програмі ${demoN} демо-записів і приклади клієнтів — щоб подивитись, як усе працює. Коли почнете працювати по-справжньому, приберіть їх.</p>
-        <button class="btn red" id="s-demo" title="Видалити всі демо-записи, демо-клієнтів і приклад-майстра">Прибрати демо-дані</button></div>` : ''}
+        <div class="hint" style="margin:0 0 10px">Разом з демо-даними вимкнуться й тестові сповіщення 🧪 у Telegram.</div>
+        <button class="btn red" id="s-demo" title="Видалити всі демо-записи, демо-клієнтів і приклад-майстра; тестові сповіщення 🧪 вимкнуться">Прибрати демо-дані</button></div>` : ''}
     </div><div class="row mt2" style="justify-content:flex-end;align-items:center;gap:12px"><span class="sm mut" id="s-auto" title="Зміни в налаштуваннях зберігаються самі через пару секунд">Зміни зберігаються автоматично</span><button class="btn pri lg" id="s-save" title="Зберегти налаштування">Зберегти налаштування</button></div>`;
     const drawPm = () => { $('#s-pm', main).innerHTML = methods.map((m, i) => `<span class="chip on">${esc(m)} <button class="btn ghost ico sm" data-rm="${i}" title="Прибрати «${esc(m)}»" style="width:22px;min-height:22px;color:#fff;border:0">${IC.x.replace('width="20" height="20"', 'width="14" height="14"')}</button></span>`).join('');
       $$('[data-rm]', main).forEach((b) => (b.onclick = () => { if (methods.length < 2) return toast('Має лишитись хоча б один спосіб', 'bad'); methods.splice(+b.dataset.rm, 1); drawPm(); })); };
@@ -881,7 +886,7 @@ const Admin = (() => {
     // Telegram-рядки: короткий підсумок праворуч (оновлюється одразу при зміні)
     const tgSel = (id, off) => { const e = $(id, main); if (!e) return ['', true]; const t = e.options[e.selectedIndex]?.text || ''; return e.value === '' || e.value === '0' ? [off, true] : [t, false]; };
     const TGV = {
-      daily: () => tgSel('#s-dh', 'вимкнено'), close: () => tgSel('#s-clh', 'вимкнено'),
+      daily: () => tgSel('#s-dh', 'вимкнено'), close: () => tgSel('#s-clh', 'вимкнено'), dsum: () => tgSel('#s-dsh', 'вимкнено'),
       report: () => { const [t, o] = tgSel('#s-ro', 'вимкнено'); return [o ? t : '1 числа', o]; },
       weekly: () => { const [t, o] = tgSel('#s-wo', 'вимкнено'); return [o ? t : 'пн 10:00', o]; },
       nudge: () => { const v = (id) => $(id, main)?.value.trim() || '', a = v('#s-n1'), b = v('#s-n2'), pc = v('#s-np') || 10;
@@ -919,6 +924,9 @@ const Admin = (() => {
       const { data, error } = await sb.rpc('open_send_now'); if (error) return toast(errMsg(error), 'bad', 5000); tgNow('open');
       toast(data ? `Надіслано: ${data} ${plural(data, 'повідомлення', 'повідомлення', 'повідомлень')}` : 'Усі вже відкрили графік (або ніхто не підключив бота)', data ? 'ok' : '', 5000);
     });
+    const dsn = $('#s-dsn', main); if (dsn) dsn.onclick = (e) => busy(e.currentTarget, async () => {
+      const { error } = await sb.rpc('dsum_send_now'); if (error) return toast(errMsg(error), 'bad', 6000);
+      toast('Підсумок за сьогодні прийде у ваш Telegram за кілька секунд', 'ok', 4500); });
     const cn = $('#s-cln', main); if (cn) cn.onclick = (e) => busy(e.currentTarget, async () => {
       if (!(await confirmBox('Надіслати вечірню перевірку зараз?', { ok: 'Надіслати', sub: 'Кожна майстриня з підключеним ботом, у якої сьогодні були записи, отримає питання «Чи позакривала записи?». Автоматично сьогодні вже не надсилатиметься.' }))) return;
       const { data, error } = await sb.rpc('close_send_now'); if (error) return toast(errMsg(error), 'bad', 5000); tgNow('close');
@@ -942,6 +950,7 @@ const Admin = (() => {
         row.nudge_pct = Math.min(50, Math.max(1, +$('#s-np', main).value || 10)); }
       if ($('#s-od', main)) row.open_day = $('#s-od', main).value === '' ? null : +$('#s-od', main).value;
       if ($('#s-clh', main)) row.close_hour = $('#s-clh', main).value === '' ? null : +$('#s-clh', main).value;
+      if ($('#s-dsh', main)) row.dsum_hour = $('#s-dsh', main).value === '' ? null : +$('#s-dsh', main).value;
       if (toMin(row.close_time) <= toMin(row.open_time)) return toast('Час закриття має бути пізніше за відкриття', 'bad');
       const { error } = await sb.from('settings').update(row).eq('id', 1); if (error) return toast(errMsg(error), 'bad');
       await Staff.reload(); if (!quiet) toast('Налаштування збережено'); return true;
