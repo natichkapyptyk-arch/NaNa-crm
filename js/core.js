@@ -362,7 +362,8 @@ window.addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); inst
 window.addEventListener('appinstalled', () => { installEvt = null; toast('Застосунок встановлено — шукайте іконку NaNa на екрані телефона', 'ok', 5000); });
 if ('serviceWorker' in navigator) window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
 // панель персоналу встановлюється окремим застосунком «NaNa CRM», що відкривається одразу на календарі
-function setManifest(staff) { const l = document.getElementById('mf'), h = staff ? 'manifest-staff.webmanifest' : 'manifest.webmanifest'; if (l && l.getAttribute('href') !== h) l.setAttribute('href', h); }
+function setManifest(staff) { const l = document.getElementById('mf'), h = staff ? 'manifest-staff.webmanifest' : 'manifest.webmanifest'; if (l && l.getAttribute('href') !== h) l.setAttribute('href', h);
+  const t = document.getElementById('mt'); if (t) t.setAttribute('content', staff ? 'NaNa CRM' : 'NaNa'); }
 async function installApp(staff = true) {
   if (isStandalone()) return toast('Ви вже в застосунку 🙂');
   if (installEvt) { const e = installEvt; installEvt = null; e.prompt(); await e.userChoice.catch(() => null); return; }
@@ -406,7 +407,12 @@ async function route() {
   leaveGuard = null;
   if (location.hash !== curHash) { prevHash = curHash; curHash = location.hash; }
   hideTip(); while (sheets.length) sheets[sheets.length - 1].close();
-  const h = decodeURIComponent(location.hash.replace(/^#/, ''));
+  let h = decodeURIComponent(location.hash.replace(/^#/, ''));
+  // іконка на головному екрані: хто вже заходив у панель персоналу — одразу в календар, а не на сторінку запису
+  if (isStandalone()) {
+    if (h === 'staff' || h.startsWith('/staff')) ls.set('app', 'staff');
+    else if ((h === '' || h === '/') && ls.get('app') === 'staff') { location.replace('#/staff/cal'); return; }
+  }
   setManifest(h === 'staff' || h.startsWith('/staff') || h.startsWith('/team/'));
   if (h.startsWith('/v/')) return Client.visit(h.slice(3));
   if (h.startsWith('/team/')) return Staff.quick(h.slice(6));

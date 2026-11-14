@@ -263,7 +263,7 @@ const Client = (() => {
   /* ---------- малювання ---------- */
   function render() {
     const v = { masters: vMasters, services: vServices, time: vTime, cart: vCart, contacts: vContacts, done: vDone }[st.step] || vMasters;
-    app().innerHTML = `<div class="cl-wrap">${hero(st.step !== 'masters')}${myVisitsCard()}${v()}</div>${bottomBar()}`;
+    app().innerHTML = `<div class="cl-wrap">${hero(st.step !== 'masters')}${myVisitsCard()}${v()}${isStandalone() ? '<div class="mt2 mb" style="text-align:center"><a class="sm mut" href="#/staff/cal" title="Увійти в панель салону — далі іконка відкриватиме одразу календар">Вхід для персоналу →</a></div>' : ''}</div>${bottomBar()}`;
     bind();
     const on = $('.dpill.on'); if (on) on.scrollIntoView({ block: 'nearest', inline: 'center' });
   }

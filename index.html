@@ -18,20 +18,22 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="NaNa">
+<meta name="apple-mobile-web-app-title" id="mt" content="NaNa">
+<script>/* панель персоналу → маніфест «NaNa CRM» (відкривається одразу на календарі) ще до того, як iPhone прочитає сторінку */
+(function(){if(/^#\/?(staff|team\/)/.test(location.hash)){document.getElementById('mf').setAttribute('href','manifest-staff.webmanifest');document.getElementById('mt').setAttribute('content','NaNa CRM');}})();</script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;700;800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="css/app.css?v=202611131515">
+<link rel="stylesheet" href="css/app.css?v=202611141350">
 </head>
 <body>
 <div id="splash" aria-hidden="true"><img src="img/banana-t.png" alt=""><b>NaNa</b><i></i></div>
 <div id="app"><div class="spin"></div></div>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
-<script src="js/core.js?v=202611131515"></script>
-<script src="js/book.js?v=202611131515"></script>
-<script src="js/staff.js?v=202611131515"></script>
-<script src="js/admin.js?v=202611131515"></script>
+<script src="js/core.js?v=202611141350"></script>
+<script src="js/book.js?v=202611141350"></script>
+<script src="js/staff.js?v=202611141350"></script>
+<script src="js/admin.js?v=202611141350"></script>
 <script>route();</script>
 <script>/* заставка застосунку: ховаємо, коли зʼявилась перша сторінка (не раніше 0,7 с і не пізніше 8 с) */
 (function () { var s = document.getElementById('splash'); if (!s) return; if (getComputedStyle(s).display === 'none') { s.remove(); return; }
