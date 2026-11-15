@@ -517,13 +517,14 @@ const Admin = (() => {
       $('#sv-phs', el).innerHTML = photos.map((u, k) => `<div class="ph"><img src="${esc(u)}" alt="">${k ? `<button class="btn" data-first="${k}" title="Зробити головним (першим)" style="left:4px;right:auto">★</button>` : '<b>головне</b>'}<button class="btn" data-rmph="${k}" title="Прибрати фото">${IC.x.replace('width="20" height="20"', 'width="14" height="14"')}</button></div>`).join('') +
         (photos.length < 6 ? `<label class="add" title="Додати фото з телефона або компʼютера">${IC.plus}Додати<input type="file" accept="image/*" multiple hidden id="sv-phin"></label>` : '');
       $$('[data-rmph]', el).forEach((b) => (b.onclick = () => { photos.splice(+b.dataset.rmph, 1); drawPh(); }));
+      $$('#sv-phs .ph img', el).forEach((im, k) => { im.title = 'Відкрити на весь екран'; im.style.cursor = 'zoom-in'; im.onclick = () => lightbox(photos, k); });
       $$('[data-first]', el).forEach((b) => (b.onclick = () => { const [u] = photos.splice(+b.dataset.first, 1); photos.unshift(u); drawPh(); }));
       const inp = $('#sv-phin', el); if (inp) inp.onchange = async () => {
         const files = [...inp.files].slice(0, 6 - photos.length); if (!files.length) return;
         const lab = inp.closest('label'); lab.innerHTML = '<span class="xs">Завантаження…</span>';
         for (const f of files) {
           try {
-            const blob = await resizeImg(f, 1200); const path = `services/${sid}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}.jpg`;
+            const blob = await resizeImg(f, 1600); const path = `services/${sid}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}.jpg`;
             const { error } = await sb.storage.from('photos').upload(path, blob, { contentType: 'image/jpeg' }); if (error) throw error;
             photos.push(sb.storage.from('photos').getPublicUrl(path).data.publicUrl);
           } catch (e) { toast(errMsg(e), 'bad'); }

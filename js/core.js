@@ -270,6 +270,29 @@ document.addEventListener('input', (e) => { const b = e.target.closest && e.targ
 document.addEventListener('click', (e) => { const x = e.target.closest && e.target.closest('.search .sx'); if (!x) return;
   const i = x.parentElement.querySelector('input'); i.value = ''; i.dispatchEvent(new Event('input', { bubbles: true })); i.focus(); x.hidden = true; });
 new MutationObserver(() => document.querySelectorAll('.search:not([data-sx])').forEach(srchSync)).observe(document.documentElement, { childList: true, subtree: true });
+// перегляд фото на весь екран: гортання (стрілки, свайп, клавіші ← →), натиск — збільшити вдвічі, ✕ / Esc / тап повз — закрити
+function lightbox(urls, start = 0) {
+  urls = (urls || []).filter(Boolean); if (!urls.length) return;
+  let i = Math.max(0, Math.min(start, urls.length - 1));
+  const many = urls.length > 1;
+  const el = document.createElement('div'); el.className = 'lbx'; el.setAttribute('role', 'dialog'); el.setAttribute('aria-label', 'Перегляд фото');
+  el.innerHTML = `<div class="lbx-sc"><img alt=""></div>
+    <button class="lbx-x" title="Закрити (Esc)" aria-label="Закрити">✕</button>
+    ${many ? `<button class="lbx-p" title="Попереднє фото (←)" aria-label="Попереднє">‹</button><button class="lbx-n" title="Наступне фото (→)" aria-label="Наступне">›</button><div class="lbx-c"></div>` : ''}`;
+  document.body.appendChild(el); const prevOv = document.body.style.overflow; document.body.style.overflow = 'hidden';
+  const img = el.querySelector('img'), sc = el.querySelector('.lbx-sc'), cnt = el.querySelector('.lbx-c');
+  const show = (k) => { i = (k + urls.length) % urls.length; el.classList.remove('zoom'); img.src = urls[i]; if (cnt) cnt.textContent = `${i + 1} / ${urls.length}`; };
+  const close = () => { el.remove(); document.body.style.overflow = prevOv; document.removeEventListener('keydown', key, true); };
+  const key = (e) => { if (e.key === 'Escape') { e.stopPropagation(); close(); } else if (many && e.key === 'ArrowRight') show(i + 1); else if (many && e.key === 'ArrowLeft') show(i - 1); };
+  document.addEventListener('keydown', key, true);
+  el.querySelector('.lbx-x').onclick = close;
+  if (many) { el.querySelector('.lbx-p').onclick = (e) => { e.stopPropagation(); show(i - 1); }; el.querySelector('.lbx-n').onclick = (e) => { e.stopPropagation(); show(i + 1); }; }
+  sc.onclick = (e) => { if (e.target === img) { el.classList.toggle('zoom'); if (el.classList.contains('zoom')) { const r = img.getBoundingClientRect(); sc.scrollLeft = (sc.scrollWidth - sc.clientWidth) * ((e.clientX - r.left) / r.width || .5); sc.scrollTop = (sc.scrollHeight - sc.clientHeight) * ((e.clientY - r.top) / r.height || .5); } } else close(); };
+  let sx = null;
+  sc.addEventListener('touchstart', (e) => { sx = e.touches.length === 1 && !el.classList.contains('zoom') ? e.touches[0].clientX : null; }, { passive: true });
+  sc.addEventListener('touchend', (e) => { if (sx == null || !many) return; const d = e.changedTouches[0].clientX - sx; if (Math.abs(d) > 45) show(i + (d < 0 ? 1 : -1)); sx = null; });
+  show(i);
+}
 // «Є незбережені зміни»: 'save' | 'discard' | null (лишитись)
 function saveAsk() {
   return new Promise((res) => {

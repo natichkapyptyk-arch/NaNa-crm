@@ -388,6 +388,7 @@ const Client = (() => {
     let sx = null; const im = $('#g-img', g.el);
     im.addEventListener('touchstart', (e) => (sx = e.touches[0].clientX), { passive: true });
     im.addEventListener('touchend', (e) => { if (sx == null || ph.length < 2) return; const d = e.changedTouches[0].clientX - sx; if (Math.abs(d) > 40) show(i + (d < 0 ? 1 : -1)); sx = null; });
+    im.title = 'Натисніть, щоб відкрити на весь екран'; im.style.cursor = 'zoom-in'; im.onclick = () => lightbox(ph, i);
     const ok = $('#g-ok', g.el); if (ok) ok.onclick = () => { g.close(); onPick(); };
   }
   function downloadIcs(items, s) {
