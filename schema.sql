@@ -856,6 +856,13 @@ declare k uuid;
 begin
   -- «Ви записали…» (власна дія) — у Telegram лише тим, хто увімкнув «Мої власні дії» (notify.self)
   if new.read_at is not null and not exists (select 1 from staff where id = new.staff_id and coalesce((notify->>'self')::boolean, false)) then return new; end if;
+  if exists (select 1 from notifications n2 join staff s2 on s2.id = n2.staff_id join staff s1 on s1.id = new.staff_id
+     where n2.id <> new.id and s2.id <> s1.id and s2.tg_chat_id = s1.tg_chat_id and n2.kind = new.kind
+       and n2.appointment_id is not distinct from new.appointment_id and n2.created_at > now() - interval '2 minutes'
+       and (n2.created_at, n2.id::text) < (new.created_at, new.id::text)   -- надсилає лише перший з однакових
+       and coalesce((s2.notify->>'tg')::boolean, true) and (n2.read_at is null or coalesce((s2.notify->>'self')::boolean, false))) then
+    return new;
+  end if;
   if exists (select 1 from staff where id = new.staff_id and tg_chat_id is not null and coalesce((notify->>'tg')::boolean, true)) then
     select hook_key into k from app_secrets where id = 1;
     perform net.http_post(
@@ -929,8 +936,10 @@ begin
   update settings set daily_sent = d where id = 1;
   select hook_key into k from app_secrets where id = 1;
   site := regexp_replace(coalesce(nullif(st.site_url, ''), 'https://nana-studio.pages.dev/'), '#.*$', '');
-  for x in select s.* from staff s where s.is_active and s.tg_chat_id is not null
-             and coalesce((s.notify->>'tg')::boolean, true) and coalesce((s.notify->>'daily')::boolean, true) order by s.sort loop
+  -- якщо кілька карток підключені до одного Telegram — одне повідомлення на чат (пріоритет власниці / адміна)
+  for x in select distinct on (s.tg_chat_id) s.* from staff s where s.is_active and s.tg_chat_id is not null
+             and coalesce((s.notify->>'tg')::boolean, true) and coalesce((s.notify->>'daily')::boolean, true)
+             order by s.tg_chat_id, (s.role in ('owner', 'admin')) desc, s.sort loop
     t := nana_priv.daily_text(x.id, x.role in ('owner', 'admin'), d);
     if t is null then continue; end if;
     t := '🌅 Доброго ранку, ' || nana_priv.h(x.first_name) || '!' || chr(10) || t || chr(10) || chr(10) || '<a href="' || site || '#/staff/cal/' || d || '">Відкрити календар</a>';
@@ -1060,8 +1069,8 @@ begin
       into late from staff s where s.is_active and s.is_bookable
        and not exists (select 1 from month_open o where o.staff_id = s.id and o.month = nm);
     if late is not null then
-      for x in select s.* from staff s where s.is_active and s.role in ('owner', 'admin') and s.tg_chat_id is not null
-                 and coalesce((s.notify->>'tg')::boolean, true) and coalesce((s.notify->>'open')::boolean, true) loop
+      for x in select distinct on (s.tg_chat_id) s.* from staff s where s.is_active and s.role in ('owner', 'admin') and s.tg_chat_id is not null
+                 and coalesce((s.notify->>'tg')::boolean, true) and coalesce((s.notify->>'open')::boolean, true) order by s.tg_chat_id loop
         perform net.http_post(
           url := 'https://arkwtpihdaqnwhdcjpqf.supabase.co/functions/v1/tg-bot',
           body := jsonb_build_object('action', 'send', 'chat_id', x.tg_chat_id, 'text',
@@ -1304,7 +1313,7 @@ begin
   select * into st from settings where id = 1;
   if not st.report_on or extract(day from d) <> 1 or hh < 10 or st.report_sent is not distinct from d then return 0; end if;
   update settings set report_sent = d where id = 1;
-  select array_agg(tg_chat_id) into ch from staff
+  select array_agg(distinct tg_chat_id) into ch from staff
    where is_active and (role = 'owner' or (role = 'admin' and see_money)) and tg_chat_id is not null
      and coalesce((notify->>'tg')::boolean, true) and coalesce((notify->>'report')::boolean, true);
   perform nana_priv.report_post(pm, (pm + interval '1 month' - interval '1 day')::date, ch);
@@ -1353,7 +1362,7 @@ begin
   select * into st from settings where id = 1;
   if not st.weekly_on or extract(isodow from d) <> 1 or hh < 10 or st.weekly_sent is not distinct from d then return 0; end if;
   update settings set weekly_sent = d where id = 1;
-  select array_agg(tg_chat_id) into ch from staff
+  select array_agg(distinct tg_chat_id) into ch from staff
    where is_active and (role = 'owner' or (role = 'admin' and see_money)) and tg_chat_id is not null
      and coalesce((notify->>'tg')::boolean, true) and coalesce((notify->>'weekly')::boolean, true);
   perform nana_priv.weekly_post(d - 7, d - 1, ch);
@@ -1443,10 +1452,12 @@ language plpgsql security definer set search_path = public as $$
 declare k uuid; r record; n int := 0; tm text; tn text;
 begin
   select hook_key into k from app_secrets where id = 1;
-  for r in select id, tg_chat_id, (role = 'owner' or (role = 'admin' and see_money)) as money from staff
+  -- один чат — одне повідомлення (якщо кілька карток підключені до того самого Telegram)
+  for r in select distinct on (tg_chat_id) id, tg_chat_id, (role = 'owner' or (role = 'admin' and see_money)) as money from staff
     where is_active and tg_chat_id is not null and (
       (p_staff is null and role in ('owner', 'admin') and coalesce((notify->>'tg')::boolean, true) and coalesce((notify->>'dsum')::boolean, true))
       or id = p_staff)
+    order by tg_chat_id, (role = 'owner' or (role = 'admin' and see_money)) desc
   loop
     if r.money then tm := coalesce(tm, nana_priv.dsum_text(d, true)); else tn := coalesce(tn, nana_priv.dsum_text(d, false)); end if;
     perform net.http_post(
@@ -1465,7 +1476,8 @@ declare st settings; d date := (now() at time zone 'Europe/Kyiv')::date; hh int 
 begin
   select * into st from settings where id = 1;
   if st.dsum_hour is null or hh < st.dsum_hour or st.dsum_sent is not distinct from d then return 0; end if;
-  update settings set dsum_sent = d where id = 1;
+  update settings set dsum_sent = d where id = 1 and dsum_sent is distinct from d;   -- атомарно: двічі за день не надішле
+  if not found then return 0; end if;
   return nana_priv.dsum_post(d);
 end $$;
 revoke execute on function nana_priv.dsum_tick() from public, anon, authenticated;
