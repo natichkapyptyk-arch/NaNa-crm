@@ -197,7 +197,8 @@ const Client = (() => {
     const vd = st.edit < 0 ? visitDay() : null;
     if (!st.day && vd && days.find((d) => d[0] === vd && d[1])) st.day = vd;   // додаєте ще послугу — одразу день вашого візиту
     if (!st.day || !days.find((d) => d[0] === st.day && d[1])) st.day = (days.find((d) => d[1]) || [])[0] || null;
-    const strip = days.map(([d, n]) => `<button class="dpill ${d === st.day ? 'on' : ''} ${n ? '' : 'off'} ${d === vd ? 'visit' : ''}" ${n ? `data-day="${d}"` : 'disabled'} title="${n ? esc(fmtDay(d, { weekday: 'long', day: 'numeric', month: 'long' })) + ': вільних віконець — ' + n : 'Немає вільного часу'}">
+    // лише дні з вільним часом: вихідні, закритий графік і повністю зайняті дні не показуємо
+    const strip = days.filter(([, n]) => n).map(([d, n]) => `<button class="dpill ${d === st.day ? 'on' : ''} ${n ? '' : 'off'} ${d === vd ? 'visit' : ''}" ${n ? `data-day="${d}"` : 'disabled'} title="${n ? esc(fmtDay(d, { weekday: 'long', day: 'numeric', month: 'long' })) + ': вільних віконець — ' + n : 'Немає вільного часу'}">
       <div class="w">${WD[isoDow(d)]}</div><div class="d">${+d.slice(8)}</div><div class="m">${esc(fmtDay(d, { month: 'short' }).replace('.', ''))}</div></button>`).join('');
     let body = '';
     if (!st.day) body = '<div class="empty"><div class="big">🗓</div>У найближчі дні вільного часу немає. Спробуйте іншого майстра або зателефонуйте нам.</div>';
@@ -521,7 +522,7 @@ const Client = (() => {
       if (!days.find((d) => d[0] === day && d[1])) day = (days.find((d) => d[1]) || [])[0];
       const sl = day ? slots(it.staff_id, dur, day, { skip, extra }) : [];
       $('#mvb', s.el).innerHTML = `<div class="sm mut mb">Зараз: ${esc(relDay(dayOf(it.starts_at)))}, ${fmtT(it.starts_at)} · ${esc(it.master)}</div>
-        ${arrows(`<div class="dstrip">${days.map(([d, n]) => `<button class="dpill ${d === day ? 'on' : ''} ${n ? '' : 'off'}" ${n ? `data-d="${d}"` : 'disabled'} title="${esc(fmtDay(d, { weekday: 'long', day: 'numeric', month: 'long' }))}"><div class="w">${WD[isoDow(d)]}</div><div class="d">${+d.slice(8)}</div><div class="m">${esc(fmtDay(d, { month: 'short' }).replace('.', ''))}</div></button>`).join('')}</div>`)}
+        ${arrows(`<div class="dstrip">${days.filter(([, n]) => n).map(([d, n]) => `<button class="dpill ${d === day ? 'on' : ''} ${n ? '' : 'off'}" ${n ? `data-d="${d}"` : 'disabled'} title="${esc(fmtDay(d, { weekday: 'long', day: 'numeric', month: 'long' }))}"><div class="w">${WD[isoDow(d)]}</div><div class="d">${+d.slice(8)}</div><div class="m">${esc(fmtDay(d, { month: 'short' }).replace('.', ''))}</div></button>`).join('')}</div>`)}
         ${sl.length ? `<div class="slots mt">${sl.map((m) => `<button class="slot" data-t="${m}" title="Перенести на ${toHM(m)}">${toHM(m)}</button>`).join('')}</div>` : '<div class="empty">Немає вільного часу</div>'}`;
       $$('[data-d]', s.el).forEach((b) => (b.onclick = () => { day = b.dataset.d; draw(); }));
       $$('[data-t]', s.el).forEach((b) => (b.onclick = async () => {
