@@ -236,6 +236,47 @@ async function monthlyReport(from: string, to: string, chats: number[]) {
   return { sent, rows: rows.length };
 }
 
+// ---------- резервна копія: усі основні таблиці в один Excel (кожна таблиця — окремий аркуш, усі колонки як є) ----------
+const BACKUP_TABLES: [string, string][] = [
+  ['clients', 'Клієнти'], ['visits', 'Візити'], ['appointments', 'Записи'], ['payments', 'Оплати'], ['services', 'Послуги'],
+  ['master_services', 'Послуги майстрів'], ['staff', 'Персонал'], ['staff_pay', 'Відсотки'], ['work_hours', 'Графік'],
+  ['day_overrides', 'Зміни графіка'], ['blocks', 'Блоки часу'], ['month_open', 'Відкриті місяці'], ['expenses', 'Витрати'],
+  ['settings', 'Налаштування'], ['appt_log', 'Історія записів'],
+];
+const SECRET_COLS = new Set(['tg_link']);   // посилання підключення Telegram у копію не кладемо
+async function backup(chats: number[]) {
+  if (!chats.length) return { skip: 'no chats' };
+  const wb = XLSX.utils.book_new(); const counts: string[] = [], failed: string[] = [];
+  const cell = (v: any) => { const x = v == null ? '' : typeof v === 'object' ? JSON.stringify(v) : v; return typeof x === 'string' && x.length > 32000 ? x.slice(0, 32000) : x; };   // у клітинці Excel до 32 767 знаків
+  const sheets: [string, any[]][] = [];
+  for (const [t, title] of BACKUP_TABLES) {
+    let rows: any[] | null = null;
+    try { rows = await pageAll(() => db.from(t).select('*').order('id')); }   // стабільний порядок для сторінок по 1000
+    catch { try { rows = await pageAll(() => db.from(t).select('*')); } catch { rows = null; } }   // таблиці без id
+    if (!rows) { failed.push(title); sheets.push([title, []]); continue; }
+    sheets.push([title, rows.map((r) => Object.fromEntries(Object.entries(r).filter(([k]) => !SECRET_COLS.has(k)).map(([k, v]) => [k, cell(v)])))]);
+    counts.push(`${title}: ${rows.length}`);
+  }
+  const now = new Intl.DateTimeFormat('uk-UA', { timeZone: TZ, day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }).format(new Date());
+  const info = XLSX.utils.aoa_to_sheet([['Резервна копія NaNa studio'], ['Створено', now], [''], ['Аркуш', 'Рядків'], ...sheets.map(([n, r]) => [n, failed.includes(n) ? 'не вдалося прочитати' : r.length]), [''],
+    ['Як відновити: надішліть цей файл у чат з Claude — дані повернуть у базу. Файл не редагуйте.']]);
+  info['!cols'] = [{ wch: 28 }, { wch: 22 }];
+  XLSX.utils.book_append_sheet(wb, info, 'Про файл');
+  for (const [n, r] of sheets) XLSX.utils.book_append_sheet(wb, r.length ? XLSX.utils.json_to_sheet(r) : XLSX.utils.aoa_to_sheet([['(порожньо)']]), n.slice(0, 31));
+  const file = XLSX.write(wb, { type: 'array', bookType: 'xlsx', compression: true });
+  const day = kDay(); const name = `NaNa резервна копія ${day.split('-').reverse().join('.')}.xlsx`;
+  const caption = `🗄 Резервна копія NaNa studio · ${now}\n${counts.slice(0, 5).join(' · ')}${failed.length ? `\n⚠️ Не вдалося прочитати: ${failed.join(', ')} — напишіть Claude` : ''}\n\nПросто збережіть цей файл — якщо з базою щось трапиться, з нього все відновлять.`;
+  let sent = 0;
+  for (const chat of chats) {
+    const fd = new FormData();
+    fd.append('chat_id', String(chat)); fd.append('caption', caption);
+    fd.append('document', new Blob([file], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }), name);
+    const r = await (await fetch(`${API}/sendDocument`, { method: 'POST', body: fd })).json();
+    if (r.ok) sent++;
+  }
+  return { sent, bytes: (file as ArrayBuffer).byteLength ?? 0 };
+}
+
 // ---------- тижневий підсумок (понеділок зранку): цифри за минулий тиждень і порівняння з попереднім ----------
 async function weeklySummary(from: string, to: string, chats: number[]) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(from) || !/^\d{4}-\d{2}-\d{2}$/.test(to) || !chats.length) return { skip: 'bad args' };
@@ -446,6 +487,7 @@ Deno.serve(async (req) => {
         return json(await send(Number(body.chat_id), String(body.text ?? ''), kb?.length ? kb : undefined));
       }
       case 'weekly_summary': return json(await weeklySummary(String(body.from ?? ''), String(body.to ?? ''), (Array.isArray(body.chats) ? body.chats : []).map(Number).filter(Boolean)));
+      case 'backup': return json(await backup((Array.isArray(body.chats) ? body.chats : []).map(Number).filter(Boolean)));
       case 'monthly_report': return json(await monthlyReport(String(body.from ?? ''), String(body.to ?? ''), (Array.isArray(body.chats) ? body.chats : []).map(Number).filter(Boolean)));
       case 'month_ask': return json(await monthAsk(String(body.staff_id), String(body.month ?? ''), !!body.first));
       case 'close_ask': return json(await closeAsk(String(body.staff_id), String(body.day ?? kDay())));

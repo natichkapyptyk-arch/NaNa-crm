@@ -657,7 +657,7 @@ const Admin = (() => {
               + '<div class="empty" id="ms-none" hidden>Послуг не знайдено</div>'; })()}
           <div class="hint">Колонки: тривалість (хв) і ціна (₴) саме в цього майстра.</div></div>
         <div class="card"><h3>Сповіщення</h3>
-          <div class="col">${[['new', 'Нові записи'], ['cancel', 'Скасування'], ['move', 'Перенесення'], ['confirm', 'Клієнт підтвердив візит (✅ у боті)'], ['daily', 'Розклад на день зранку (у Telegram)'], ['close', 'Ввечері: «чи закрила записи?» (у Telegram)'], ['open', 'З 22-го: «відкрий графік на наступний місяць» (у Telegram)'], ['report', '1 числа: звіт за місяць з Excel (лише власниця / адмін)'], ['weekly', 'Понеділок: підсумок тижня (лише власниця / адмін)'], ['dsum', 'Ввечері: підсумок дня (лише власниця / адмін)'], ['self', 'Мої власні дії (записала, перенесла, скасувала) — теж у Telegram']].map(([k, n]) => `<label class="sw" ${k === 'report' || k === 'weekly' || k === 'dsum' ? `data-boss-nt ${p.role === 'master' ? 'hidden' : ''}` : ''} title="Отримувати сповіщення: ${n.toLowerCase()}"><input type="checkbox" data-nt="${k}" ${(k === 'self' ? nt[k] === true : nt[k] !== false) ? 'checked' : ''} ${can ? '' : 'disabled'}><i></i><span>${n}</span></label>`).join('')}
+          <div class="col">${[['new', 'Нові записи'], ['cancel', 'Скасування'], ['move', 'Перенесення'], ['confirm', 'Клієнт підтвердив візит (✅ у боті)'], ['daily', 'Розклад на день зранку (у Telegram)'], ['close', 'Ввечері: «чи закрила записи?» (у Telegram)'], ['open', 'З 22-го: «відкрий графік на наступний місяць» (у Telegram)'], ['report', '1 числа: звіт за місяць з Excel (лише власниця / адмін)'], ['weekly', 'Понеділок: підсумок тижня (лише власниця / адмін)'], ['dsum', 'Ввечері: підсумок дня (лише власниця / адмін)'], ['backup', 'Неділя: резервна копія бази в Excel (лише власниця / адмін)'], ['self', 'Мої власні дії (записала, перенесла, скасувала) — теж у Telegram']].map(([k, n]) => `<label class="sw" ${k === 'report' || k === 'weekly' || k === 'dsum' || k === 'backup' ? `data-boss-nt ${p.role === 'master' ? 'hidden' : ''}` : ''} title="Отримувати сповіщення: ${n.toLowerCase()}"><input type="checkbox" data-nt="${k}" ${(k === 'self' ? nt[k] === true : nt[k] !== false) ? 'checked' : ''} ${can ? '' : 'disabled'}><i></i><span>${n}</span></label>`).join('')}
           <label class="sw" title="Дублювати сповіщення в Telegram"><input type="checkbox" data-nt="tg" ${nt.tg !== false ? 'checked' : ''} ${can ? '' : 'disabled'}><i></i><span>Надсилати в Telegram</span></label></div>
           <div class="hint">${p.role === 'master' ? 'Майстер отримує сповіщення лише про свої записи, а зранку — розклад лише своїх записів.' : 'Власниця й адмін отримують сповіщення про всі записи, а зранку — розклад усього салону.'}</div>
           ${!isNew && bot ? `<div class="sect"><h3>${IC.tg.replace('<svg', '<svg width="18" height="18"')} Telegram ${p.tg_chat_id ? '<span class="pill done">підключено</span>' : '<span class="pill g">не підключено</span>'}</h3>
@@ -794,7 +794,7 @@ const Admin = (() => {
     let methods = [...(s.pay_methods || [])];
     // коли бот востаннє надсилав (дати *_sent у settings); ⚠️ — якщо увімкнено, а надсилань давно не було
     const TGL = { daily: ['daily_sent', 'daily_hour', 2, 'надіслано'], dsum: ['dsum_sent', 'dsum_hour', 2, 'надіслано'], close: ['close_sent', 'close_hour', 2, 'надіслано'], report: ['report_sent', 'report_on', 32, 'автоматично'],
-      weekly: ['weekly_sent', 'weekly_on', 8, 'автоматично'], nudge: ['nudge_sent', 'nudge1_days', 2, 'перевірка'], open: ['open_sent', 'open_day', 0, 'нагадування'] };
+      weekly: ['weekly_sent', 'weekly_on', 8, 'автоматично'], backup: ['backup_sent', 'backup_on', 8, 'надіслано'], nudge: ['nudge_sent', 'nudge1_days', 2, 'перевірка'], open: ['open_sent', 'open_day', 0, 'нагадування'] };
     const tgLastTxt = (key, d) => { const [, on, warnD, w] = TGL[key];
       const enabled = key === 'nudge' ? (s.nudge1_days != null || s.nudge2_days != null) : (typeof s[on] === 'boolean' ? s[on] : s[on] != null);
       if (!d) return [enabled ? 'ще не надсилалось' : '', false];
@@ -853,6 +853,10 @@ const Admin = (() => {
         ${'weekly_on' in s && money$() ? `<details class="tg-it" data-tg="weekly"><summary><div class="grow"><b>Підсумок тижня</b>${tgLast('weekly')}</div><span class="tg-v" data-tgv></span></summary><div class="tg-b"><div class="two"><div><label class="lb" for="s-wo">Підсумок тижня в Telegram</label><select class="inp" id="s-wo" title="Щопонеділка о 10:00 власниці й адміну — виторг, візити, нові клієнти, скасування й найкраща майстриня за минулий тиждень, з порівнянням">
           <option value="1" ${s.weekly_on ? 'selected' : ''}>щопонеділка о 10:00</option><option value="0" ${s.weekly_on ? '' : 'selected'}>не надсилати</option></select></div>
           <div><label class="lb">&nbsp;</label><button class="btn" id="s-wn" title="Надіслати підсумок минулого тижня собі в Telegram зараз">${IC.tg.replace('<svg', '<svg width="16" height="16"')} Тиждень зараз</button></div></div></div></details>` : ''}
+        ${'backup_on' in s && money$() ? `<details class="tg-it" data-tg="backup"><summary><div class="grow"><b>Резервна копія бази</b>${tgLast('backup')}</div><span class="tg-v" data-tgv></span></summary><div class="tg-b"><div class="two"><div><label class="lb" for="s-bko">Копія в Telegram (Excel)</label><select class="inp" id="s-bko" title="Щонеділі о 21:00 власниці й адміну з доступом до грошей — один Excel-файл з усіма клієнтами, записами, оплатами, послугами, графіком і витратами. Якщо з базою щось трапиться, з цього файлу все відновлять">
+          <option value="1" ${s.backup_on ? 'selected' : ''}>щонеділі о 21:00</option><option value="0" ${s.backup_on ? '' : 'selected'}>не надсилати</option></select></div>
+          <div><label class="lb">&nbsp;</label><button class="btn" id="s-bkn" title="Зробити свіжу копію бази й надіслати собі в Telegram зараз">${IC.tg.replace('<svg', '<svg width="16" height="16"')} Копія зараз</button></div></div>
+          <p class="xs mut" style="margin:8px 0 0">Файл просто зберігайте в Telegram — його не треба відкривати чи редагувати. У ньому особисті дані клієнтів, тож не пересилайте його стороннім.</p></div></details>` : ''}
         ${'nudge_pct' in s ? `<details class="tg-it" data-tg="nudge"><summary><div class="grow"><b>Повторні візити</b>${tgLast('nudge')}</div><span class="tg-v" data-tgv></span></summary><div class="tg-b"><div class="two">
           <div><label class="lb" for="s-n1">«Час оновити» через, днів</label><input class="inp" id="s-n1" type="number" min="7" max="180" value="${s.nudge1_days ?? ''}" placeholder="не надсилати" title="Через скільки днів після останнього візиту бот пише «найкращий час оновити манікюр / брівки / вії» з кнопкою «Записатися»"></div>
           <div><label class="lb" for="s-n2">«Знижка, давно не були» через, днів</label><input class="inp" id="s-n2" type="number" min="14" max="365" value="${s.nudge2_days ?? ''}" placeholder="не надсилати" title="Через скільки днів бот пропонує знижку тим, хто не повернувся"></div></div>
@@ -890,6 +894,7 @@ const Admin = (() => {
       daily: () => tgSel('#s-dh', 'вимкнено'), close: () => tgSel('#s-clh', 'вимкнено'), dsum: () => tgSel('#s-dsh', 'вимкнено'),
       report: () => { const [t, o] = tgSel('#s-ro', 'вимкнено'); return [o ? t : '1 числа', o]; },
       weekly: () => { const [t, o] = tgSel('#s-wo', 'вимкнено'); return [o ? t : 'пн 10:00', o]; },
+      backup: () => { const [t, o] = tgSel('#s-bko', 'вимкнено'); return [o ? t : 'нд 21:00', o]; },
       nudge: () => { const v = (id) => $(id, main)?.value.trim() || '', a = v('#s-n1'), b = v('#s-n2'), pc = v('#s-np') || 10;
         const l = [a && `${a} дн.`, b && `${b} дн. −${pc}%`].filter(Boolean); return l.length ? [l.join(' · '), false] : ['вимкнено', true]; },
       open: () => { const [t, o] = tgSel('#s-od', 'вимкнено'); return [o ? t : 'з ' + t, o]; },
@@ -914,6 +919,9 @@ const Admin = (() => {
     const wn = $('#s-wn', main); if (wn) wn.onclick = (e) => busy(e.currentTarget, async () => {
       const { error } = await sb.rpc('weekly_send_now'); if (error) return toast(errMsg(error), 'bad', 6000);
       toast('Підсумок минулого тижня прийде у ваш Telegram за кілька секунд', 'ok', 4500); });
+    const bkn = $('#s-bkn', main); if (bkn) bkn.onclick = (e) => busy(e.currentTarget, async () => {
+      const { error } = await sb.rpc('backup_send_now'); if (error) return toast(errMsg(error), 'bad', 6000);
+      toast('Копія бази (Excel) прийде у ваш Telegram за кілька секунд', 'ok', 4500); });
     const rn = $('#s-rn', main); if (rn) rn.onclick = (e) => busy(e.currentTarget, async () => {
       const { error } = await sb.rpc('report_send_now'); if (error) return toast(errMsg(error), 'bad', 6000);
       toast('Звіт за цей місяць прийде у ваш Telegram за кілька секунд', 'ok', 4500); });
@@ -946,6 +954,7 @@ const Admin = (() => {
       if ($('#s-dh', main)) row.daily_hour = $('#s-dh', main).value === '' ? null : +$('#s-dh', main).value;
       if ($('#s-ro', main)) row.report_on = $('#s-ro', main).value === '1';
       if ($('#s-wo', main)) row.weekly_on = $('#s-wo', main).value === '1';
+      if ($('#s-bko', main)) row.backup_on = $('#s-bko', main).value === '1';
       if ($('#s-n1', main)) { const n1 = $('#s-n1', main).value, n2 = $('#s-n2', main).value;
         row.nudge1_days = n1 === '' ? null : Math.min(180, Math.max(7, +n1)); row.nudge2_days = n2 === '' ? null : Math.min(365, Math.max(14, +n2));
         row.nudge_pct = Math.min(50, Math.max(1, +$('#s-np', main).value || 10)); }
