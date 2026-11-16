@@ -68,6 +68,19 @@ const Client = (() => {
     for (let i = 0; i <= C.settings.max_days && out.length < n; i++) { const d = addDays(t, i); if (slots(mid, dur, d).length) out.push(d); }
     return out;
   }
+  // смужка днів зі стрілками ‹ › з обох боків (гортання на ~80% ширини; на телефоні ще й свайпом)
+  const CHL = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg>';
+  const arrows = (inner) => `<div class="sarr"><button type="button" class="sa-b" data-sa="-1" title="Попередні дні" aria-label="Попередні дні">${CHL}</button>${inner}<button type="button" class="sa-b" data-sa="1" title="Наступні дні" aria-label="Наступні дні">${CHL.replace('M15 5l-7 7 7 7', 'M9 5l7 7-7 7')}</button></div>`;
+  function bindArrows(root) {
+    $$('.sarr', root).forEach((w) => {
+      const sc = w.querySelector('.dstrip, .days'), [bl, br] = $$('.sa-b', w); if (!sc) return;
+      const upd = () => { const max = sc.scrollWidth - sc.clientWidth - 2; w.classList.toggle('noscroll', max <= 0); bl.disabled = sc.scrollLeft <= 2; br.disabled = sc.scrollLeft >= max; };
+      [bl, br].forEach((b) => (b.onclick = (e) => { e.stopPropagation(); sc.scrollBy({ left: +b.dataset.sa * Math.max(sc.clientWidth * 0.8, 120), behavior: 'smooth' }); }));
+      sc.addEventListener('scroll', upd, { passive: true });
+      if (window.ResizeObserver) new ResizeObserver(upd).observe(sc); else addEventListener('resize', upd);
+      upd();
+    });
+  }
   const visitDay = () => (st.cart.length ? dayOf(new Date(Math.min(...st.cart.map((x) => x.s))).toISOString()) : null);   // день візиту (перша послуга)
   // звідки прийшла клієнтка: позначене посилання (?from=insta, ?from=gmaps) або сайт/застосунок, з якого перейшла; памʼятаємо 30 днів
   const REF = (() => {
@@ -138,19 +151,19 @@ const Client = (() => {
       `<button class="chip ${st.cat === c ? 'on' : ''}" data-cat="${esc(c)}" title="Майстри, які роблять: ${esc(c.toLowerCase())}">${esc(c)}</button>`).join('')}</div>`;
     const cards = ms.map((m) => {
       const list = masterServices(m.id).filter((x) => !st.cat || C.svc.get(x.service_id).category === st.cat);
-      const from = Math.min(...list.map((x) => +x.price)); let days = nearDays(m.id, 5, st.cat);
+      const from = Math.min(...list.map((x) => +x.price)); let days = nearDays(m.id, 14, st.cat);
       // день вашого візиту — завжди серед днів (якщо в майстрині є вільний час) і виділений
       // «ваш візит» — лише в майстрині, до якої вже є послуга в кошику (у решти цей день — звичайний, якщо він вільний)
       const vd = visitDay(), mineV = vd && st.cart.some((x) => x.mid === m.id && dayOf(new Date(x.s).toISOString()) === vd);
-      if (vd && !days.includes(vd) && slots(m.id, Math.min(...list.map((x) => x.dur)), vd).length) days = [...days.slice(0, 4), vd].sort();
+      if (vd && !days.includes(vd) && slots(m.id, Math.min(...list.map((x) => x.dur)), vd).length) days = [...days.slice(0, 13), vd].sort();
       const cats = [...new Set(list.map((x) => C.svc.get(x.service_id).category))].join(' · ');
       return `<div class="m-card" data-m="${m.id}" title="Обрати майстра ${esc(m.first_name)} і подивитись послуги">
         ${avatar(m, 'l')}<div class="grow"><div class="nm">${esc(fullName(m))}</div><div class="rl">${esc(m.experience || cats)}</div>
         ${m.bio ? `<div class="bio">${esc(m.bio)}</div>` : ''}
         <div class="from">${esc(cats)} · від ${money(from)}</div>
-        <div class="days">${days.length ? days.map((d) => d === vd && mineV ? `<span class="dchip visit" data-m="${m.id}" data-day="${d}" title="День вашого візиту: ${esc(fmtDay(d, { weekday: 'long', day: 'numeric', month: 'long' }))} — додати послугу на цей день"><span>ваш візит</span><b>${+d.slice(8)}</b></span>`
+        ${arrows(`<div class="days">${days.length ? days.map((d) => d === vd && mineV ? `<span class="dchip visit" data-m="${m.id}" data-day="${d}" title="День вашого візиту: ${esc(fmtDay(d, { weekday: 'long', day: 'numeric', month: 'long' }))} — додати послугу на цей день"><span>ваш візит</span><b>${+d.slice(8)}</b></span>`
           : `<span class="dchip" data-m="${m.id}" data-day="${d}" title="Найближчий вільний день: ${esc(fmtDay(d, { weekday: 'long', day: 'numeric', month: 'long' }))}"><span>${esc(relDay(d).split(',')[0])}</span><b>${+d.slice(8)}</b></span>`).join('')
-          : '<span class="dchip none">Немає вільного часу</span>'}</div></div></div>`;
+          : '<span class="dchip none">Немає вільного часу</span>'}</div>`)}</div></div>`;
     }).join('');
     const wantBar = st.want && C.svc.get(st.want) ? `<div class="want-bar">Хто робить «${esc(C.svc.get(st.want).name)}» <button class="chip" id="want-x" title="Показати всіх майстрів">✕ Усі майстри</button></div>` : '';
     return `${stepsBar()}<div class="st-title"><h2>${st.cart.length ? 'Додайте ще послугу' : 'Оберіть майстра'}</h2></div>${st.want ? wantBar : cats}
@@ -206,7 +219,7 @@ const Client = (() => {
     }
     return `${stepsBar()}<div class="st-title"><button class="btn ghost ico" data-back="services" title="Назад — до послуг">${IC.back}</button><h2>Оберіть день і час</h2></div>
       <div class="s-row inCart" style="cursor:default">${(s.photos || [])[0] ? `<button class="s-ph" data-gal="${s.id}" title="Подивитись фото робіт"><img src="${esc(s.photos[0])}" alt=""></button>` : ''}<div class="grow"><div class="nm">${esc(s.name)}</div><div class="ds">Майстер: ${esc(fullName(m))}</div></div><div class="pr">${money(x.price)}<small>${durTxt(x.dur)}</small></div></div>
-      <div class="dstrip" id="dstrip">${strip}</div>${body}`;
+      ${arrows(`<div class="dstrip" id="dstrip">${strip}</div>`)}${body}`;
   }
   function vCart() {
     if (!st.cart.length) { st.step = 'masters'; return vMasters(); }
@@ -300,7 +313,7 @@ const Client = (() => {
   const addonsFor = (p) => masterServices(p.mid).filter((x) => isAddon(x.service_id) && C.svc.get(x.service_id).category === C.svc.get(p.sid).category && !addonsOf(p.k).some((a) => a.sid === x.service_id));
   function goStep(s) { st.step = s; render(); scrollTo({ top: 0, behavior: 'smooth' }); }
   function bind() {
-    const a = app();
+    const a = app(); bindArrows(a);
     $$('[data-cat]', a).forEach((b) => (b.onclick = () => { st.cat = b.dataset.cat; render(); }));
     $$('[data-cat2]', a).forEach((b) => (b.onclick = () => { st.cat = b.dataset.cat2; render(); }));
     $$('.m-card', a).forEach((c) => (c.onclick = (e) => { const d = e.target.closest('[data-day]'); st.mid = c.dataset.m; st.day = d ? d.dataset.day : null; st.edit = -1;
@@ -508,7 +521,7 @@ const Client = (() => {
       if (!days.find((d) => d[0] === day && d[1])) day = (days.find((d) => d[1]) || [])[0];
       const sl = day ? slots(it.staff_id, dur, day, { skip, extra }) : [];
       $('#mvb', s.el).innerHTML = `<div class="sm mut mb">Зараз: ${esc(relDay(dayOf(it.starts_at)))}, ${fmtT(it.starts_at)} · ${esc(it.master)}</div>
-        <div class="dstrip">${days.map(([d, n]) => `<button class="dpill ${d === day ? 'on' : ''} ${n ? '' : 'off'}" ${n ? `data-d="${d}"` : 'disabled'} title="${esc(fmtDay(d, { weekday: 'long', day: 'numeric', month: 'long' }))}"><div class="w">${WD[isoDow(d)]}</div><div class="d">${+d.slice(8)}</div><div class="m">${esc(fmtDay(d, { month: 'short' }).replace('.', ''))}</div></button>`).join('')}</div>
+        ${arrows(`<div class="dstrip">${days.map(([d, n]) => `<button class="dpill ${d === day ? 'on' : ''} ${n ? '' : 'off'}" ${n ? `data-d="${d}"` : 'disabled'} title="${esc(fmtDay(d, { weekday: 'long', day: 'numeric', month: 'long' }))}"><div class="w">${WD[isoDow(d)]}</div><div class="d">${+d.slice(8)}</div><div class="m">${esc(fmtDay(d, { month: 'short' }).replace('.', ''))}</div></button>`).join('')}</div>`)}
         ${sl.length ? `<div class="slots mt">${sl.map((m) => `<button class="slot" data-t="${m}" title="Перенести на ${toHM(m)}">${toHM(m)}</button>`).join('')}</div>` : '<div class="empty">Немає вільного часу</div>'}`;
       $$('[data-d]', s.el).forEach((b) => (b.onclick = () => { day = b.dataset.d; draw(); }));
       $$('[data-t]', s.el).forEach((b) => (b.onclick = async () => {
@@ -519,6 +532,7 @@ const Client = (() => {
         s.close(); toast('Запис перенесено'); visit(token);
       }));
       const on = $('.dpill.on', s.el); if (on) on.scrollIntoView({ block: 'nearest', inline: 'center' });
+      bindArrows(s.el);
     };
     draw();
   }

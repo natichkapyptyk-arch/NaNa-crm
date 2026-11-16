@@ -206,7 +206,18 @@ h3{font-size:16px}
 .m-card .nm{font-weight:800;font-size:16px}
 .m-card .rl{color:var(--mut);font-size:13px;margin-top:1px}
 .m-card .bio{font-size:13px;color:var(--ink2);margin-top:4px}
-.m-card .days{display:flex;gap:6px;flex-wrap:wrap;margin-top:9px}
+.m-card .days{display:flex;gap:6px;flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;scroll-snap-type:x proximity;padding:2px 1px}
+.m-card .days::-webkit-scrollbar{display:none}
+.m-card .days .dchip{flex:none;scroll-snap-align:start}
+.m-card>.grow{min-width:0}
+.sarr{display:flex;align-items:center;gap:6px;min-width:0}
+.m-card .sarr{margin-top:7px}
+.sarr>.dstrip,.sarr>.days{flex:1;min-width:0}
+.sa-b{flex:none;width:34px;height:34px;border-radius:50%;border:1.5px solid var(--kpib);background:var(--card);color:var(--ink);display:grid;place-items:center;cursor:pointer;padding:0;transition:all .12s}
+.sa-b:hover:not(:disabled){border-color:var(--kpih);background:var(--yels)}
+.sa-b:disabled{opacity:.28;cursor:default}
+.sarr.noscroll .sa-b{display:none}
+@media (max-width:520px){.sa-b{width:28px;height:28px}.sarr{gap:4px}}
 .dchip{display:inline-flex;flex-direction:column;align-items:center;min-width:52px;padding:5px 8px;border-radius:10px;border:1.5px solid var(--line2);background:var(--card);font-size:12px;line-height:1.15;cursor:pointer;font-weight:700;transition:all .12s}
 .dchip b{font-size:15px}
 .dchip:hover{border-color:var(--gr);background:var(--yels)}
