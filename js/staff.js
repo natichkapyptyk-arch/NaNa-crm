@@ -68,7 +68,7 @@ const Staff = (() => {
       <div class="errtxt hide" id="l-e"></div>
       <button class="btn pri lg wide mt" id="l-go" title="Увійти в програму (Enter)">Увійти</button>
       <p class="hint" style="text-align:center">Немає пароля? Попросіть у власниці посилання для швидкого входу.</p></form>
-      <p style="text-align:center"><a href="#" class="sm mut" title="Сторінка онлайн-запису для клієнтів">← Онлайн-запис для клієнтів</a></p></div>`;
+      <p style="text-align:center"><a href="#/book" class="sm mut" title="Сторінка онлайн-запису для клієнтів">← Онлайн-запис для клієнтів</a></p></div>`;
     $('#lf').onsubmit = async (e) => {
       e.preventDefault();
       const u = $('#l-u').value.trim().toLowerCase(), p = $('#l-p').value; const er = $('#l-e');
@@ -141,7 +141,7 @@ const Staff = (() => {
     }
     const nav = NAV();
     $('#st-nav').innerHTML = nav.map(([k, n, ic]) => `<a href="#/staff/${k}" class="${k === page ? 'on' : ''}" title="${TIPS[k]}">${ic}<span>${n}</span></a>`).join('') +
-      `<div class="sep"></div><a href="#" target="_blank" title="Відкрити сторінку онлайн-запису, яку бачать клієнти">${IC.globe.replace('width="14" height="14"', 'width="20" height="20"')}<span>Сторінка запису</span></a>
+      `<div class="sep"></div><a href="#/book" target="_blank" title="Відкрити сторінку онлайн-запису, яку бачать клієнти">${IC.globe.replace('width="14" height="14"', 'width="20" height="20"')}<span>Сторінка запису</span></a>
        <a href="javascript:void 0" id="nav-th" title="Світла або темна тема">${THEMES[themeNow()][0]}<span>Тема: ${THEMES[themeNow()][1].toLowerCase()}</span></a>
        ${isStandalone() ? '' : `<a href="javascript:void 0" id="nav-app" title="Встановити панель як застосунок на телефон або компʼютер">📲<span>На телефон</span></a>`}
        <a href="javascript:void 0" id="nav-out" title="Вийти з програми на цьому пристрої">${IC.out}<span>Вийти</span></a>`;
@@ -153,7 +153,7 @@ const Staff = (() => {
       `<a href="javascript:void 0" id="tab-more" class="${main4.includes(page) ? '' : 'on'}" title="Інші розділи">${IC.more}<span>Ще</span></a>`;
     $('#tab-more').onclick = () => {
       const s = sheet({ title: 'Розділи', body: nav.filter((x) => !main4.includes(x[0])).map(([k, n, ic]) => `<a class="list-row" href="#/staff/${k}" title="${TIPS[k]}"><span style="width:22px">${ic}</span><div class="grow nm">${n}</div>${IC.fwd}</a>`).join('') +
-        `<a class="list-row" href="#" target="_blank" title="Сторінка, яку бачать клієнти"><span style="width:22px">${IC.globe}</span><div class="grow nm">Сторінка онлайн-запису</div></a>
+        `<a class="list-row" href="#/book" target="_blank" title="Сторінка, яку бачать клієнти"><span style="width:22px">${IC.globe}</span><div class="grow nm">Сторінка онлайн-запису</div></a>
          ${isStandalone() ? '' : `<div class="list-row" id="m-app" title="Іконка NaNa на екрані телефона — відкривається одразу календар"><span style="width:22px;text-align:center">📲</span><div class="grow nm">Встановити на телефон</div>${IC.fwd}</div>`}
          <div class="list-row" id="m-th" title="Світла або темна тема"><span style="width:22px;text-align:center">${THEMES[themeNow()][0]}</span><div class="grow nm">Тема: ${THEMES[themeNow()][1].toLowerCase()}</div></div>
          <div class="list-row" id="m-out" title="Вийти з програми"><span style="width:22px">${IC.out}</span><div class="grow nm">Вийти</div></div>` });

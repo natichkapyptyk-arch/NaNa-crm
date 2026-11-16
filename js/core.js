@@ -404,7 +404,7 @@ async function installApp(staff = true) {
 /* ---------- маршрути ---------- */
 function siteBase() { return location.href.replace(/#.*$/, ''); }
 // попередня сторінка — щоб кнопка «назад» у картці вела туди, звідки прийшли (календар, персонал…)
-let curHash = location.hash, prevHash = '';
+let curHash = location.hash, prevHash = ''; let firstRoute = true;
 function go(h) { if (location.hash === h) route(); else location.hash = h; }
 // незбережені зміни: сторінка ставить leaveGuard = { hash, dirty(), save() } — перед переходом спитаємо
 let leaveGuard = null;
@@ -433,11 +433,14 @@ async function route() {
   if (location.hash !== curHash) { prevHash = curHash; curHash = location.hash; }
   hideTip(); while (sheets.length) sheets[sheets.length - 1].close();
   let h = decodeURIComponent(location.hash.replace(/^#/, ''));
-  // іконка на головному екрані: хто вже заходив у панель персоналу — одразу в календар, а не на сторінку запису
+  // іконка на головному екрані: хто вже заходив у панель персоналу — одразу в календар, а не на сторінку запису.
+  // Лише при відкритті програми: перехід на «Сторінку онлайн-запису» зсередини (#/book, #/) не повертає в календар.
+  const first = firstRoute; firstRoute = false;
   if (isStandalone()) {
     if (h === 'staff' || h.startsWith('/staff')) ls.set('app', 'staff');
-    else if ((h === '' || h === '/') && ls.get('app') === 'staff') { location.replace('#/staff/cal'); return; }
+    else if (first && (h === '' || h === '/') && ls.get('app') === 'staff') { location.replace('#/staff/cal'); return; }
   }
+  if (h === '/book' || h === 'book') { history.replaceState(null, '', '#/'); curHash = '#/'; h = '/'; }
   setManifest(h === 'staff' || h.startsWith('/staff') || h.startsWith('/team/'));
   if (h === '/works' || h === 'works') return Client.works();
   if (h.startsWith('/v/')) return Client.visit(h.slice(3));
