@@ -2,7 +2,7 @@
 /* NaNa studio — онлайн-запис для клієнтів і сторінка «Мій запис» */
 const Client = (() => {
   let C = null, B = null;               // каталог і зайнятість
-  const st = { step: 'masters', cat: '', mid: null, sid: null, day: null, cart: [], edit: -1, done: null };
+  const st = { step: 'masters', cat: '', mid: null, sid: null, day: null, cart: [], edit: -1, done: null, want: null };   // want — послуга з «Наших робіт»
   let cartK = 0;   // унікальний ключ позиції кошика (для «додатково» до основної послуги)
   const app = () => $('#app');
 
@@ -96,7 +96,7 @@ const Client = (() => {
   const cartDur = () => st.cart.reduce((a, x) => a + x.dur, 0);
 
   /* ---------- шапка ---------- */
-  function hero(small) {
+  function hero(small, noWorks = false) {
     const s = C.settings; const ph = String(s.phone || '').replace(/[^\d+]/g, '');
     return `<header class="cl-hero"${small ? ' style="padding-bottom:16px"' : ''}>
       <a href="#" title="На головну — онлайн-запис"><img class="logo" src="img/logo-t.png" alt="${esc(s.salon_name)}"${small ? ' style="height:64px"' : ''}></a>
@@ -104,7 +104,7 @@ const Client = (() => {
         ${s.address ? `<a href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(s.salon_name + ' ' + s.address)}" target="_blank" rel="noopener" title="Відкрити адресу на мапі">${IC.pin}${esc(s.address)}</a>` : ''}
         ${ph ? `<a href="tel:${esc(ph)}" title="Зателефонувати в салон">${IC.call.replace('<svg', '<svg width="15" height="15"')}${esc(fmtPhone(ph))}</a>` : ''}
         ${s.instagram ? `<a href="https://instagram.com/${encodeURIComponent(s.instagram)}" target="_blank" rel="noopener" title="Instagram салону — роботи майстрів">${IC.ig.replace('<svg', '<svg width="15" height="15"')}@${esc(s.instagram)}</a>` : ''}
-      </div>${small ? '' : '<div class="tag">твій банановий бюті простір 🍌</div>'}${promoTag()}</header>`;
+      </div>${!noWorks && C.services.some((x) => (x.photos || []).length) ? `<a class="works-btn" href="#/works" title="Фото наших робіт: брови, вії, манікюр">📸 Наші роботи</a>` : ''}${small ? '' : '<div class="tag">твій банановий бюті простір 🍌</div>'}${promoTag()}</header>`;
   }
   // знижка за посиланням з Telegram-бота (?promo=10) — показуємо 30 днів; майстриня врахує під час оплати
   function promoTag() { const p = ls.get('promo', null); return p && p.p && Date.now() - p.t < 30 * 864e5 ? `<div class="promo-tag">🎁 Ваша знижка ${+p.p}% на будь-яку послугу — майстриня врахує її під час оплати</div>` : ''; }
@@ -133,7 +133,7 @@ const Client = (() => {
 
   /* ---------- кроки ---------- */
   function vMasters() {
-    const ms = C.masters.filter((m) => masterServices(m.id).some((x) => !st.cat || C.svc.get(x.service_id).category === st.cat));
+    const ms = C.masters.filter((m) => st.want ? C.ms.get(m.id)?.has(st.want) : masterServices(m.id).some((x) => !st.cat || C.svc.get(x.service_id).category === st.cat));
     const cats = `<div class="chips scroll mb cat-ch"><button class="chip ${!st.cat ? 'on' : ''}" data-cat="" title="Показати всіх майстрів">Усі</button>${C.cats.map((c) =>
       `<button class="chip ${st.cat === c ? 'on' : ''}" data-cat="${esc(c)}" title="Майстри, які роблять: ${esc(c.toLowerCase())}">${esc(c)}</button>`).join('')}</div>`;
     const cards = ms.map((m) => {
@@ -152,7 +152,8 @@ const Client = (() => {
           : `<span class="dchip" data-m="${m.id}" data-day="${d}" title="Найближчий вільний день: ${esc(fmtDay(d, { weekday: 'long', day: 'numeric', month: 'long' }))}"><span>${esc(relDay(d).split(',')[0])}</span><b>${+d.slice(8)}</b></span>`).join('')
           : '<span class="dchip none">Немає вільного часу</span>'}</div></div></div>`;
     }).join('');
-    return `${stepsBar()}<div class="st-title"><h2>${st.cart.length ? 'Додайте ще послугу' : 'Оберіть майстра'}</h2></div>${cats}
+    const wantBar = st.want && C.svc.get(st.want) ? `<div class="want-bar">Хто робить «${esc(C.svc.get(st.want).name)}» <button class="chip" id="want-x" title="Показати всіх майстрів">✕ Усі майстри</button></div>` : '';
+    return `${stepsBar()}<div class="st-title"><h2>${st.cart.length ? 'Додайте ще послугу' : 'Оберіть майстра'}</h2></div>${st.want ? wantBar : cats}
       ${cards || '<div class="empty"><div class="big">🍌</div>Поки немає майстрів для онлайн-запису. Зателефонуйте нам, будь ласка.</div>'}`;
   }
   function vServices() {
@@ -302,7 +303,10 @@ const Client = (() => {
     const a = app();
     $$('[data-cat]', a).forEach((b) => (b.onclick = () => { st.cat = b.dataset.cat; render(); }));
     $$('[data-cat2]', a).forEach((b) => (b.onclick = () => { st.cat = b.dataset.cat2; render(); }));
-    $$('.m-card', a).forEach((c) => (c.onclick = (e) => { const d = e.target.closest('[data-day]'); st.mid = c.dataset.m; st.day = d ? d.dataset.day : null; st.edit = -1; goStep('services'); }));
+    $$('.m-card', a).forEach((c) => (c.onclick = (e) => { const d = e.target.closest('[data-day]'); st.mid = c.dataset.m; st.day = d ? d.dataset.day : null; st.edit = -1;
+      if (st.want && C.ms.get(st.mid)?.has(st.want)) { st.sid = st.want; st.want = null; return goStep('time'); }
+      st.want = null; goStep('services'); }));
+    const wx = $('#want-x', a); if (wx) wx.onclick = () => { st.want = null; render(); };
     const pickSvc = (sid) => {
       if (isAddon(sid)) {   // «додатково» — до останньої основної послуги цього майстра в кошику
         const main = st.cart.filter((x) => !x.of && x.mid === st.mid && C.svc.get(x.sid).category === C.svc.get(sid).category).sort((p, q) => q.s - p.s)[0];
@@ -380,7 +384,8 @@ const Client = (() => {
     const g = sheet({ title: esc(sv.name), wide: true, body: `<div class="gal"><img id="g-img" src="${esc(ph[0])}" alt="">
         ${ph.length > 1 ? `<button class="btn ico g-prev" title="Попереднє фото">${IC.back}</button><button class="btn ico g-next" title="Наступне фото">${IC.fwd}</button>` : ''}</div>
       ${ph.length > 1 ? `<div class="g-th">${ph.map((u, k) => `<img src="${esc(u)}" data-k="${k}" class="${k ? '' : 'on'}" alt="" title="Фото ${k + 1}">`).join('')}</div>` : ''}
-      ${sv.descr ? `<p class="mut" style="margin:10px 0 0">${esc(sv.descr)}</p>` : ''}`,
+      ${sv.descr ? `<p class="mut" style="margin:10px 0 0">${esc(sv.descr)}</p>` : ''}
+      <div style="margin-top:10px"><a class="sm" href="#/works" title="Усі фото наших робіт">📸 Більше робіт →</a></div>`,
       foot: onPick ? `<button class="btn pri lg" id="g-ok" title="Обрати цю послугу">Обрати · ${fromTxt(sv.id, st.mid)}${money(x ? x.price : sv.price)}</button>` : '' });
     const show = (k) => { i = (k + ph.length) % ph.length; $('#g-img', g.el).src = ph[i]; $$('.g-th img', g.el).forEach((t) => t.classList.toggle('on', +t.dataset.k === i)); };
     $$('.g-th img', g.el).forEach((t) => (t.onclick = () => show(+t.dataset.k)));
@@ -408,6 +413,45 @@ const Client = (() => {
     try { await load(); } catch (e) { app().innerHTML = `<div class="cl-wrap"><div class="card mt2 empty"><div class="big">😕</div>${esc(errMsg(e))}<div class="mt"><button class="btn" onclick="location.reload()" title="Спробувати ще раз">Оновити</button></div></div></div>`; return; }
     if (st.step === 'done' && !st.done) st.step = 'masters';
     render();
+  }
+
+  /* ---------- «Наші роботи»: усі фото з послуг, як профіль в Instagram ---------- */
+  let wCat = '';
+  const minPrice = (sid) => { const l = C.ms_raw.filter((x) => x.service_id === sid).map((x) => +x.price); const s = C.svc.get(sid);
+    if (!l.length) return s.price ? money(s.price) : ''; const mn = Math.min(...l); return (new Set(l).size > 1 || isFrom(sid) ? 'від ' : '') + money(mn); };
+  function bookService(sid) {   // «Записатися на цю послугу»
+    const ms = C.masters.filter((m) => C.ms.get(m.id)?.has(sid));
+    if (!ms.length) return toast('Ця послуга зараз недоступна для онлайн-запису — зателефонуйте нам, будь ласка', 'bad', 5000);
+    st.done = null; st.edit = -1; st.day = null; st.cat = C.svc.get(sid).category;
+    if (isAddon(sid)) { st.want = null; st.step = 'masters'; location.hash = '#/';   // «додатково» (дизайн тощо) — спершу основна послуга
+      return toast(`«${C.svc.get(sid).name}» додається до основної послуги — оберіть майстра й послугу, а потім додайте її одним дотиком`, 'ok', 6000); }
+    if (ms.length === 1) { st.mid = ms[0].id; st.sid = sid; st.want = null; st.step = 'time'; } else { st.want = sid; st.step = 'masters'; }
+    location.hash = '#/';   // маршрут сам відкриє запис з обраним кроком
+  }
+  async function works() {
+    document.title = 'Наші роботи — NaNa studio';
+    if (!C) app().innerHTML = '<div class="spin"></div>';
+    try { await load(); } catch (e) { app().innerHTML = `<div class="cl-wrap"><div class="card mt2 empty"><div class="big">😕</div>${esc(errMsg(e))}</div></div>`; return; }
+    // нові фото першими (у назві файлу — час завантаження), далі — порядок послуг
+    const all = [];
+    C.services.forEach((s, si) => (s.photos || []).forEach((u, k) => all.push({ u, s, si, k, t: +((String(u).match(/-(\d{12,14})-/) || [])[1] || 0) })));
+    all.sort((a, b) => b.t - a.t || a.si - b.si || a.k - b.k);
+    const cats = [...new Set(all.map((x) => x.s.category))].sort((a, b) => C.cats.indexOf(a) - C.cats.indexOf(b));
+    if (wCat && !cats.includes(wCat)) wCat = '';
+    const draw = () => {
+      const l = all.filter((x) => !wCat || x.s.category === wCat);
+      app().innerHTML = `<div class="cl-wrap">${hero(true, true)}
+        <div class="st-title"><button class="btn ico" onclick="location.hash='#/'" title="Назад до запису">${IC.back}</button><h2>Наші роботи</h2></div>
+        ${cats.length > 1 ? `<div class="chips scroll mb cat-ch"><button class="chip ${!wCat ? 'on' : ''}" data-wc="" title="Усі роботи">Усі <span class="xs">${all.length}</span></button>${cats.map((c) => `<button class="chip ${wCat === c ? 'on' : ''}" data-wc="${esc(c)}" title="Роботи: ${esc(c.toLowerCase())}">${esc(c)}</button>`).join('')}</div>` : ''}
+        ${l.length ? `<div class="works">${l.map((x, i) => `<button class="w-it" data-wi="${i}" title="${esc(x.s.name)} — відкрити на весь екран"><img src="${esc(x.u)}" alt="${esc(x.s.name)}" loading="lazy"></button>`).join('')}</div>`
+          : '<div class="card empty">Фото робіт скоро зʼявляться 🍌</div>'}
+        <div class="mt2 mb" style="text-align:center"><a class="btn pri lg" href="#/" title="Перейти до онлайн-запису">Записатися онлайн</a></div></div>`;
+      $$('[data-wc]').forEach((b) => (b.onclick = () => { wCat = b.dataset.wc; draw(); }));
+      $$('[data-wi]').forEach((b) => (b.onclick = () => lightbox(l.map((x) => x.u), +b.dataset.wi, {
+        captions: l.map((x) => [x.s.name, minPrice(x.s.id)].filter(Boolean).join(' · ')),
+        action: { label: 'Записатися на цю послугу', title: 'Обрати цю послугу й час', fn: (k) => bookService(l[k].s.id) } })));
+    };
+    draw(); scrollTo(0, 0);
   }
 
   /* ---------- «Мій запис» ---------- */
@@ -478,5 +522,5 @@ const Client = (() => {
     };
     draw();
   }
-  return { book, visit, load, get C() { return C; } };
+  return { book, visit, works, load, get C() { return C; } };
 })();

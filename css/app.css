@@ -713,4 +713,20 @@ label.check{display:flex;align-items:center;gap:8px;font-size:14px;cursor:pointe
 .lbx-p{left:10px} .lbx-n{right:10px}
 .lbx-x:hover,.lbx-p:hover,.lbx-n:hover{background:rgba(228,234,32,.85);color:#20201E}
 .lbx.zoom .lbx-p,.lbx.zoom .lbx-n{display:none}
-.lbx-c{position:absolute;left:50%;transform:translateX(-50%);bottom:max(16px,env(safe-area-inset-bottom));color:#fff;font-weight:700;font-size:14px;background:rgba(255,255,255,.14);padding:4px 12px;border-radius:999px}
+.lbx-f{position:absolute;left:0;right:0;bottom:0;padding:12px 16px max(16px,env(safe-area-inset-bottom));display:flex;flex-direction:column;align-items:center;gap:10px;background:linear-gradient(transparent,rgba(10,10,9,.85) 35%);pointer-events:none}
+.lbx-f>*{pointer-events:auto}
+.lbx-t{color:#fff;font-weight:700;font-size:15px;text-align:center;max-width:560px}
+.lbx-a{min-width:240px}
+.lbx-c{color:#fff;font-weight:700;font-size:13px;background:rgba(255,255,255,.14);padding:3px 12px;border-radius:999px}
+.lbx.zoom .lbx-f{display:none}
+
+/* «Наші роботи» */
+.works-btn{display:flex;width:fit-content;align-items:center;gap:6px;margin:12px auto 0;padding:8px 16px;border-radius:999px;border:1.5px solid var(--kpib);color:var(--ink);font-weight:700;text-decoration:none;background:var(--card)}
+.works-btn:hover{border-color:var(--kpih)}
+.works{display:grid;grid-template-columns:repeat(3,1fr);gap:4px;border-radius:14px;overflow:hidden}
+@media (min-width:900px){.works{grid-template-columns:repeat(4,1fr)}}
+.w-it{display:block;aspect-ratio:1;padding:0;border:0;background:var(--st2);cursor:zoom-in;overflow:hidden}
+.w-it img{width:100%;height:100%;object-fit:cover;display:block;transition:transform .2s}
+.w-it:hover img{transform:scale(1.04)}
+.want-bar{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:12px;padding:10px 14px;border-radius:12px;border:1.5px solid var(--kpib);font-weight:700}
+.want-bar .chip{margin:0}

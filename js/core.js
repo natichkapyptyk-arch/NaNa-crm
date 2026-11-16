@@ -271,21 +271,23 @@ document.addEventListener('click', (e) => { const x = e.target.closest && e.targ
   const i = x.parentElement.querySelector('input'); i.value = ''; i.dispatchEvent(new Event('input', { bubbles: true })); i.focus(); x.hidden = true; });
 new MutationObserver(() => document.querySelectorAll('.search:not([data-sx])').forEach(srchSync)).observe(document.documentElement, { childList: true, subtree: true });
 // перегляд фото на весь екран: гортання (стрілки, свайп, клавіші ← →), натиск — збільшити вдвічі, ✕ / Esc / тап повз — закрити
-function lightbox(urls, start = 0) {
+function lightbox(urls, start = 0, { captions = null, action = null } = {}) {   // action: { label, title, fn(i) }
   urls = (urls || []).filter(Boolean); if (!urls.length) return;
   let i = Math.max(0, Math.min(start, urls.length - 1));
   const many = urls.length > 1;
   const el = document.createElement('div'); el.className = 'lbx'; el.setAttribute('role', 'dialog'); el.setAttribute('aria-label', 'Перегляд фото');
   el.innerHTML = `<div class="lbx-sc"><img alt=""></div>
     <button class="lbx-x" title="Закрити (Esc)" aria-label="Закрити">✕</button>
-    ${many ? `<button class="lbx-p" title="Попереднє фото (←)" aria-label="Попереднє">‹</button><button class="lbx-n" title="Наступне фото (→)" aria-label="Наступне">›</button><div class="lbx-c"></div>` : ''}`;
+    ${many ? `<button class="lbx-p" title="Попереднє фото (←)" aria-label="Попереднє">‹</button><button class="lbx-n" title="Наступне фото (→)" aria-label="Наступне">›</button>` : ''}
+    <div class="lbx-f">${captions ? '<div class="lbx-t"></div>' : ''}${action ? `<button class="btn pri lbx-a" title="${esc(action.title || action.label)}">${esc(action.label)}</button>` : ''}${many ? '<div class="lbx-c"></div>' : ''}</div>`;
   document.body.appendChild(el); const prevOv = document.body.style.overflow; document.body.style.overflow = 'hidden';
-  const img = el.querySelector('img'), sc = el.querySelector('.lbx-sc'), cnt = el.querySelector('.lbx-c');
-  const show = (k) => { i = (k + urls.length) % urls.length; el.classList.remove('zoom'); img.src = urls[i]; if (cnt) cnt.textContent = `${i + 1} / ${urls.length}`; };
+  const img = el.querySelector('img'), sc = el.querySelector('.lbx-sc'), cnt = el.querySelector('.lbx-c'), cap = el.querySelector('.lbx-t');
+  const show = (k) => { i = (k + urls.length) % urls.length; el.classList.remove('zoom'); img.src = urls[i]; if (cnt) cnt.textContent = `${i + 1} / ${urls.length}`; if (cap) cap.textContent = captions[i] || ''; };
   const close = () => { el.remove(); document.body.style.overflow = prevOv; document.removeEventListener('keydown', key, true); };
   const key = (e) => { if (e.key === 'Escape') { e.stopPropagation(); close(); } else if (many && e.key === 'ArrowRight') show(i + 1); else if (many && e.key === 'ArrowLeft') show(i - 1); };
   document.addEventListener('keydown', key, true);
   el.querySelector('.lbx-x').onclick = close;
+  if (action) el.querySelector('.lbx-a').onclick = (e) => { e.stopPropagation(); close(); action.fn(i); };
   if (many) { el.querySelector('.lbx-p').onclick = (e) => { e.stopPropagation(); show(i - 1); }; el.querySelector('.lbx-n').onclick = (e) => { e.stopPropagation(); show(i + 1); }; }
   sc.onclick = (e) => { if (e.target === img) { el.classList.toggle('zoom'); if (el.classList.contains('zoom')) { const r = img.getBoundingClientRect(); sc.scrollLeft = (sc.scrollWidth - sc.clientWidth) * ((e.clientX - r.left) / r.width || .5); sc.scrollTop = (sc.scrollHeight - sc.clientHeight) * ((e.clientY - r.top) / r.height || .5); } } else close(); };
   let sx = null;
@@ -437,6 +439,7 @@ async function route() {
     else if ((h === '' || h === '/') && ls.get('app') === 'staff') { location.replace('#/staff/cal'); return; }
   }
   setManifest(h === 'staff' || h.startsWith('/staff') || h.startsWith('/team/'));
+  if (h === '/works' || h === 'works') return Client.works();
   if (h.startsWith('/v/')) return Client.visit(h.slice(3));
   if (h.startsWith('/team/')) return Staff.quick(h.slice(6));
   if (h.startsWith('/pw/')) return Staff.pwLink(h.slice(4));
