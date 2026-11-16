@@ -828,6 +828,7 @@ const Admin = (() => {
       ${Staff.isOwner() ? `<div class="card"><h3>Журнал змін</h3>
         <div class="hint" style="margin-top:-4px">Хто й коли змінював ціни, послуги, персонал і ролі, налаштування, оплати й витрати, скасовував записи чи давав знижки. Бачать лише власниці.</div>
         <button class="btn wide mt" id="s-audit" title="Відкрити журнал змін за період">📜 Відкрити журнал</button></div>` : ''}
+      <div class="card" id="s-use"><h3>Місце в базі</h3><div class="mut sm">Рахую…</div></div>
       </div>
       <div class="scol">
       <div class="card"><h3>Посилання на запис</h3><div class="hint mb">Вставте ці посилання в Instagram (у шапку профілю й кнопку «Записатися») і в профіль Google Maps (поле «Сайт» / «Запис»). Тоді на дашборді в плитці «Записи» буде видно, скільки записів прийшло звідки.</div>
@@ -881,6 +882,18 @@ const Admin = (() => {
         <div class="hint" style="margin:0 0 10px">Разом з демо-даними вимкнуться й тестові сповіщення 🧪 у Telegram.</div>
         <button class="btn red" id="s-demo" title="Видалити всі демо-записи, демо-клієнтів і приклад-майстра; тестові сповіщення 🧪 вимкнуться">Прибрати демо-дані</button></div>` : ''}
     </div><div class="row mt2" style="justify-content:flex-end;align-items:center;gap:12px"><span class="sm mut" id="s-auto" title="Зміни в налаштуваннях зберігаються самі через пару секунд">Зміни зберігаються автоматично</span><button class="btn pri lg" id="s-save" title="Зберегти налаштування">Зберегти налаштування</button></div>`;
+    // «Місце в базі»: скільки зайнято з безкоштовного тарифу Supabase (500 МБ база, 1 ГБ фото)
+    sb.rpc('db_usage').then(({ data: u, error }) => { const box = $('#s-use', main); if (!box) return;
+      if (error || !u) { box.remove(); return; }
+      const mb = (b) => { const m = b / 1048576; return (m < 10 ? m.toFixed(1).replace('.', ',') : Math.round(m)) + ' МБ'; };
+      const bar = (label, used, lim, limT, sub) => { const pc = Math.min(100, used / lim * 100), bad = pc >= 80;
+        return `<div class="use-r"><div class="row" style="justify-content:space-between;gap:8px"><b class="sm">${label}</b><span class="sm ${bad ? 'warn' : 'mut'}">${mb(used)} з ${limT} · ${pc < 1 ? '<1' : Math.round(pc)}%</span></div>
+          <div class="use-b" title="${label}: зайнято ${mb(used)} з ${limT}"><i style="width:${Math.max(pc, 1.5)}%" class="${bad ? 'bad' : ''}"></i></div>${sub ? `<div class="xs mut">${sub}</div>` : ''}</div>`; };
+      const full = u.db / 524288000 >= 0.8 || u.files / 1073741824 >= 0.8;
+      box.innerHTML = `<h3>Місце в базі</h3>
+        ${bar('Дані', u.db, 524288000, '500 МБ', `з них клієнти, записи й усе ваше — ${mb(u.own)}, решта — службове Supabase · ${u.clients} ${plural(u.clients, 'клієнт', 'клієнти', 'клієнтів')}, ${u.appts} ${plural(u.appts, 'запис', 'записи', 'записів')}`)}
+        ${bar('Фото', u.files, 1073741824, '1 ГБ', `${u.files_n} ${plural(u.files_n, 'файл', 'файли', 'файлів')} (послуги, персонал)`)}
+        <div class="hint" style="margin-bottom:0">${full ? '⚠️ Місця лишається мало — напишіть Claude, щоб почистити старе або перейти на платний тариф Supabase.' : '✅ Місця вистачить надовго. Це безкоштовний тариф Supabase; якщо зайнято стане понад 80%, тут зʼявиться попередження.'}</div>`; });
     const drawPm = () => { $('#s-pm', main).innerHTML = methods.map((m, i) => `<span class="chip on">${esc(m)} <button class="btn ghost ico sm" data-rm="${i}" title="Прибрати «${esc(m)}»" style="width:22px;min-height:22px;color:#fff;border:0">${IC.x.replace('width="20" height="20"', 'width="14" height="14"')}</button></span>`).join('');
       $$('[data-rm]', main).forEach((b) => (b.onclick = () => { if (methods.length < 2) return toast('Має лишитись хоча б один спосіб', 'bad'); methods.splice(+b.dataset.rm, 1); drawPm(); })); };
     drawPm();

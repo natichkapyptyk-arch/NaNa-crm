@@ -653,6 +653,9 @@ label.check{display:flex;align-items:center;gap:8px;font-size:14px;cursor:pointe
 .tg-it[open]>summary::after{transform:rotate(-135deg);margin-bottom:-2px}
 .tg-it>summary b{font-size:15px}
 .tg-l{margin-top:2px}
+.use-r{margin:10px 0 12px}.use-r .warn{color:var(--warn);font-weight:600}
+.use-b{height:10px;border-radius:6px;background:var(--sep);overflow:hidden;margin:6px 0 4px;border:1px solid var(--yelb)}
+.use-b i{display:block;height:100%;background:var(--yel);border-radius:6px}.use-b i.bad{background:var(--warn)}
 .tg-l.warn{color:var(--warn);font-weight:600}
 .tg-v{flex:none;font-size:13px;font-weight:700;padding:4px 10px;border-radius:999px;background:var(--yels);color:var(--pilly);white-space:nowrap;max-width:46%;overflow:hidden;text-overflow:ellipsis}
 .tg-it.off>summary b{color:var(--mut);font-weight:600}
