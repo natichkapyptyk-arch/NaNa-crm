@@ -1415,6 +1415,17 @@ begin
     into n_done, n_noshow, n_open
     from appointments a where not a.demo and a.starts_at >= f and a.starts_at < t;
   select coalesce(sum(p.amount), 0) into rev from payments p join appointments a on a.id = p.appointment_id where not a.demo and p.paid_at >= f and p.paid_at < t;
+  -- тестові (демо) — поки увімкнені тестові сповіщення
+  select coalesce(demo_notify, true) into demo_on from settings where id = 1;
+  dn := 0; dc := 0; dm := 0;
+  if demo_on then
+    select count(distinct n.appointment_id) filter (where n.kind = 'new'), count(distinct n.appointment_id) filter (where n.kind = 'cancel'),
+           count(distinct n.appointment_id) filter (where n.kind = 'move')
+      into dn, dc, dm
+      from notifications n join appointments a on a.id = n.appointment_id where a.demo and n.created_at >= f and n.created_at < t;
+  end if;
+  -- за день нічого не було — порожньо (автоматичний підсумок тоді не надсилається)
+  if n_new + n_cancel + n_move + n_done + n_noshow + n_open = 0 and rev = 0 and dn + dc + dm = 0 then return ''; end if;
   txt := '📋 <b>Підсумок дня, ' || to_char(d, 'DD.MM') || '</b>'
     || E'\n✅ Завершено візитів: ' || n_done || case when p_money then ' · 💰 ' || replace(trim(to_char(rev, 'FM999G999G990')), ',', ' ') || ' ₴' else '' end
     || E'\n🆕 Нових записів: ' || n_new || case when n_online > 0 then ' (онлайн ' || n_online || ')' else '' end
@@ -1433,15 +1444,7 @@ begin
     ) x on true
    where m.is_active and not m.demo and (x.done + x.canc + x.mv) > 0;
   if per is not null then txt := txt || E'\n\n' || per; end if;
-  -- тестові (демо) — поки увімкнені тестові сповіщення
-  select coalesce(demo_notify, true) into demo_on from settings where id = 1;
-  if demo_on then
-    select count(distinct n.appointment_id) filter (where n.kind = 'new'), count(distinct n.appointment_id) filter (where n.kind = 'cancel'),
-           count(distinct n.appointment_id) filter (where n.kind = 'move')
-      into dn, dc, dm
-      from notifications n join appointments a on a.id = n.appointment_id where a.demo and n.created_at >= f and n.created_at < t;
-    if dn + dc + dm > 0 then txt := txt || E'\n\n🧪 Тестові (демо): нових ' || dn || ', скасовано ' || dc || ', перенесено ' || dm; end if;
-  end if;
+  if dn + dc + dm > 0 then txt := txt || E'\n\n🧪 Тестові (демо): нових ' || dn || ', скасовано ' || dc || ', перенесено ' || dm; end if;
   return txt;
 end $$;
 revoke execute on function nana_priv.dsum_text(date, boolean) from public, anon, authenticated;
@@ -1460,6 +1463,11 @@ begin
     order by tg_chat_id, (role = 'owner' or (role = 'admin' and see_money)) desc
   loop
     if r.money then tm := coalesce(tm, nana_priv.dsum_text(d, true)); else tn := coalesce(tn, nana_priv.dsum_text(d, false)); end if;
+    -- нічого не було: автоматично — не надсилаємо; «Підсумок зараз» (p_staff) — коротке повідомлення
+    if coalesce(case when r.money then tm else tn end, '') = '' then
+      if p_staff is null then continue; end if;
+      tm := '📋 <b>Підсумок дня, ' || to_char(d, 'DD.MM') || E'</b>\nСьогодні без записів, скасувань і перенесень.'; tn := tm;
+    end if;
     perform net.http_post(
       url := 'https://arkwtpihdaqnwhdcjpqf.supabase.co/functions/v1/tg-bot',
       body := jsonb_build_object('action', 'send', 'chat_id', r.tg_chat_id, 'text', case when r.money then tm else tn end),
